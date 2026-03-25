@@ -13,9 +13,9 @@ import java.util.concurrent.CompletionStage;
 final class InMemoryDocumentCollection implements DocumentCollection {
 
     private final String name;
-    private final InMemoryDocumentStore store;
+    private final LocalDocumentStore store;
 
-    InMemoryDocumentCollection(String name, InMemoryDocumentStore store) {
+    InMemoryDocumentCollection(String name, LocalDocumentStore store) {
         this.name = requireName(name);
         this.store = Objects.requireNonNull(store, "store");
     }

@@ -14,10 +14,10 @@ import java.util.function.UnaryOperator;
 
 final class InMemoryDocument implements Document {
 
-    private final InMemoryDocumentStore store;
+    private final LocalDocumentStore store;
     private final DocumentKey key;
 
-    InMemoryDocument(InMemoryDocumentStore store, DocumentKey key) {
+    InMemoryDocument(LocalDocumentStore store, DocumentKey key) {
         this.store = Objects.requireNonNull(store, "store");
         this.key = Objects.requireNonNull(key, "key");
     }

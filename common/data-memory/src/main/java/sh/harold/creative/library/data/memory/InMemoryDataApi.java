@@ -9,14 +9,18 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class InMemoryDataApi implements DataApi {
 
-    private final InMemoryDocumentStore store;
+    private final LocalDocumentStore store;
     private final Map<String, InMemoryDocumentCollection> collections = new ConcurrentHashMap<>();
 
     public InMemoryDataApi() {
-        this(new InMemoryDocumentStore());
+        this(new CaffeineDocumentStore(new InMemoryDocumentStore()));
     }
 
     public InMemoryDataApi(InMemoryDocumentStore store) {
+        this((LocalDocumentStore) store);
+    }
+
+    InMemoryDataApi(LocalDocumentStore store) {
         this.store = Objects.requireNonNull(store, "store");
     }
 

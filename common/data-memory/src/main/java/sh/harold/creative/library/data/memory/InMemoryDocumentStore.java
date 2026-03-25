@@ -15,7 +15,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.UnaryOperator;
 
-public final class InMemoryDocumentStore implements DocumentStore {
+public final class InMemoryDocumentStore implements LocalDocumentStore {
 
     private final Map<String, Map<String, Map<String, Object>>> collections = new ConcurrentHashMap<>();
 
@@ -55,18 +55,21 @@ public final class InMemoryDocumentStore implements DocumentStore {
         collections.clear();
     }
 
-    DocumentSnapshot readSnapshot(DocumentKey key) {
+    @Override
+    public DocumentSnapshot readSnapshot(DocumentKey key) {
         Objects.requireNonNull(key, "key");
         Map<String, Object> current = collection(key.collection()).get(key.id());
         return new DocumentSnapshot(key, current == null ? Map.of() : PathMaps.deepCopy(current), current != null);
     }
 
-    void writeNow(DocumentKey key, Map<String, Object> data) {
+    @Override
+    public void writeNow(DocumentKey key, Map<String, Object> data) {
         Objects.requireNonNull(key, "key");
         collection(key.collection()).put(key.id(), PathMaps.deepCopy(Objects.requireNonNullElse(data, Map.of())));
     }
 
-    DocumentSnapshot updateSnapshot(DocumentKey key, UnaryOperator<Map<String, Object>> mutator) {
+    @Override
+    public DocumentSnapshot updateSnapshot(DocumentKey key, UnaryOperator<Map<String, Object>> mutator) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(mutator, "mutator");
         Map<String, Map<String, Object>> collection = collection(key.collection());
@@ -78,7 +81,8 @@ public final class InMemoryDocumentStore implements DocumentStore {
         return readSnapshot(key);
     }
 
-    void patchNow(DocumentKey key, DocumentPatch patch) {
+    @Override
+    public void patchNow(DocumentKey key, DocumentPatch patch) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(patch, "patch");
         if (!readSnapshot(key).exists() && patch.setValues().isEmpty()) {
@@ -95,12 +99,14 @@ public final class InMemoryDocumentStore implements DocumentStore {
         });
     }
 
-    boolean deleteNow(DocumentKey key) {
+    @Override
+    public boolean deleteNow(DocumentKey key) {
         Objects.requireNonNull(key, "key");
         return collection(key.collection()).remove(key.id()) != null;
     }
 
-    List<DocumentSnapshot> allSnapshots(String collection) {
+    @Override
+    public List<DocumentSnapshot> allSnapshots(String collection) {
         Map<String, Map<String, Object>> documents = collection(collection);
         List<DocumentSnapshot> snapshots = new ArrayList<>(documents.size());
         for (Map.Entry<String, Map<String, Object>> entry : documents.entrySet()) {
@@ -113,7 +119,8 @@ public final class InMemoryDocumentStore implements DocumentStore {
         return snapshots;
     }
 
-    long countNow(String collection) {
+    @Override
+    public long countNow(String collection) {
         return collection(collection).size();
     }
 
