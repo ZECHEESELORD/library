@@ -1,0 +1,4 @@
+name: paper-entity-example
+version: '${version}'
+main: sh.harold.creative.library.example.paper.entity.PaperEntityExamplePlugin
+api-version: '1.21'
