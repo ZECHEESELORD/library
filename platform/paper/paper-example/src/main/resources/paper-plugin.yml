@@ -1,0 +1,4 @@
+name: paper-example
+version: '${version}'
+main: sh.harold.creative.library.example.paper.PaperExamplePlugin
+api-version: '1.21'
