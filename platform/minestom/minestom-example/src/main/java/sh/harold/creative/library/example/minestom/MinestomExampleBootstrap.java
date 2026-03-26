@@ -1,30 +1,51 @@
 package sh.harold.creative.library.example.minestom;
 
 import net.minestom.server.MinecraftServer;
-import net.kyori.adventure.text.format.NamedTextColor;
-import sh.harold.creative.library.data.memory.InMemoryDataApi;
-import sh.harold.creative.library.message.Message;
-import sh.harold.creative.library.message.Topics;
-import sh.harold.creative.library.menu.core.StandardMenuService;
+import net.minestom.server.coordinate.Pos;
+import net.minestom.server.event.player.AsyncPlayerConfigurationEvent;
+import net.minestom.server.event.player.PlayerSpawnEvent;
+import net.minestom.server.instance.InstanceContainer;
+import net.minestom.server.instance.block.Block;
+import sh.harold.creative.library.menu.minestom.MinestomMenuPlatform;
 
 public final class MinestomExampleBootstrap {
+
+    private static final String HOST = "0.0.0.0";
+    private static final int PORT = 25565;
 
     private MinestomExampleBootstrap() {
     }
 
     public static void main(String[] args) {
-        MinecraftServer.init();
-        new InMemoryDataApi();
-        new StandardMenuService();
-        Message.topic(
-                Topics.SOUL,
-                "minestom-example loaded for {host}.",
-                Message.slot("host", "Minestom")
-        ).hover(
-                Message.block()
-                        .title("+ MINESTOM EXAMPLE", NamedTextColor.GOLD)
-                        .line("Shared content objects are ready.")
-                        .build()
-        );
+        MinecraftServer minecraftServer = MinecraftServer.init();
+
+        InstanceContainer instance = MinecraftServer.getInstanceManager().createInstanceContainer();
+        instance.enableAutoChunkLoad(true);
+        instance.setGenerator(unit -> {
+            unit.modifier().fillHeight(0, 40, Block.STONE);
+            unit.modifier().fillHeight(40, 41, Block.GRASS_BLOCK);
+        });
+        instance.loadChunk(0, 0).join();
+
+        MinestomMenuPlatform menus = new MinestomMenuPlatform();
+        MinestomMenuExampleMenus examples = new MinestomMenuExampleMenus(menus);
+        Pos spawn = new Pos(0.5, 42.0, 0.5);
+
+        MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent.class, event -> {
+            event.setSpawningInstance(instance);
+            event.getPlayer().setRespawnPoint(spawn);
+        });
+        MinecraftServer.getGlobalEventHandler().addListener(PlayerSpawnEvent.class, event -> {
+            if (event.isFirstSpawn()) {
+                menus.open(event.getPlayer(), examples.gallery());
+            }
+        });
+
+        log("Minestom menu example ready on localhost:" + PORT + ". Joining players open the house-style gallery.");
+        minecraftServer.start(HOST, PORT);
+    }
+
+    private static void log(String message) {
+        System.out.println("[minestom-menu-example] " + message);
     }
 }
