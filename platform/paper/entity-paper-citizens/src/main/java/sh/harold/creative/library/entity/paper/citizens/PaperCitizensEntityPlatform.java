@@ -6,6 +6,7 @@ import net.citizensnpcs.api.event.NPCRightClickEvent;
 import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.trait.SkinTrait;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -53,6 +54,7 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
     }
 
     public ManagedEntity spawn(World world, EntitySpec spec) {
+        requirePrimaryThread("spawn Citizens-backed entities");
         EntitySpecValidator.validate(spec);
         if (!EntityTypes.PLAYER_LIKE_HUMANOID.equals(spec.type())) {
             throw new IllegalArgumentException("Citizens bridge only supports creative:player_like_humanoid");
@@ -67,6 +69,7 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
     }
 
     public HouseServiceEntity spawnService(World world, HouseServiceSpec serviceSpec) {
+        requirePrimaryThread("spawn Citizens-backed service entities");
         HouseValidator.validate(serviceSpec);
         HousePresentation presentation = HousePresentationFactory.create(serviceSpec);
         ManagedEntity anchor = spawn(world, serviceSpec.entitySpec());
@@ -90,6 +93,7 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
 
     @Override
     public void close() {
+        requirePrimaryThread("close Citizens entity platform");
         HandlerList.unregisterAll(this);
         List<UUID> ids = new ArrayList<>(entities.keySet());
         for (UUID id : ids) {
@@ -121,6 +125,12 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
         return new Location(world, transform.x(), transform.y(), transform.z(), transform.yaw(), transform.pitch());
     }
 
+    private static void requirePrimaryThread(String action) {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException(action + " must run on the Paper primary server thread");
+        }
+    }
+
     private final class CitizensManagedEntity extends AbstractManagedEntity {
         private final NPC npc;
         private final Runnable onDespawn;
@@ -147,17 +157,22 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
 
                 @Override
                 public void skin(SkinTexture skinTexture) {
-                    requireSpawned();
+                    CitizensManagedEntity.this.requireMutable();
                     skinTrait.setSkinPersistent(id().toString(), skinTexture.signature(), skinTexture.texture());
                 }
 
                 @Override
                 public void clearSkin() {
-                    requireSpawned();
+                    CitizensManagedEntity.this.requireMutable();
                     skinTrait.clearTexture();
                 }
             });
             applyInitialState();
+        }
+
+        @Override
+        protected void assertOwnerThread() {
+            requirePrimaryThread("Mutating Citizens entity " + id());
         }
 
         private Entity currentEntity() {

@@ -79,6 +79,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
     }
 
     public ManagedEntity spawn(World world, EntitySpec spec) {
+        requirePrimaryThread("spawn Paper entities");
         EntitySpecValidator.validate(spec);
         EntityType type = toBukkitType(spec.type());
         Location location = toLocation(world, spec.transform());
@@ -89,6 +90,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
     }
 
     public HouseServiceEntity spawnService(World world, HouseServiceSpec serviceSpec) {
+        requirePrimaryThread("spawn Paper service entities");
         HouseValidator.validate(serviceSpec);
         HousePresentation presentation = HousePresentationFactory.create(serviceSpec);
         ManagedEntity anchor = spawn(world, serviceSpec.entitySpec());
@@ -113,6 +115,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
     @Override
     public void close() {
+        requirePrimaryThread("close Paper entity platform");
         HandlerList.unregisterAll(this);
         List<UUID> ids = new ArrayList<>(entities.keySet());
         for (UUID id : ids) {
@@ -142,6 +145,12 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
     private static Location toLocation(World world, EntityTransform transform) {
         return new Location(world, transform.x(), transform.y(), transform.z(), transform.yaw(), transform.pitch());
+    }
+
+    private static void requirePrimaryThread(String action) {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException(action + " must run on the Paper primary server thread");
+        }
     }
 
     private static EntityType toBukkitType(EntityTypeKey type) {
@@ -225,7 +234,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void aiEnabled(boolean enabled) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         mob.setAI(enabled);
                     }
                 });
@@ -240,7 +249,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void adult(boolean adult) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         if (adult) {
                             ageable.setAdult();
                         } else {
@@ -263,13 +272,13 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void equipment(EquipmentSlot slot, ItemDescriptor item) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         livingEntity.getEquipment().setItem(toBukkitSlot(slot), toItemStack(item));
                     }
 
                     @Override
                     public void clearEquipment(EquipmentSlot slot) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         livingEntity.getEquipment().setItem(toBukkitSlot(slot), null);
                     }
                 });
@@ -282,7 +291,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void persistent(boolean persistent) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         entity.setPersistent(persistent);
                     }
                 });
@@ -297,7 +306,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void collidable(boolean collidable) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         collidableEntity.setCollidable(collidable);
                     }
                 });
@@ -313,7 +322,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public boolean leashHolder(ManagedEntity other) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         if (other instanceof PaperManagedEntity paperManagedEntity) {
                             return leashable.setLeashHolder(paperManagedEntity.entity);
                         }
@@ -322,7 +331,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void clearLeash() {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         leashable.setLeashHolder(null);
                     }
                 });
@@ -337,7 +346,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void level(int level) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         villager.setVillagerLevel(level);
                     }
 
@@ -348,13 +357,13 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void profession(net.kyori.adventure.key.Key profession) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         villager.setProfession(Villager.Profession.valueOf(profession.value().toUpperCase(Locale.ROOT).replace('-', '_')));
                     }
 
                     @Override
                     public void clearProfession() {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         villager.setProfession(Villager.Profession.NONE);
                     }
                 });
@@ -395,7 +404,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void width(float width) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         display.setDisplayWidth(width);
                     }
 
@@ -406,7 +415,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void height(float height) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         display.setDisplayHeight(height);
                     }
                 });
@@ -421,7 +430,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void text(Component text) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         textDisplay.text(text);
                     }
 
@@ -432,7 +441,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void width(float width) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         textDisplay.setDisplayWidth(width);
                     }
 
@@ -443,7 +452,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void height(float height) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         textDisplay.setDisplayHeight(height);
                     }
                 });
@@ -459,7 +468,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void item(ItemDescriptor item) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         itemDisplay.setItemStack(toItemStack(item));
                     }
 
@@ -470,7 +479,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void width(float width) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         itemDisplay.setDisplayWidth(width);
                     }
 
@@ -481,7 +490,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void height(float height) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         itemDisplay.setDisplayHeight(height);
                     }
                 });
@@ -496,7 +505,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void block(BlockDescriptor block) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         blockDisplay.setBlock(toBlockData(block));
                     }
 
@@ -507,7 +516,7 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void width(float width) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         blockDisplay.setDisplayWidth(width);
                     }
 
@@ -518,11 +527,16 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
                     @Override
                     public void height(float height) {
-                        requireSpawned();
+                        PaperManagedEntity.this.requireMutable();
                         blockDisplay.setDisplayHeight(height);
                     }
                 });
             }
+        }
+
+        @Override
+        protected void assertOwnerThread() {
+            requirePrimaryThread("Mutating Paper entity " + id());
         }
 
         @Override

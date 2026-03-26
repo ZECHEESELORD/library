@@ -72,6 +72,14 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
         }
     }
 
+    protected final void requireMutable() {
+        requireSpawned();
+        assertOwnerThread();
+    }
+
+    protected void assertOwnerThread() {
+    }
+
     @Override
     public final UUID id() {
         return id;
@@ -104,14 +112,14 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
 
     @Override
     public final void customName(Component customName) {
-        requireSpawned();
+        requireMutable();
         this.customName = Objects.requireNonNull(customName, "customName");
         doCustomName(customName);
     }
 
     @Override
     public final void clearCustomName() {
-        requireSpawned();
+        requireMutable();
         this.customName = null;
         doClearCustomName();
     }
@@ -123,7 +131,7 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
 
     @Override
     public final void customNameVisible(boolean visible) {
-        requireSpawned();
+        requireMutable();
         this.customNameVisible = visible;
         doCustomNameVisible(visible);
     }
@@ -135,7 +143,7 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
 
     @Override
     public final void glowing(boolean glowing) {
-        requireSpawned();
+        requireMutable();
         this.glowing = glowing;
         doGlowing(glowing);
     }
@@ -147,7 +155,7 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
 
     @Override
     public final void silent(boolean silent) {
-        requireSpawned();
+        requireMutable();
         this.silent = silent;
         doSilent(silent);
     }
@@ -159,7 +167,7 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
 
     @Override
     public final void gravity(boolean gravity) {
-        requireSpawned();
+        requireMutable();
         this.gravity = gravity;
         doGravity(gravity);
     }
@@ -171,27 +179,27 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
 
     @Override
     public final void invulnerable(boolean invulnerable) {
-        requireSpawned();
+        requireMutable();
         this.invulnerable = invulnerable;
         doInvulnerable(invulnerable);
     }
 
     @Override
     public final void teleport(EntityTransform transform) {
-        requireSpawned();
+        requireMutable();
         this.transform = Objects.requireNonNull(transform, "transform");
         doTeleport(transform);
     }
 
     @Override
     public final void interactionHandler(EntityInteractionHandler handler) {
-        requireSpawned();
+        requireMutable();
         this.interactionHandler = Objects.requireNonNull(handler, "handler");
     }
 
     @Override
     public final void clearInteractionHandler() {
-        requireSpawned();
+        requireMutable();
         this.interactionHandler = null;
     }
 
@@ -206,7 +214,7 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
     }
 
     public final void handleInteraction(InteractorRef interactor, InteractionKind kind) {
-        requireSpawned();
+        requireMutable();
         EntityInteractionHandler handler = interactionHandler;
         if (handler != null) {
             handler.onInteract(new EntityInteractionContext(this, interactor, kind));
@@ -218,6 +226,7 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
         if (!spawned) {
             return;
         }
+        assertOwnerThread();
         doDespawn();
         spawned = false;
     }

@@ -30,6 +30,7 @@ import net.minestom.server.instance.block.Block;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
 import net.minestom.server.network.player.ResolvableProfile;
+import net.minestom.server.thread.AcquirableOwnershipException;
 import sh.harold.creative.library.entity.BlockDescriptor;
 import sh.harold.creative.library.entity.EntitySpec;
 import sh.harold.creative.library.entity.EntityTransform;
@@ -241,6 +242,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
                 @Override
                 public boolean addPassenger(ManagedEntity other) {
                     if (other instanceof MinestomManagedEntity minestomManagedEntity) {
+                        MinestomManagedEntity.this.requireMutable();
                         entity.addPassenger(minestomManagedEntity.entity);
                         return true;
                     }
@@ -250,6 +252,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
                 @Override
                 public boolean removePassenger(ManagedEntity other) {
                     if (other instanceof MinestomManagedEntity minestomManagedEntity) {
+                        MinestomManagedEntity.this.requireMutable();
                         entity.removePassenger(minestomManagedEntity.entity);
                         return true;
                     }
@@ -265,9 +268,9 @@ public final class MinestomEntityPlatform implements AutoCloseable {
                 }
 
                 @Override
-                public boolean leashHolder(ManagedEntity other) {
-                    requireSpawned();
-                    if (other instanceof MinestomManagedEntity minestomManagedEntity) {
+                    public boolean leashHolder(ManagedEntity other) {
+                        MinestomManagedEntity.this.requireMutable();
+                        if (other instanceof MinestomManagedEntity minestomManagedEntity) {
                         entity.setLeashHolder(minestomManagedEntity.entity);
                         return true;
                     }
@@ -275,10 +278,10 @@ public final class MinestomEntityPlatform implements AutoCloseable {
                 }
 
                 @Override
-                public void clearLeash() {
-                    requireSpawned();
-                    entity.setLeashHolder(null);
-                }
+                    public void clearLeash() {
+                        MinestomManagedEntity.this.requireMutable();
+                        entity.setLeashHolder(null);
+                    }
             });
 
             registerCapability(PoseCapable.class, new PoseCapable() {
@@ -289,7 +292,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                 @Override
                 public void pose(sh.harold.creative.library.entity.EntityPose pose) {
-                    requireSpawned();
+                    MinestomManagedEntity.this.requireMutable();
                     entity.setPose(toMinestomPose(pose));
                 }
             });
@@ -307,13 +310,13 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void equipment(sh.harold.creative.library.entity.EquipmentSlot slot, ItemDescriptor item) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         livingEntity.setEquipment(toMinestomSlot(slot), toItemStack(item));
                     }
 
                     @Override
                     public void clearEquipment(sh.harold.creative.library.entity.EquipmentSlot slot) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         livingEntity.setEquipment(toMinestomSlot(slot), ItemStack.AIR);
                     }
                 });
@@ -328,7 +331,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void adult(boolean adult) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(AgeableMobMeta.class, meta -> meta.setBaby(!adult));
                     }
                 });
@@ -343,7 +346,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void level(int level) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         VillagerMeta.Level[] levels = VillagerMeta.Level.values();
                         int index = Math.max(0, Math.min(level - 1, levels.length - 1));
                         entity.editEntityMeta(VillagerMeta.class, meta ->
@@ -358,7 +361,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void profession(Key profession) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         VillagerProfession villagerProfession = VillagerProfession.fromKey(profession);
                         if (villagerProfession == null) {
                             throw new IllegalArgumentException("Unknown villager profession " + profession);
@@ -370,7 +373,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void clearProfession() {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(VillagerMeta.class, meta ->
                                 meta.setVillagerData(meta.getVillagerData().withProfession(VillagerProfession.fromKey("minecraft:none")))
                         );
@@ -387,7 +390,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void width(float width) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(AbstractDisplayMeta.class, meta -> meta.setWidth(width));
                     }
 
@@ -398,7 +401,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void height(float height) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(AbstractDisplayMeta.class, meta -> meta.setHeight(height));
                     }
                 });
@@ -413,7 +416,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void text(Component text) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(TextDisplayMeta.class, meta -> meta.setText(text));
                     }
 
@@ -424,7 +427,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void width(float width) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(TextDisplayMeta.class, meta -> meta.setWidth(width));
                     }
 
@@ -435,7 +438,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void height(float height) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(TextDisplayMeta.class, meta -> meta.setHeight(height));
                     }
                 });
@@ -451,7 +454,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void item(ItemDescriptor item) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(ItemDisplayMeta.class, meta -> meta.setItemStack(toItemStack(item)));
                     }
 
@@ -462,7 +465,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void width(float width) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(ItemDisplayMeta.class, meta -> meta.setWidth(width));
                     }
 
@@ -473,7 +476,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void height(float height) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(ItemDisplayMeta.class, meta -> meta.setHeight(height));
                     }
                 });
@@ -488,7 +491,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void block(BlockDescriptor block) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(BlockDisplayMeta.class, meta -> meta.setBlockState(toBlock(block)));
                     }
 
@@ -499,7 +502,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void width(float width) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(BlockDisplayMeta.class, meta -> meta.setWidth(width));
                     }
 
@@ -510,7 +513,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void height(float height) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         entity.editEntityMeta(BlockDisplayMeta.class, meta -> meta.setHeight(height));
                     }
                 });
@@ -525,7 +528,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void skin(SkinTexture skinTexture) {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         appliedSkin = skinTexture;
                         entity.editEntityMeta(MannequinMeta.class, meta ->
                                 meta.setProfile(new ResolvableProfile(new PlayerSkin(skinTexture.texture(), skinTexture.signature())))
@@ -534,11 +537,23 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
                     @Override
                     public void clearSkin() {
-                        requireSpawned();
+                        MinestomManagedEntity.this.requireMutable();
                         appliedSkin = null;
                         entity.editEntityMeta(MannequinMeta.class, meta -> meta.setProfile(ResolvableProfile.EMPTY));
                     }
                 });
+            }
+        }
+
+        @Override
+        protected void assertOwnerThread() {
+            try {
+                entity.acquirable().assertOwnership();
+            } catch (AcquirableOwnershipException exception) {
+                throw new IllegalStateException(
+                        "Mutating Minestom entity " + id() + " requires the owning tick thread or an acquired entity context",
+                        exception
+                );
             }
         }
 
