@@ -1,19 +1,24 @@
 package sh.harold.creative.library.menu.paper;
 
-import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import sh.harold.creative.library.menu.MenuSlot;
 
-public final class PaperMenuRenderer {
+public final class PaperMenuRenderer implements PaperMenuSlotRenderer {
 
+    private final PaperMenuItemFactory itemFactory;
+
+    public PaperMenuRenderer() {
+        this(new BukkitPaperMenuItemFactory());
+    }
+
+    PaperMenuRenderer(PaperMenuItemFactory itemFactory) {
+        this.itemFactory = itemFactory;
+    }
+
+    @Override
     public ItemStack render(MenuSlot slot) {
-        Material material = Material.matchMaterial(slot.icon().key());
-        if (material == null) {
-            throw new IllegalArgumentException("Unknown Paper material for menu icon: " + slot.icon().key());
-        }
-
-        ItemStack itemStack = new ItemStack(material);
+        ItemStack itemStack = itemFactory.create(slot.icon().key());
         itemStack.editMeta(meta -> applyMeta(meta, slot));
         return itemStack;
     }

@@ -1,7 +1,10 @@
 package sh.harold.creative.library.menu.minestom;
 
 import net.kyori.adventure.text.Component;
+import net.minestom.server.MinecraftServer;
 import net.minestom.server.entity.Player;
+import net.minestom.server.event.Event;
+import net.minestom.server.event.EventNode;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
 import sh.harold.creative.library.menu.CanvasMenuBuilder;
@@ -17,17 +20,29 @@ import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.core.StandardMenuService;
 
 import java.util.Objects;
+import java.util.UUID;
 
-public final class MinestomMenuPlatform {
+public final class MinestomMenuPlatform implements AutoCloseable {
 
     private final MenuService menus;
+    private final MinestomMenuRuntime runtime;
+    private final EventNode<Event> parentNode;
+    private final EventNode<Event> runtimeNode;
 
     public MinestomMenuPlatform() {
-        this(new StandardMenuService());
+        this(new StandardMenuService(), MinecraftServer.getGlobalEventHandler());
     }
 
     public MinestomMenuPlatform(MenuService menus) {
+        this(menus, MinecraftServer.getGlobalEventHandler());
+    }
+
+    public MinestomMenuPlatform(MenuService menus, EventNode<Event> parentNode) {
         this.menus = Objects.requireNonNull(menus, "menus");
+        this.parentNode = Objects.requireNonNull(parentNode, "parentNode");
+        this.runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        this.runtimeNode = runtime.createEventNode("menu-runtime-" + UUID.randomUUID());
+        this.parentNode.addChild(runtimeNode);
     }
 
     public ListMenuBuilder list() {
@@ -67,7 +82,13 @@ public final class MinestomMenuPlatform {
     }
 
     public void open(Player player, Menu menu) {
-        throw new UnsupportedOperationException("Minestom menu opening is not implemented yet");
+        runtime.open(Objects.requireNonNull(player, "player"), Objects.requireNonNull(menu, "menu"));
+    }
+
+    @Override
+    public void close() {
+        runtime.close();
+        parentNode.removeChild(runtimeNode);
     }
 
     private static MenuIcon icon(Material material) {

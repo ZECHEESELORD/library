@@ -3,7 +3,9 @@ package sh.harold.creative.library.menu.paper;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.HandlerList;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.creative.library.menu.CanvasMenuBuilder;
 import sh.harold.creative.library.menu.ListMenuBuilder;
 import sh.harold.creative.library.menu.Menu;
@@ -18,16 +20,22 @@ import sh.harold.creative.library.menu.core.StandardMenuService;
 
 import java.util.Objects;
 
-public final class PaperMenuPlatform {
+public final class PaperMenuPlatform implements AutoCloseable {
 
     private final MenuService menus;
+    private final PaperMenuRuntime runtime;
+    private final PaperMenuListener listener;
 
-    public PaperMenuPlatform() {
-        this(new StandardMenuService());
+    public PaperMenuPlatform(JavaPlugin plugin) {
+        this(plugin, new StandardMenuService());
     }
 
-    public PaperMenuPlatform(MenuService menus) {
+    public PaperMenuPlatform(JavaPlugin plugin, MenuService menus) {
+        Objects.requireNonNull(plugin, "plugin");
         this.menus = Objects.requireNonNull(menus, "menus");
+        this.runtime = new PaperMenuRuntime(new BukkitPaperMenuAccess(), org.bukkit.Bukkit::getPlayer, new PaperMenuRenderer());
+        this.listener = new PaperMenuListener(runtime);
+        plugin.getServer().getPluginManager().registerEvents(listener, plugin);
     }
 
     public ListMenuBuilder list() {
@@ -67,7 +75,13 @@ public final class PaperMenuPlatform {
     }
 
     public void open(Player player, Menu menu) {
-        throw new UnsupportedOperationException("Paper menu opening is not implemented yet");
+        runtime.open(Objects.requireNonNull(player, "player"), Objects.requireNonNull(menu, "menu"));
+    }
+
+    @Override
+    public void close() {
+        runtime.close();
+        HandlerList.unregisterAll(listener);
     }
 
     private static MenuIcon icon(Material material) {
