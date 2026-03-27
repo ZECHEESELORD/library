@@ -7,6 +7,8 @@ import net.minestom.server.event.player.PlayerSpawnEvent;
 import net.minestom.server.instance.InstanceContainer;
 import net.minestom.server.instance.block.Block;
 import sh.harold.creative.library.menu.minestom.MinestomMenuPlatform;
+import sh.harold.creative.library.sound.SoundCueKeys;
+import sh.harold.creative.library.sound.minestom.MinestomSoundCuePlatform;
 
 public final class MinestomExampleBootstrap {
 
@@ -28,6 +30,7 @@ public final class MinestomExampleBootstrap {
         instance.loadChunk(0, 0).join();
 
         MinestomMenuPlatform menus = new MinestomMenuPlatform();
+        MinestomSoundCuePlatform sounds = new MinestomSoundCuePlatform();
         MinestomMenuExampleMenus examples = new MinestomMenuExampleMenus(menus);
         Pos spawn = new Pos(0.5, 42.0, 0.5);
 
@@ -37,6 +40,7 @@ public final class MinestomExampleBootstrap {
         });
         MinecraftServer.getGlobalEventHandler().addListener(PlayerSpawnEvent.class, event -> {
             if (event.isFirstSpawn()) {
+                sounds.play(event.getPlayer(), SoundCueKeys.REWARD_DISCOVERY);
                 menus.open(event.getPlayer(), examples.gallery());
             }
         });
