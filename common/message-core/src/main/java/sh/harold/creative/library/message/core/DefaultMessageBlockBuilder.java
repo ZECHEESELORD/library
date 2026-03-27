@@ -9,6 +9,7 @@ import sh.harold.creative.library.message.SlotBinding;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiFunction;
 
 public final class DefaultMessageBlockBuilder implements MessageBlockBuilder {
 
@@ -50,6 +51,24 @@ public final class DefaultMessageBlockBuilder implements MessageBlockBuilder {
     }
 
     @Override
+    public <T> MessageBlockBuilder bullets(Iterable<T> items, BiFunction<MessageBlockBuilder, T, MessageBlockBuilder> mapper) {
+        Objects.requireNonNull(items, "items");
+        Objects.requireNonNull(mapper, "mapper");
+
+        BulletOnlyBuilder bulletBuilder = new BulletOnlyBuilder();
+        for (T item : items) {
+            MessageBlockBuilder returnedBuilder = Objects.requireNonNull(
+                    mapper.apply(bulletBuilder, item),
+                    "mapper result"
+            );
+            if (returnedBuilder != bulletBuilder) {
+                throw new IllegalArgumentException("bullets(...) mapper must return the provided builder");
+            }
+        }
+        return this;
+    }
+
+    @Override
     public void send(Audience audience) {
         build().send(audience);
     }
@@ -64,5 +83,60 @@ public final class DefaultMessageBlockBuilder implements MessageBlockBuilder {
             throw new IllegalArgumentException("rgbHex must be between 0x000000 and 0xFFFFFF");
         }
         return rgbHex;
+    }
+
+    private final class BulletOnlyBuilder implements MessageBlockBuilder {
+
+        @Override
+        public MessageBlockBuilder title(String text, TextColor color) {
+            throw new IllegalStateException("bullets(...) mapper may only add bullet entries");
+        }
+
+        @Override
+        public MessageBlockBuilder title(String text, int rgbHex) {
+            throw new IllegalStateException("bullets(...) mapper may only add bullet entries");
+        }
+
+        @Override
+        public MessageBlockBuilder blank() {
+            throw new IllegalStateException("bullets(...) mapper may only add bullet entries");
+        }
+
+        @Override
+        public MessageBlockBuilder line(String template, SlotBinding... slots) {
+            throw new IllegalStateException("bullets(...) mapper may only add bullet entries");
+        }
+
+        @Override
+        public MessageBlockBuilder bullet(String template, SlotBinding... slots) {
+            DefaultMessageBlockBuilder.this.bullet(template, slots);
+            return this;
+        }
+
+        @Override
+        public <T> MessageBlockBuilder bullets(Iterable<T> items, BiFunction<MessageBlockBuilder, T, MessageBlockBuilder> mapper) {
+            Objects.requireNonNull(items, "items");
+            Objects.requireNonNull(mapper, "mapper");
+            for (T item : items) {
+                MessageBlockBuilder returnedBuilder = Objects.requireNonNull(
+                        mapper.apply(this, item),
+                        "mapper result"
+                );
+                if (returnedBuilder != this) {
+                    throw new IllegalArgumentException("bullets(...) mapper must return the provided builder");
+                }
+            }
+            return this;
+        }
+
+        @Override
+        public void send(Audience audience) {
+            throw new IllegalStateException("bullets(...) mapper may only add bullet entries");
+        }
+
+        @Override
+        public MessageBlock build() {
+            throw new IllegalStateException("bullets(...) mapper may only add bullet entries");
+        }
     }
 }

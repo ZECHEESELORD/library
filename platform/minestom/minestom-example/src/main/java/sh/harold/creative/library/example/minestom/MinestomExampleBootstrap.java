@@ -32,24 +32,41 @@ public final class MinestomExampleBootstrap {
         MinestomMenuPlatform menus = new MinestomMenuPlatform();
         MinestomSoundCuePlatform sounds = new MinestomSoundCuePlatform();
         MinestomMenuExampleMenus examples = new MinestomMenuExampleMenus(menus);
+        MinestomDevHarnessMessages feedback = new MinestomDevHarnessMessages();
+        MinestomMessageFacadeExamples messageExamples = new MinestomMessageFacadeExamples();
         Pos spawn = new Pos(0.5, 42.0, 0.5);
+        MinestomEntityExampleHarness entityExamples = new MinestomEntityExampleHarness(instance, spawn, menus, examples, sounds, feedback);
 
+        entityExamples.reset();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            entityExamples.close();
+            sounds.close();
+        }));
+
+        MinecraftServer.getCommandManager().register(new MinestomMenuExamplesCommand(menus, examples, feedback));
+        MinecraftServer.getCommandManager().register(new MinestomMessageFacadeCommand(messageExamples, feedback));
+        MinecraftServer.getCommandManager().register(new MinestomSoundCueCommand(new MinestomSoundCueExamples(sounds, feedback), feedback));
+        MinecraftServer.getCommandManager().register(new MinestomEntityExamplesCommand(entityExamples, feedback));
         MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent.class, event -> {
             event.setSpawningInstance(instance);
             event.getPlayer().setRespawnPoint(spawn);
         });
         MinecraftServer.getGlobalEventHandler().addListener(PlayerSpawnEvent.class, event -> {
             if (event.isFirstSpawn()) {
+                entityExamples.ensureSpawned();
                 sounds.play(event.getPlayer(), SoundCueKeys.REWARD_DISCOVERY);
-                menus.open(event.getPlayer(), examples.gallery());
+                menus.open(event.getPlayer(), examples.tabsGallery());
+                feedback.sendQuickStart(event.getPlayer());
             }
         });
 
-        log("Minestom menu example ready on localhost:" + PORT + ". Joining players open the house-style gallery.");
+        log("Unified Minestom dev harness ready on localhost:" + PORT
+                + ". Use /testmenus, /testmessages, /testsoundfx, and /testnpcs.");
         minecraftServer.start(HOST, PORT);
     }
 
     private static void log(String message) {
-        System.out.println("[minestom-menu-example] " + message);
+        System.out.println("[minestom-example] " + message);
     }
 }

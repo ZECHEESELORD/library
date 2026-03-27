@@ -27,6 +27,8 @@ final class DefaultMessageRenderer {
     private static final TextColor BLOCK_BODY = NamedTextColor.GRAY;
     private static final TextColor BLOCK_BULLET_PREFIX = NamedTextColor.DARK_GRAY;
     private static final TextColor CLICK_PROMPT = NamedTextColor.YELLOW;
+    private static final String BLOCK_INDENT = " ";
+    private static final String BLOCK_BULLET = "\u2022 ";
 
     private DefaultMessageRenderer() {
     }
@@ -46,6 +48,10 @@ final class DefaultMessageRenderer {
         }
         if (lines.isEmpty()) {
             return Component.empty();
+        }
+        if (target == RenderTarget.CHAT) {
+            lines.add(0, Component.empty());
+            lines.add(Component.empty());
         }
         Component rendered = Component.join(net.kyori.adventure.text.JoinConfiguration.separator(Component.newline()), lines);
         return target == RenderTarget.HOVER ? stripInteractive(rendered) : rendered;
@@ -83,12 +89,18 @@ final class DefaultMessageRenderer {
             case MessageBlock.TitleEntry title -> Component.text(title.text(), title.color(), TextDecoration.BOLD);
             case MessageBlock.LineEntry ignored -> {
                 ComponentBuilder<?, ?> builder = Component.text();
+                if (target == RenderTarget.CHAT) {
+                    builder.append(Component.text(BLOCK_INDENT, BLOCK_BODY));
+                }
                 appendTemplate(builder, entry.template(), entry.bindings(), BLOCK_BODY, BLOCK_BODY, target);
                 yield builder.build();
             }
             case MessageBlock.BulletEntry ignored -> {
                 ComponentBuilder<?, ?> builder = Component.text();
-                builder.append(Component.text("- ", BLOCK_BULLET_PREFIX));
+                if (target == RenderTarget.CHAT) {
+                    builder.append(Component.text(BLOCK_INDENT, BLOCK_BODY));
+                }
+                builder.append(Component.text(BLOCK_BULLET, BLOCK_BULLET_PREFIX));
                 appendTemplate(builder, entry.template(), entry.bindings(), BLOCK_BODY, BLOCK_BODY, target);
                 yield builder.build();
             }

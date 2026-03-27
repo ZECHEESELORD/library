@@ -17,8 +17,8 @@
 
 ## Minestom
 
-- Start the Minestom example bootstrap and join the server on `localhost:25565`. Confirm the native villager, temporary armor stand, `Meredith`, and `Gideon` appear near spawn.
-- Right-click and attack the native villager, `Meredith`, and `Gideon`, and confirm the interaction logs are emitted.
-- Wait for the scheduled smoke steps and confirm the villager renames, glows, becomes silent, teleports, and the temporary armor stand despawns.
+- Start the unified Minestom dev harness and join the server on `localhost:25565`. Run `/testnpcs reset` if needed, then confirm the native villager, temporary armor stand, `Meredith`, and `Gideon` appear near spawn.
+- Right-click and attack the native villager, `Meredith`, and `Gideon`, and confirm the in-game interaction responses appear.
+- Confirm `Meredith` opens the menu gallery and `Gideon` reprints the dev-harness command summary.
 - Confirm `Meredith` and `Gideon` both render the structured 3-line House presentation.
 - Confirm unsupported behavior stays explicit rather than silent: Minestom still has no AI toggle capability, and non-living invulnerability remains type-limited.

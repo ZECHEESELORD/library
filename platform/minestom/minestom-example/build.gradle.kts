@@ -1,10 +1,25 @@
+plugins {
+    application
+}
+
 dependencies {
     implementation(project(":common:data-memory"))
+    implementation(project(":common:house-service-entity"))
     implementation(project(":common:message-core"))
     implementation(project(":common:state-machine-core"))
     implementation(project(":common:menu-core"))
+    implementation(project(":platform:minestom:entity-minestom"))
     implementation(project(":platform:minestom:message-minestom"))
     implementation(project(":platform:minestom:sound-minestom"))
     implementation(project(":platform:minestom:menu-minestom"))
     implementation("net.minestom:minestom:${rootProject.property("minestomVersion")}")
+}
+
+application {
+    mainClass.set("sh.harold.creative.library.example.minestom.MinestomExampleBootstrap")
+}
+
+tasks.named<org.gradle.api.tasks.JavaExec>("run") {
+    group = "application"
+    description = "Runs the embedded Minestom dev harness on localhost:25565."
 }

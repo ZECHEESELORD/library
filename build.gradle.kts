@@ -39,3 +39,9 @@ subprojects {
         useJUnitPlatform()
     }
 }
+
+tasks.register("runMinestomExample") {
+    group = "application"
+    description = "Runs the embedded Minestom dev harness."
+    dependsOn(":platform:minestom:minestom-example:run")
+}

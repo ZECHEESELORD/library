@@ -17,6 +17,10 @@ final class MinestomMenuExampleMenus {
     }
 
     Menu gallery() {
+        return tabsGallery();
+    }
+
+    Menu tabsGallery() {
         return menus.tabs()
                 .title("House Style Gallery")
                 .defaultTab("profiles")
@@ -27,6 +31,43 @@ final class MinestomMenuExampleMenus {
                         farmingXlixButton(),
                         museumRewardsButton())))
                 .build();
+    }
+
+    Menu listGallery() {
+        return menus.list()
+                .title("House Style List Gallery")
+                .addItem(yourSkyBlockProfileButton())
+                .addItem(farmingXlixButton())
+                .addItem(museumRewardsButton())
+                .addItem(profileSlotFiveButton())
+                .build();
+    }
+
+    Menu canvasGallery() {
+        return menus.canvas()
+                .title("Canvas Gallery")
+                .back(context -> context.open(tabsGallery()))
+                .place(10, yourSkyBlockProfileDisplay())
+                .place(12, farmingXlixDisplay())
+                .place(14, museumRewardsDisplay())
+                .place(16, profileSlotFiveDisplay())
+                .build();
+    }
+
+    Menu profilePreview() {
+        return yourSkyBlockProfileMenu();
+    }
+
+    Menu farmingPreview() {
+        return farmingXlixMenu();
+    }
+
+    Menu museumPreview() {
+        return museumRewardsMenu();
+    }
+
+    Menu slotFivePreview() {
+        return profileSlotFiveMenu();
     }
 
     private MenuButton yourSkyBlockProfileButton() {
@@ -105,7 +146,7 @@ final class MinestomMenuExampleMenus {
     private Menu preview(String title, MenuDisplayItem item) {
         return menus.canvas()
                 .title(title)
-                .back(context -> context.open(gallery()))
+                .back(context -> context.open(tabsGallery()))
                 .place(13, item)
                 .build();
     }

@@ -82,11 +82,11 @@ class MessageRenderingTest {
     void blockRendersTitlesBlankLinesAndBullets() {
         MessageBlock block = Message.block()
                 .title("+ AREA DISCOVERED", NamedTextColor.GOLD)
-                .blank()
                 .line(
                         "You discovered {area}!",
                         Message.slot("area", Message.value("The Barn").color(0x55FF55))
                 )
+                .blank()
                 .bullet("Fast travel unlocked")
                 .bullet("New NPCs available")
                 .build();
@@ -94,21 +94,26 @@ class MessageRenderingTest {
         Component expected = Component.join(
                 JoinConfiguration.separator(Component.newline()),
                 java.util.List.of(
-                        Component.text("+ AREA DISCOVERED", NamedTextColor.GOLD, TextDecoration.BOLD),
                         Component.empty(),
+                        Component.text("+ AREA DISCOVERED", NamedTextColor.GOLD, TextDecoration.BOLD),
                         Component.text()
+                                .append(Component.text(" ", NamedTextColor.GRAY))
                                 .append(Component.text("You discovered ", NamedTextColor.GRAY))
                                 .append(Component.text("The Barn", TextColor.color(0x55FF55)))
                                 .append(Component.text("!", NamedTextColor.GRAY))
                                 .build(),
+                        Component.empty(),
                         Component.text()
-                                .append(Component.text("- ", NamedTextColor.DARK_GRAY))
+                                .append(Component.text(" ", NamedTextColor.GRAY))
+                                .append(Component.text("\u2022 ", NamedTextColor.DARK_GRAY))
                                 .append(Component.text("Fast travel unlocked", NamedTextColor.GRAY))
                                 .build(),
                         Component.text()
-                                .append(Component.text("- ", NamedTextColor.DARK_GRAY))
+                                .append(Component.text(" ", NamedTextColor.GRAY))
+                                .append(Component.text("\u2022 ", NamedTextColor.DARK_GRAY))
                                 .append(Component.text("New NPCs available", NamedTextColor.GRAY))
-                                .build()
+                                .build(),
+                        Component.empty()
                 )
         );
 
@@ -129,19 +134,27 @@ class MessageRenderingTest {
                 )
                 .build();
 
-        Component expected = Component.text()
-                .append(Component.text("CLICK", NamedTextColor.YELLOW, TextDecoration.BOLD)
-                        .clickEvent(ClickEvent.openUrl("https://example.com/wiki")))
-                .append(Component.text(" for ", NamedTextColor.GRAY))
-                .append(Component.text("Wiki", TextColor.color(0x55FF55))
-                        .clickEvent(ClickEvent.openUrl("https://example.com/wiki")))
-                .append(Component.text(", ", NamedTextColor.GRAY))
-                .append(Component.text("CLICK", NamedTextColor.YELLOW, TextDecoration.BOLD)
-                        .clickEvent(ClickEvent.openUrl("https://example.com/discord")))
-                .append(Component.text(" for ", NamedTextColor.GRAY))
-                .append(Component.text("Discord", TextColor.color(0x5865F2))
-                        .clickEvent(ClickEvent.openUrl("https://example.com/discord")))
-                .build();
+        Component expected = Component.join(
+                JoinConfiguration.separator(Component.newline()),
+                java.util.List.of(
+                        Component.empty(),
+                        Component.text()
+                                .append(Component.text(" ", NamedTextColor.GRAY))
+                                .append(Component.text("CLICK", NamedTextColor.YELLOW, TextDecoration.BOLD)
+                                        .clickEvent(ClickEvent.openUrl("https://example.com/wiki")))
+                                .append(Component.text(" for ", NamedTextColor.GRAY))
+                                .append(Component.text("Wiki", TextColor.color(0x55FF55))
+                                        .clickEvent(ClickEvent.openUrl("https://example.com/wiki")))
+                                .append(Component.text(", ", NamedTextColor.GRAY))
+                                .append(Component.text("CLICK", NamedTextColor.YELLOW, TextDecoration.BOLD)
+                                        .clickEvent(ClickEvent.openUrl("https://example.com/discord")))
+                                .append(Component.text(" for ", NamedTextColor.GRAY))
+                                .append(Component.text("Discord", TextColor.color(0x5865F2))
+                                        .clickEvent(ClickEvent.openUrl("https://example.com/discord")))
+                                .build(),
+                        Component.empty()
+                )
+        );
 
         assertEquals(expected, renderBlock(block));
     }
