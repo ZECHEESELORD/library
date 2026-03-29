@@ -6,11 +6,13 @@ public interface TabsMenuBuilder {
 
     /**
      * House footer policy for v1 tab menus:
+     * row 0 = tab strip,
+     * row 1 = black-pane spacer,
+     * rows 2-4 = tab content,
      * slot 45 = previous/back,
      * slot 49 = close,
      * slot 53 = next,
      * remaining bottom-row slots = utility controls or black-pane filler.
-     * The top row is reserved for the tab strip.
      */
 
     TabsMenuBuilder title(String title);

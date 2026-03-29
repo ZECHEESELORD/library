@@ -44,7 +44,7 @@ class StandardMenuServiceTest {
     }
 
     @Test
-    void tabsUseTopRowStripAndStableFooterGrammar() {
+    void tabsUseTopRowStripSpacerRowAndStableFooterGrammar() {
         Menu menu = menus.tabs()
                 .title("Modes")
                 .back(context -> {})
@@ -56,8 +56,28 @@ class StandardMenuServiceTest {
 
         assertTrue(titleAt(frame, 0).contains("Alpha"));
         assertTrue(titleAt(frame, 1).contains("Beta"));
+        assertEquals(" ", titleAt(frame, 9));
+        assertEquals("Item 0", titleAt(frame, 18));
         assertEquals("Back", titleAt(frame, 45));
         assertEquals("Close", titleAt(frame, 49));
+    }
+
+    @Test
+    void tabsPageWithinThreeContentRows() {
+        Menu menu = menus.tabs()
+                .title("Modes")
+                .addTab(MenuTab.of("alpha", "Alpha", MenuIcon.vanilla("stone"), sampleButtons(28)))
+                .addTab(MenuTab.of("beta", "Beta", MenuIcon.vanilla("diamond"), sampleButtons(1)))
+                .build();
+
+        MenuFrame firstPage = menu.frames().get("tab:alpha:page:0");
+        MenuFrame secondPage = menu.frames().get("tab:alpha:page:1");
+
+        assertEquals("Item 0", titleAt(firstPage, 18));
+        assertEquals("Item 26", titleAt(firstPage, 44));
+        assertEquals("Next Page", titleAt(firstPage, 53));
+        assertEquals("Item 27", titleAt(secondPage, 18));
+        assertEquals("Previous Page", titleAt(secondPage, 45));
     }
 
     @Test

@@ -149,7 +149,8 @@ class PaperMenuRuntimeTest {
         assertEquals("Back", slotTitle(access, inventory, 45));
         assertEquals("» Profiles", slotTitle(access, inventory, 0));
         assertEquals("Progress", slotTitle(access, inventory, 1));
-        assertEquals("Your SkyBlock Profile", slotTitle(access, inventory, 9));
+        assertEquals(" ", slotTitle(access, inventory, 9));
+        assertEquals("Your SkyBlock Profile", slotTitle(access, inventory, 18));
 
         InventoryClickEvent switchTab = click(player, inventory, 1, ClickType.LEFT);
         runtime.onInventoryClick(switchTab);
@@ -157,7 +158,7 @@ class PaperMenuRuntimeTest {
         assertTrue(switchTab.isCancelled());
         assertEquals("Profiles", slotTitle(access, inventory, 0));
         assertEquals("» Progress", slotTitle(access, inventory, 1));
-        assertEquals("Farming XLIX", slotTitle(access, inventory, 9));
+        assertEquals("Farming XLIX", slotTitle(access, inventory, 18));
 
         InventoryClickEvent back = click(player, inventory, 45, ClickType.LEFT);
         runtime.onInventoryClick(back);

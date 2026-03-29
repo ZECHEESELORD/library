@@ -135,7 +135,8 @@ class MinestomMenuRuntimeTest {
         assertEquals("Back", slotTitle(inventory, 45));
         assertEquals("» Profiles", slotTitle(inventory, 0));
         assertEquals("Progress", slotTitle(inventory, 1));
-        assertEquals("Your SkyBlock Profile", slotTitle(inventory, 9));
+        assertEquals(" ", slotTitle(inventory, 9));
+        assertEquals("Your SkyBlock Profile", slotTitle(inventory, 18));
 
         InventoryPreClickEvent switchTab = new InventoryPreClickEvent(inventory, player, new Click.Left(1));
         runtime.onInventoryPreClick(switchTab);
@@ -143,7 +144,7 @@ class MinestomMenuRuntimeTest {
         assertTrue(switchTab.isCancelled());
         assertEquals("Profiles", slotTitle(inventory, 0));
         assertEquals("» Progress", slotTitle(inventory, 1));
-        assertEquals("Farming XLIX", slotTitle(inventory, 9));
+        assertEquals("Farming XLIX", slotTitle(inventory, 18));
 
         InventoryPreClickEvent back = new InventoryPreClickEvent(inventory, player, new Click.Left(45));
         runtime.onInventoryPreClick(back);

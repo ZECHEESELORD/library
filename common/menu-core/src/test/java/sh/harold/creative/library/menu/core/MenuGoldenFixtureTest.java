@@ -106,8 +106,9 @@ class MenuGoldenFixtureTest {
                 FRAME tab:profiles:page:0
                 0:» Profiles
                 1:Progress
-                9:Your SkyBlock Profile
-                10:Profile Slot #5
+                9:[blank]
+                18:Your SkyBlock Profile
+                19:Profile Slot #5
                 49:Close""", menuSnapshot(menu));
     }
 
@@ -122,8 +123,9 @@ class MenuGoldenFixtureTest {
         builder.append("INITIAL ").append(menu.initialFrameId()).append('\n');
         String frameId = menu.initialFrameId();
         builder.append("FRAME ").append(frameId);
-        for (int slot : List.of(0, 1, 9, 10, 49)) {
-            builder.append('\n').append(slot).append(':').append(flatten(menu.frames().get(frameId).slots().get(slot).title()));
+        for (int slot : List.of(0, 1, 9, 18, 19, 49)) {
+            String title = flatten(menu.frames().get(frameId).slots().get(slot).title());
+            builder.append('\n').append(slot).append(':').append(title.isBlank() ? "[blank]" : title);
         }
         return builder.toString();
     }

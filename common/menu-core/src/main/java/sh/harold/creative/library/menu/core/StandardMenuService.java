@@ -30,9 +30,12 @@ import java.util.function.Function;
 public final class StandardMenuService implements MenuService {
 
     private static final int LIST_ROWS = 6;
-    private static final int CONTENT_START = 9;
-    private static final int CONTENT_END = 44;
-    private static final int CONTENT_SIZE = CONTENT_END - CONTENT_START + 1;
+    private static final int LIST_CONTENT_START = 9;
+    private static final int LIST_CONTENT_END = 44;
+    private static final int LIST_CONTENT_SIZE = LIST_CONTENT_END - LIST_CONTENT_START + 1;
+    private static final int TABS_CONTENT_START = 18;
+    private static final int TABS_CONTENT_END = 44;
+    private static final int TABS_CONTENT_SIZE = TABS_CONTENT_END - TABS_CONTENT_START + 1;
     private static final int FOOTER_PREVIOUS_OR_BACK_OFFSET = 0;
     private static final int FOOTER_SECONDARY_LEFT_OFFSET = 1;
     private static final int FOOTER_CLOSE_OFFSET = 4;
@@ -111,7 +114,7 @@ public final class StandardMenuService implements MenuService {
 
         @Override
         public Menu build() {
-            int totalPages = Math.max(1, (items.size() + CONTENT_SIZE - 1) / CONTENT_SIZE);
+            int totalPages = Math.max(1, (items.size() + LIST_CONTENT_SIZE - 1) / LIST_CONTENT_SIZE);
             Map<String, MenuFrame> frames = new LinkedHashMap<>();
             for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
                 frames.put(frameId(pageIndex), new MenuFrame(title, buildListPage(pageIndex, totalPages, items, utilities, backAction)));
@@ -191,7 +194,7 @@ public final class StandardMenuService implements MenuService {
             String initialFrameId = null;
             for (MenuTab tab : tabs) {
                 List<MenuItem> tabItems = tab.items();
-                int totalPages = Math.max(1, (tabItems.size() + CONTENT_SIZE - 1) / CONTENT_SIZE);
+                int totalPages = Math.max(1, (tabItems.size() + TABS_CONTENT_SIZE - 1) / TABS_CONTENT_SIZE);
                 for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
                     String frameId = frameId(tab.id(), pageIndex);
                     if (initialFrameId == null && (defaultTabId == null || defaultTabId.equals(tab.id())) && pageIndex == 0) {
@@ -283,9 +286,9 @@ public final class StandardMenuService implements MenuService {
         int footerStart = HouseMenuCompiler.footerStart(LIST_ROWS);
         validateUtilitySlots(utilities, footerStart,
                 reservedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0, totalPages > 1 && pageIndex + 1 < totalPages, backAction != null));
-        int firstItem = pageIndex * CONTENT_SIZE;
-        int lastItem = Math.min(items.size(), firstItem + CONTENT_SIZE);
-        int contentSlot = CONTENT_START;
+        int firstItem = pageIndex * LIST_CONTENT_SIZE;
+        int lastItem = Math.min(items.size(), firstItem + LIST_CONTENT_SIZE);
+        int contentSlot = LIST_CONTENT_START;
         for (int i = firstItem; i < lastItem; i++) {
             slots.put(contentSlot, HouseMenuCompiler.compile(contentSlot, items.get(i)));
             contentSlot++;
@@ -337,9 +340,9 @@ public final class StandardMenuService implements MenuService {
         }
         validateUtilitySlots(utilities, footerStart,
                 reservedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0, totalPages > 1 && pageIndex + 1 < totalPages, backAction != null));
-        int firstItem = pageIndex * CONTENT_SIZE;
-        int lastItem = Math.min(activeTab.items().size(), firstItem + CONTENT_SIZE);
-        int contentSlot = CONTENT_START;
+        int firstItem = pageIndex * TABS_CONTENT_SIZE;
+        int lastItem = Math.min(activeTab.items().size(), firstItem + TABS_CONTENT_SIZE);
+        int contentSlot = TABS_CONTENT_START;
         for (int i = firstItem; i < lastItem; i++) {
             slots.put(contentSlot, HouseMenuCompiler.compile(contentSlot, activeTab.items().get(i)));
             contentSlot++;
