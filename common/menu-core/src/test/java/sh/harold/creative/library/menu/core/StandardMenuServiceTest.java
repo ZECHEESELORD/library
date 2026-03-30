@@ -103,6 +103,7 @@ class StandardMenuServiceTest {
         assertEquals("Dark Oak", titleAt(frame, 4));
         assertEquals("Stone", titleAt(frame, 6));
         assertEquals("Cobblestone", titleAt(frame, 7));
+        assertEquals(List.of("", "Oak", "", "CLICK to view!"), loreAt(frame, 1));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 5));
 
         assertEquals("minecraft:lime_stained_glass_pane", iconAt(frame, 10));

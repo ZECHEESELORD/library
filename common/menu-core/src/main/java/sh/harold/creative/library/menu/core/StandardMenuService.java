@@ -579,9 +579,13 @@ public final class StandardMenuService implements MenuService {
     private static Component promptLine(String clickLabel, String promptLabel) {
         return Component.text()
                 .append(Component.text(clickLabel, NamedTextColor.YELLOW, TextDecoration.BOLD))
-                .append(Component.text(" to " + promptLabel, NamedTextColor.YELLOW))
+                .append(Component.text(" to " + emphaticPromptLabel(promptLabel), NamedTextColor.YELLOW))
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
+    }
+
+    private static String emphaticPromptLabel(String promptLabel) {
+        return promptLabel.endsWith("!") ? promptLabel : promptLabel + "!";
     }
 
     private static void applyUtilities(Map<Integer, MenuSlot> slots, int footerStart, Map<UtilitySlot, MenuItem> utilities) {
