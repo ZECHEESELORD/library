@@ -20,6 +20,7 @@ import net.minestom.server.entity.metadata.display.AbstractDisplayMeta;
 import net.minestom.server.entity.metadata.display.BlockDisplayMeta;
 import net.minestom.server.entity.metadata.display.ItemDisplayMeta;
 import net.minestom.server.entity.metadata.display.TextDisplayMeta;
+import net.minestom.server.entity.metadata.other.ArmorStandMeta;
 import net.minestom.server.entity.metadata.villager.VillagerMeta;
 import net.minestom.server.event.Event;
 import net.minestom.server.event.EventNode;
@@ -96,10 +97,10 @@ public final class MinestomEntityPlatform implements AutoCloseable {
         HouseValidator.validate(serviceSpec);
         HousePresentation presentation = HousePresentationFactory.create(serviceSpec);
         ManagedEntity anchor = spawn(instance, serviceSpec.entitySpec());
-        anchor.customName(presentation.name());
-        anchor.customNameVisible(true);
+        anchor.clearCustomName();
+        anchor.customNameVisible(false);
 
-        HousePresentationRenderer renderer = new MinestomHouseRenderer(instance, anchor.transform(), presentation);
+        HousePresentationRenderer renderer = new MinestomHouseRenderer(((MinestomManagedEntity) anchor).entity, presentation);
         StandardHouseServiceEntity serviceEntity = new StandardHouseServiceEntity(anchor, presentation, renderer);
 
         AtomicReference<HouseServiceEntity> reference = new AtomicReference<>(serviceEntity);
@@ -609,20 +610,25 @@ public final class MinestomEntityPlatform implements AutoCloseable {
     }
 
     private static final class MinestomHouseRenderer implements HousePresentationRenderer {
+        private static final double LINE_SPACING = 0.3;
+
         private final List<Entity> displays = new ArrayList<>();
 
-        private MinestomHouseRenderer(Instance instance, EntityTransform anchorTransform, HousePresentation presentation) {
-            displays.add(spawnLine(instance, anchorTransform, 0.35, presentation.role()));
-            displays.add(spawnLine(instance, anchorTransform, 0.10, presentation.prompt()));
+        private MinestomHouseRenderer(Entity anchor, HousePresentation presentation) {
+            List<Component> lines = presentation.lines();
+            Entity vehicle = anchor;
+            for (int index = lines.size() - 1; index >= 0; index--) {
+                double offset = (lines.size() - 1 - index) * LINE_SPACING;
+                Entity display = spawnLine(anchor.getInstance(), anchor.getPosition(), offset, lines.get(index));
+                vehicle.addPassenger(display);
+                displays.add(display);
+                vehicle = display;
+            }
         }
 
         @Override
         public void teleport(EntityTransform transform) {
-            if (displays.size() != 2) {
-                return;
-            }
-            displays.get(0).teleport(new Pos(transform.x(), transform.y() + 0.35, transform.z(), transform.yaw(), transform.pitch())).join();
-            displays.get(1).teleport(new Pos(transform.x(), transform.y() + 0.10, transform.z(), transform.yaw(), transform.pitch())).join();
+            // Mounted passenger stacks follow the anchor entity automatically.
         }
 
         @Override
@@ -633,14 +639,19 @@ public final class MinestomEntityPlatform implements AutoCloseable {
             displays.clear();
         }
 
-        private static Entity spawnLine(Instance instance, EntityTransform transform, double offset, Component text) {
-            Entity entity = new Entity(Objects.requireNonNull(EntityType.fromKey("minecraft:text_display"), "text display type"));
-            entity.editEntityMeta(TextDisplayMeta.class, meta -> {
-                meta.setText(text);
-                meta.setTranslation(new Vec(0.0, 0.0, 0.0));
+        private static Entity spawnLine(Instance instance, Pos anchorPosition, double offset, Component text) {
+            Entity entity = createEntity(EntityTypes.ARMOR_STAND);
+            entity.editEntityMeta(ArmorStandMeta.class, meta -> {
+                meta.setSmall(true);
+                meta.setMarker(true);
+                meta.setHasNoBasePlate(true);
             });
+            entity.setCustomName(text);
+            entity.setCustomNameVisible(true);
+            entity.setInvisible(true);
+            entity.setSilent(true);
             entity.setNoGravity(true);
-            entity.setInstance(instance, new Pos(transform.x(), transform.y() + offset, transform.z(), transform.yaw(), transform.pitch())).join();
+            entity.setInstance(instance, anchorPosition.add(0.0, offset, 0.0)).join();
             return entity;
         }
     }

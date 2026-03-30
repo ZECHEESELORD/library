@@ -10,23 +10,20 @@ public final class HouseServiceSpec {
 
     private final EntitySpec entitySpec;
     private final Component name;
-    private final HouseRole role;
-    private final HousePromptMode promptMode;
+    private final Component description;
     private final HouseVisibilityPolicy visibilityPolicy;
     private final HouseServiceClickHandler clickHandler;
 
     private HouseServiceSpec(
             EntitySpec entitySpec,
             Component name,
-            HouseRole role,
-            HousePromptMode promptMode,
+            Component description,
             HouseVisibilityPolicy visibilityPolicy,
             HouseServiceClickHandler clickHandler
     ) {
         this.entitySpec = Objects.requireNonNull(entitySpec, "entitySpec");
         this.name = name;
-        this.role = Objects.requireNonNull(role, "role");
-        this.promptMode = Objects.requireNonNull(promptMode, "promptMode");
+        this.description = description;
         this.visibilityPolicy = Objects.requireNonNull(visibilityPolicy, "visibilityPolicy");
         this.clickHandler = clickHandler;
     }
@@ -39,12 +36,8 @@ public final class HouseServiceSpec {
         return name;
     }
 
-    public HouseRole role() {
-        return role;
-    }
-
-    public HousePromptMode promptMode() {
-        return promptMode;
+    public Component description() {
+        return description;
     }
 
     public HouseVisibilityPolicy visibilityPolicy() {
@@ -62,8 +55,7 @@ public final class HouseServiceSpec {
     public static final class Builder {
         private final EntitySpec entitySpec;
         private Component name;
-        private HouseRole role = HouseRole.hidden();
-        private HousePromptMode promptMode = HousePromptMode.INTERACT;
+        private Component description;
         private HouseVisibilityPolicy visibilityPolicy = HouseVisibilityPolicy.ALWAYS;
         private HouseServiceClickHandler clickHandler;
 
@@ -76,13 +68,18 @@ public final class HouseServiceSpec {
             return this;
         }
 
-        public Builder role(HouseRole role) {
-            this.role = Objects.requireNonNull(role, "role");
+        public Builder name(String name) {
+            this.name = HouseTextFormats.parse(name);
             return this;
         }
 
-        public Builder promptMode(HousePromptMode promptMode) {
-            this.promptMode = Objects.requireNonNull(promptMode, "promptMode");
+        public Builder description(Component description) {
+            this.description = Objects.requireNonNull(description, "description");
+            return this;
+        }
+
+        public Builder description(String description) {
+            this.description = HouseTextFormats.parse(description);
             return this;
         }
 
@@ -97,7 +94,7 @@ public final class HouseServiceSpec {
         }
 
         public HouseServiceSpec build() {
-            return new HouseServiceSpec(entitySpec, name, role, promptMode, visibilityPolicy, clickHandler);
+            return new HouseServiceSpec(entitySpec, name, description, visibilityPolicy, clickHandler);
         }
     }
 }

@@ -12,8 +12,6 @@ import sh.harold.creative.library.entity.EntitySpec;
 import sh.harold.creative.library.entity.EntityTransform;
 import sh.harold.creative.library.entity.EntityTypes;
 import sh.harold.creative.library.entity.ManagedEntity;
-import sh.harold.creative.library.entity.house.HousePromptMode;
-import sh.harold.creative.library.entity.house.HouseRole;
 import sh.harold.creative.library.entity.house.HouseServiceEntity;
 import sh.harold.creative.library.entity.house.HouseServiceSpec;
 import sh.harold.creative.library.entity.minestom.MinestomEntityPlatform;
@@ -59,9 +57,8 @@ public final class MinestomEntityExampleBootstrap {
                         .transform(new EntityTransform(spawn.x() + 4.0, spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()))
                         .flags(CommonEntityFlags.builder().gravity(false).build())
                         .build())
-                .name(Component.text("Meredith"))
-                .role(HouseRole.of(Component.text("Banker")))
-                .promptMode(HousePromptMode.VIEW)
+                .name("&bMeredith")
+                .description("Banker")
                 .clickHandler(context -> log("House banker clicked by " + context.interactor().uniqueId()))
                 .build());
 
@@ -69,9 +66,8 @@ public final class MinestomEntityExampleBootstrap {
                         .transform(new EntityTransform(spawn.x() + 6.0, spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()))
                         .flags(CommonEntityFlags.builder().gravity(false).build())
                         .build())
-                .name(Component.text("Gideon"))
-                .role(HouseRole.of(Component.text("Guide")))
-                .promptMode(HousePromptMode.TALK)
+                .name("&aGideon")
+                .description("Guide")
                 .clickHandler(context -> log("House guide clicked by " + context.interactor().uniqueId()))
                 .build());
 
@@ -107,10 +103,9 @@ public final class MinestomEntityExampleBootstrap {
         }).delay(TaskSchedule.tick(60)).schedule();
 
         instance.scheduler().buildTask(() -> {
-            guideService.entity().customName(Component.text("Gideon (Smoke)"));
             guideService.entity().glowing(true);
             guideService.teleport(new EntityTransform(spawn.x() + 6.0, spawn.y(), spawn.z() + 1.5, spawn.yaw(), spawn.pitch()));
-            log("Smoke step 4: renamed, toggled, and teleported the mannequin-backed guide.");
+            log("Smoke step 4: toggled and teleported the mannequin-backed guide.");
         }).delay(TaskSchedule.tick(80)).schedule();
     }
 

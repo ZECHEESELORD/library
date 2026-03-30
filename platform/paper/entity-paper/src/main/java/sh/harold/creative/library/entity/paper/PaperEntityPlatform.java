@@ -9,6 +9,7 @@ import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.AbstractVillager;
 import org.bukkit.entity.Ageable;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
@@ -94,10 +95,10 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
         HouseValidator.validate(serviceSpec);
         HousePresentation presentation = HousePresentationFactory.create(serviceSpec);
         ManagedEntity anchor = spawn(world, serviceSpec.entitySpec());
-        anchor.customName(presentation.name());
-        anchor.customNameVisible(true);
+        anchor.clearCustomName();
+        anchor.customNameVisible(false);
 
-        HousePresentationRenderer renderer = new PaperHouseRenderer(world, anchor.transform(), presentation);
+        HousePresentationRenderer renderer = new PaperHouseRenderer(((PaperManagedEntity) anchor).entity, presentation);
         StandardHouseServiceEntity serviceEntity = new StandardHouseServiceEntity(anchor, presentation, renderer);
 
         AtomicReference<HouseServiceEntity> reference = new AtomicReference<>(serviceEntity);
@@ -587,39 +588,55 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
     }
 
     private static final class PaperHouseRenderer implements HousePresentationRenderer {
-        private final List<TextDisplay> displays = new ArrayList<>();
+        private static final double LINE_SPACING = 0.3;
 
-        private PaperHouseRenderer(World world, EntityTransform anchorTransform, HousePresentation presentation) {
-            displays.add(spawnLine(world, anchorTransform, 0.35, presentation.role()));
-            displays.add(spawnLine(world, anchorTransform, 0.10, presentation.prompt()));
+        private final List<ArmorStand> displays = new ArrayList<>();
+
+        private PaperHouseRenderer(Entity anchor, HousePresentation presentation) {
+            List<Component> lines = presentation.lines();
+            Entity vehicle = anchor;
+            for (int index = lines.size() - 1; index >= 0; index--) {
+                double offset = (lines.size() - 1 - index) * LINE_SPACING;
+                ArmorStand display = spawnLine(anchor.getWorld(), anchor.getLocation(), offset, lines.get(index));
+                if (!vehicle.addPassenger(display)) {
+                    display.remove();
+                    throw new IllegalStateException("Failed to mount House line armor stand to " + vehicle.getUniqueId());
+                }
+                displays.add(display);
+                vehicle = display;
+            }
         }
 
         @Override
         public void teleport(EntityTransform transform) {
-            if (displays.size() != 2) {
-                return;
-            }
-            displays.get(0).teleport(new Location(displays.get(0).getWorld(), transform.x(), transform.y() + 0.35, transform.z(), transform.yaw(), transform.pitch()));
-            displays.get(1).teleport(new Location(displays.get(1).getWorld(), transform.x(), transform.y() + 0.10, transform.z(), transform.yaw(), transform.pitch()));
+            // Mounted passenger stacks follow the anchor entity automatically.
         }
 
         @Override
         public void close() {
-            for (TextDisplay display : displays) {
+            for (ArmorStand display : displays) {
                 display.remove();
             }
             displays.clear();
         }
 
-        private static TextDisplay spawnLine(World world, EntityTransform transform, double offset, Component text) {
+        private static ArmorStand spawnLine(World world, Location anchorLocation, double offset, Component text) {
             return world.spawn(
-                    new Location(world, transform.x(), transform.y() + offset, transform.z(), transform.yaw(), transform.pitch()),
-                    TextDisplay.class,
+                    anchorLocation.clone().add(0.0, offset, 0.0),
+                    ArmorStand.class,
                     display -> {
-                        display.text(text);
+                        display.customName(text);
+                        display.setCustomNameVisible(true);
+                        display.setVisible(false);
+                        display.setMarker(true);
+                        display.setSmall(true);
+                        display.setBasePlate(false);
                         display.setGravity(false);
                         display.setInvulnerable(true);
+                        display.setSilent(true);
+                        display.setCollidable(false);
                         display.setPersistent(false);
+                        display.setCanTick(false);
                     }
             );
         }

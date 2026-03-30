@@ -11,11 +11,9 @@ import sh.harold.creative.library.entity.EntityTransform;
 import sh.harold.creative.library.entity.EntityTypes;
 import sh.harold.creative.library.entity.ManagedEntity;
 import sh.harold.creative.library.entity.house.HouseServiceEntity;
+import sh.harold.creative.library.entity.house.HouseServiceSpec;
 import sh.harold.creative.library.entity.paper.PaperEntityPlatform;
 import sh.harold.creative.library.entity.paper.citizens.PaperCitizensEntityPlatform;
-import sh.harold.creative.library.entity.house.HousePromptMode;
-import sh.harold.creative.library.entity.house.HouseRole;
-import sh.harold.creative.library.entity.house.HouseServiceSpec;
 
 public final class PaperEntityExamplePlugin extends JavaPlugin {
 
@@ -48,9 +46,8 @@ public final class PaperEntityExamplePlugin extends JavaPlugin {
                         .transform(new EntityTransform(spawn.getX() + 4.0, spawn.getY(), spawn.getZ(), spawn.getYaw(), spawn.getPitch()))
                         .flags(CommonEntityFlags.builder().gravity(false).build())
                         .build())
-                .name(Component.text("Meredith"))
-                .role(HouseRole.of(Component.text("Banker")))
-                .promptMode(HousePromptMode.OPEN)
+                .name("&bMeredith")
+                .description("Banker")
                 .clickHandler(context -> getLogger().info("House banker clicked by " + context.interactor().uniqueId()))
                 .build());
 
@@ -60,9 +57,8 @@ public final class PaperEntityExamplePlugin extends JavaPlugin {
                             .transform(new EntityTransform(spawn.getX() + 6.0, spawn.getY(), spawn.getZ(), spawn.getYaw(), spawn.getPitch()))
                             .flags(CommonEntityFlags.builder().gravity(false).build())
                             .build())
-                    .name(Component.text("Gideon"))
-                    .role(HouseRole.of(Component.text("Guide")))
-                    .promptMode(HousePromptMode.TALK)
+                    .name("&aGideon")
+                    .description("Guide")
                     .clickHandler(context -> getLogger().info("Citizens guide clicked by " + context.interactor().uniqueId()))
                     .build());
         } else {
@@ -104,10 +100,9 @@ public final class PaperEntityExamplePlugin extends JavaPlugin {
 
         if (citizensGuideService != null) {
             Bukkit.getScheduler().runTaskLater(this, () -> {
-                citizensGuideService.entity().customName(Component.text("Gideon (Smoke)"));
                 citizensGuideService.entity().glowing(true);
                 citizensGuideService.teleport(new EntityTransform(spawn.getX() + 6.0, spawn.getY(), spawn.getZ() + 1.5, spawn.getYaw(), spawn.getPitch()));
-                getLogger().info("Smoke step 4: renamed, toggled, and teleported the Citizens-backed guide.");
+                getLogger().info("Smoke step 4: toggled and teleported the Citizens-backed guide.");
             }, 80L);
         }
     }

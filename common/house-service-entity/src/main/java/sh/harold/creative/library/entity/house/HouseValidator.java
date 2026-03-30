@@ -14,8 +14,8 @@ public final class HouseValidator {
         if (spec.name() == null || Component.empty().equals(spec.name())) {
             throw new IllegalArgumentException("House service name is required");
         }
-        if (!spec.role().isHidden() && spec.role().label().filter(component -> !Component.empty().equals(component)).isEmpty()) {
-            throw new IllegalArgumentException("House service role label is required");
+        if (spec.description() == null || Component.empty().equals(spec.description())) {
+            throw new IllegalArgumentException("House service description is required");
         }
     }
 }

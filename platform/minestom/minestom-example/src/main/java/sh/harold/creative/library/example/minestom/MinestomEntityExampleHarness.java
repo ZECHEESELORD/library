@@ -12,8 +12,6 @@ import sh.harold.creative.library.entity.EntityTypes;
 import sh.harold.creative.library.entity.InteractionKind;
 import sh.harold.creative.library.entity.InteractorRef;
 import sh.harold.creative.library.entity.ManagedEntity;
-import sh.harold.creative.library.entity.house.HousePromptMode;
-import sh.harold.creative.library.entity.house.HouseRole;
 import sh.harold.creative.library.entity.house.HouseServiceEntity;
 import sh.harold.creative.library.entity.house.HouseServiceSpec;
 import sh.harold.creative.library.entity.minestom.MinestomEntityPlatform;
@@ -98,9 +96,8 @@ final class MinestomEntityExampleHarness implements AutoCloseable {
                         .transform(transform(spawn.x() + 4.0, spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()))
                         .flags(CommonEntityFlags.builder().gravity(false).build())
                         .build())
-                .name(Component.text("Meredith"))
-                .role(HouseRole.of(Component.text("Banker")))
-                .promptMode(HousePromptMode.VIEW)
+                .name("&bMeredith")
+                .description("Banker")
                 .clickHandler(context -> withInteractor(context.interactor(), player -> {
                     sounds.play(player, SoundCueKeys.INTERACTION_NPC);
                     menus.open(player, menuExamples.tabsGallery());
@@ -112,9 +109,8 @@ final class MinestomEntityExampleHarness implements AutoCloseable {
                         .transform(transform(spawn.x() + 6.0, spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()))
                         .flags(CommonEntityFlags.builder().gravity(false).build())
                         .build())
-                .name(Component.text("Gideon"))
-                .role(HouseRole.of(Component.text("Guide")))
-                .promptMode(HousePromptMode.TALK)
+                .name("&aGideon")
+                .description("Guide")
                 .clickHandler(context -> withInteractor(context.interactor(), player -> {
                     sounds.play(player, SoundCueKeys.INTERACTION_NPC);
                     feedback.sendSummary(player);

@@ -24,4 +24,4 @@ Legend:
 - Citizens support is intentionally limited to player-like humanoid entities. It is not a generic Paper entity backend.
 - Minestom invulnerability is type-limited. Living entities support it directly; non-living entities reject `invulnerable(true)` explicitly.
 - Minestom currently exposes no `AiCapable` implementation. AI control remains unsupported rather than faked.
-- House rendering is always the structured 3-line model when the service wrapper is used: anchor name plus backend-owned role and prompt lines.
+- House rendering is always the structured 3-line model when the service wrapper is used: backend-owned armor-stand lines for colored name, gray bracketed description, and yellow bold `CLICK`, with the anchor nameplate hidden.
