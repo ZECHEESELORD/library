@@ -49,49 +49,49 @@ final class PaperMenuExampleMenus {
                                         MenuPair.of("Highlight", FakeSkyBlockMenuValues.tracked("Accessory Power")),
                                         MenuPair.of("Status", FakeSkyBlockMenuValues.ready("Wardrobe ready")),
                                         List.of(
-                                        yourSkyBlockProfileButton(),
-                                        profileSlotFiveButton(),
-                                        exampleButton(Material.ENDER_CHEST, FakeSkyBlockMenuTitles.normal("Accessory Bag"),
+                                                yourSkyBlockProfileButton(),
+                                                profileSlotFiveButton(),
+                                                exampleButton(Material.ENDER_CHEST, FakeSkyBlockMenuTitles.normal("Accessory Bag"),
                                                 "Review talisman loadouts and stored enrichments.", ActionVerb.VIEW),
-                                        exampleButton(Material.LEATHER_CHESTPLATE, FakeSkyBlockMenuTitles.normal("Wardrobe"),
-                                                "Manage saved combat and farming sets.", ActionVerb.MANAGE))),
+                                                exampleButton(Material.LEATHER_CHESTPLATE, FakeSkyBlockMenuTitles.normal("Wardrobe"),
+                                                        "Manage saved combat and farming sets.", ActionVerb.MANAGE))),
                                 listTab("progress", FakeSkyBlockMenuTitles.success("Progress & Milestones"), Material.EXPERIENCE_BOTTLE,
                                         "Review skill progress, milestone rewards, and collection checkpoints without leaving the broader progression lane.",
                                         MenuPair.of("Track", FakeSkyBlockMenuValues.tracked("Skills & collections")),
                                         MenuPair.of("Hot", FakeSkyBlockMenuValues.claimable("Museum Rewards")),
                                         List.of(
-                                        farmingXlixButton(),
-                                        museumRewardsButton(),
-                                        exampleButton(Material.DIAMOND_SWORD, FakeSkyBlockMenuTitles.danger("Slayer"),
+                                                farmingXlixButton(),
+                                                museumRewardsButton(),
+                                                exampleButton(Material.DIAMOND_SWORD, FakeSkyBlockMenuTitles.danger("Slayer"),
                                                 "Check boss milestones and recipe unlocks.", ActionVerb.VIEW),
-                                        exampleButton(Material.HAY_BLOCK, FakeSkyBlockMenuTitles.normal("Collections"),
-                                                "Browse crop and material progression.", ActionVerb.BROWSE))),
+                                                exampleButton(Material.HAY_BLOCK, FakeSkyBlockMenuTitles.normal("Collections"),
+                                                        "Browse crop and material progression.", ActionVerb.BROWSE))),
                                 listTab("museum", FakeSkyBlockMenuTitles.reward("Museum & Rewards"), Material.BOOK,
                                         "Check donated sets, milestone payouts, and the next curator unlocks in one reward-heavy museum tab.",
                                         MenuPair.of("Focus", FakeSkyBlockMenuValues.claimable("Rewards & donations")),
                                         MenuPair.of("Next", FakeSkyBlockMenuValues.tracked("Curator Log")),
                                         List.of(
-                                        museumRewardsButton(),
-                                        exampleButton(Material.PAINTING, FakeSkyBlockMenuTitles.normal("Donations"),
+                                                museumRewardsButton(),
+                                                exampleButton(Material.PAINTING, FakeSkyBlockMenuTitles.normal("Donations"),
                                                 "Review donated pieces and missing sets.", ActionVerb.BROWSE),
-                                        exampleButton(Material.ARMOR_STAND, FakeSkyBlockMenuTitles.normal("Armor Sets"),
+                                                exampleButton(Material.ARMOR_STAND, FakeSkyBlockMenuTitles.normal("Armor Sets"),
                                                 "Track set milestones and SkyBlock XP.", ActionVerb.VIEW),
-                                        exampleButton(Material.CLOCK, FakeSkyBlockMenuTitles.reward("Curator Log"),
-                                                "See which rewards unlock next.", ActionVerb.VIEW))),
+                                                exampleButton(Material.CLOCK, FakeSkyBlockMenuTitles.reward("Curator Log"),
+                                                        "See which rewards unlock next.", ActionVerb.VIEW))),
                                 listTab("upgrades", FakeSkyBlockMenuTitles.special("Account & Profile Upgrades"), Material.NETHER_STAR,
                                         "Upgrade your current account unlocks, long-term profile slots, and quality-of-life expansions from one place.",
                                         MenuPair.of("Profile", FakeSkyBlockMenuValues.inactive("Nothing Going On...")),
                                         MenuPair.of("Account", FakeSkyBlockMenuValues.featured("Bazaar Flipper II")),
                                         List.of(
-                                        exampleButton(Material.CRAFTING_TABLE, FakeSkyBlockMenuTitles.normal("Crafting Slots"),
+                                                exampleButton(Material.CRAFTING_TABLE, FakeSkyBlockMenuTitles.normal("Crafting Slots"),
                                                 "Review unlocked recipe pages and extra slots.", ActionVerb.MANAGE),
-                                        exampleButton(Material.REDSTONE, FakeSkyBlockMenuTitles.perk("Accessory Power"),
+                                                exampleButton(Material.REDSTONE, FakeSkyBlockMenuTitles.perk("Accessory Power"),
                                                 "Tune your selected reforging preset.", ActionVerb.MANAGE),
-                                        exampleButton(Material.EMERALD, FakeSkyBlockMenuTitles.perk("Bank Upgrades"),
+                                                exampleButton(Material.EMERALD, FakeSkyBlockMenuTitles.perk("Bank Upgrades"),
                                                 "Check interest tiers and account perks.", ActionVerb.BUY),
-                                        exampleButton(Material.ANVIL, FakeSkyBlockMenuTitles.perk("Profile Upgrades"),
-                                                "Preview bag, potion, and wardrobe expansions.", ActionVerb.BROWSE))))
-                )
+                                                exampleButton(Material.ANVIL, FakeSkyBlockMenuTitles.perk("Profile Upgrades"),
+                                                        "Preview bag, potion, and wardrobe expansions.", ActionVerb.BROWSE)))
+                        )))
                 .addGroup(MenuTabGroup.of(
                         "social",
                         List.of(
@@ -100,29 +100,29 @@ final class PaperMenuExampleMenus {
                                         MenuPair.of("Ready", FakeSkyBlockMenuValues.ready("Ready Check")),
                                         MenuPair.of("Browse", FakeSkyBlockMenuValues.tracked("Party Finder")),
                                         List.of(
-                                        exampleButton(Material.NAME_TAG, FakeSkyBlockMenuTitles.normal("Party Finder"),
+                                                exampleButton(Material.NAME_TAG, FakeSkyBlockMenuTitles.normal("Party Finder"),
                                                 "Browse open groups for quick dungeon runs.", ActionVerb.BROWSE),
-                                        exampleButton(Material.PLAYER_HEAD, FakeSkyBlockMenuTitles.normal("Invite Friends"),
+                                                exampleButton(Material.PLAYER_HEAD, FakeSkyBlockMenuTitles.normal("Invite Friends"),
                                                 "Send invites to your frequent teammates.", ActionVerb.OPEN),
-                                        exampleButton(Material.BELL, FakeSkyBlockMenuTitles.success("Ready Check"),
-                                                "Signal the group before starting a run.", ActionVerb.CONFIRM))),
+                                                exampleButton(Material.BELL, FakeSkyBlockMenuTitles.success("Ready Check"),
+                                                        "Signal the group before starting a run.", ActionVerb.CONFIRM))),
                                 listTab("guild", FakeSkyBlockMenuTitles.perk("Guild & Perk Tools"), Material.SHIELD,
                                         "Review the roster, browse recent activity, and surface guild-wide perks without bouncing between admin views.",
                                         MenuPair.of("Perks", FakeSkyBlockMenuValues.tracked("Beacon boosts")),
                                         MenuPair.of("Roster", FakeSkyBlockMenuValues.ready("Online notes synced")),
                                         List.of(
-                                        exampleButton(Material.BOOKSHELF, FakeSkyBlockMenuTitles.normal("Roster"),
+                                                exampleButton(Material.BOOKSHELF, FakeSkyBlockMenuTitles.normal("Roster"),
                                                 "View online members and rank notes.", ActionVerb.BROWSE),
-                                        exampleButton(Material.BEACON, FakeSkyBlockMenuTitles.perk("Perks"),
+                                                exampleButton(Material.BEACON, FakeSkyBlockMenuTitles.perk("Perks"),
                                                 "Inspect guild upgrade bonuses.", ActionVerb.VIEW),
-                                        exampleButton(Material.WRITABLE_BOOK, FakeSkyBlockMenuTitles.normal("Activity Log"),
-                                                "Browse recent joins, leaves, and events.", ActionVerb.BROWSE))),
+                                                exampleButton(Material.WRITABLE_BOOK, FakeSkyBlockMenuTitles.normal("Activity Log"),
+                                                        "Browse recent joins, leaves, and events.", ActionVerb.BROWSE))),
                                 listTab("mail", FakeSkyBlockMenuTitles.reward("Mail, Refunds & Claims"), Material.WRITABLE_BOOK,
                                         "Collect completed deliveries, stale refunds, and marketplace returns from one claim-first mailbox tab.",
                                         MenuPair.of("Claim", FakeSkyBlockMenuValues.claimable("Deliveries & bids")),
                                         MenuPair.of("Queue", FakeSkyBlockMenuValues.claimable("26 parcels waiting")),
-                                        mailButtons())))
-                )
+                                        mailButtons())
+                        )))
                 .addGroup(MenuTabGroup.of(
                         "showcase",
                         List.of(
@@ -156,19 +156,19 @@ final class PaperMenuExampleMenus {
                                 canvasTab("routes", FakeSkyBlockMenuTitles.normal("Demo Routes"), Material.BOOKSHELF,
                                         "Jump between the list and canvas galleries while toggling the shared filler so the authored layout decisions stay easy to compare.",
                                         builder -> {
-                                    if (!canvasFillerEnabled) {
-                                        builder.fillWithBlackPane(false);
-                                    }
-                                    builder.place(29, openMenuButton(Material.CHEST, FakeSkyBlockMenuTitles.normal("Open List Gallery"),
-                                            "Jump into the plain paged list example.", ActionVerb.OPEN, this::listGallery));
-                                    builder.place(31, canvasFillerToggleButton(canvasFillerEnabled, "routes"));
-                                    builder.place(33, openMenuButton(Material.ITEM_FRAME, FakeSkyBlockMenuTitles.normal("Open Canvas Gallery"),
-                                            "Jump into the fixed-slot canvas example.", ActionVerb.OPEN, this::canvasGallery));
-                                },
+                                            if (!canvasFillerEnabled) {
+                                                builder.fillWithBlackPane(false);
+                                            }
+                                            builder.place(29, openMenuButton(Material.CHEST, FakeSkyBlockMenuTitles.normal("Open List Gallery"),
+                                                    "Jump into the plain paged list example.", ActionVerb.OPEN, this::listGallery));
+                                            builder.place(31, canvasFillerToggleButton(canvasFillerEnabled, "routes"));
+                                            builder.place(33, openMenuButton(Material.ITEM_FRAME, FakeSkyBlockMenuTitles.normal("Open Canvas Gallery"),
+                                                    "Jump into the fixed-slot canvas example.", ActionVerb.OPEN, this::canvasGallery));
+                                        },
                                         "Open paged list gallery",
                                         "Toggle canvas filler live",
-                                        "Open fixed-slot canvas gallery")))
-                )
+                                        "Open fixed-slot canvas gallery")
+                        )))
                 .build();
     }
 

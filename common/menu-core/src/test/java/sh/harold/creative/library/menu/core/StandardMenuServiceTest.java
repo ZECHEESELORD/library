@@ -427,9 +427,8 @@ class StandardMenuServiceTest {
     }
 
     private static int slotWithTitle(MenuFrame frame, String title) {
-        return frame.slots().entrySet().stream()
-                .filter(entry -> titleAt(frame, entry.getKey()).equals(title))
-                .mapToInt(java.util.Map.Entry::getKey)
+        return IntStream.range(0, frame.slots().size())
+                .filter(slot -> titleAt(frame, slot).equals(title))
                 .findFirst()
                 .orElseThrow();
     }
