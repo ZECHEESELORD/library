@@ -1,5 +1,6 @@
 package sh.harold.creative.library.menu.minestom;
 
+import net.kyori.adventure.key.Key;
 import net.minestom.server.entity.Player;
 import net.minestom.server.event.Event;
 import net.minestom.server.event.EventNode;
@@ -14,6 +15,7 @@ import sh.harold.creative.library.menu.MenuContext;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuSlotAction;
 import sh.harold.creative.library.menu.core.MenuSessionState;
+import sh.harold.creative.library.sound.SoundCueService;
 
 import java.util.Map;
 import java.util.Objects;
@@ -24,9 +26,11 @@ final class MinestomMenuRuntime implements AutoCloseable {
 
     private final Map<UUID, MinestomMenuSession> sessions = new ConcurrentHashMap<>();
     private final MinestomMenuRenderer renderer;
+    private final SoundCueService sounds;
 
-    MinestomMenuRuntime(MinestomMenuRenderer renderer) {
+    MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds) {
         this.renderer = Objects.requireNonNull(renderer, "renderer");
+        this.sounds = Objects.requireNonNull(sounds, "sounds");
     }
 
     EventNode<Event> createEventNode(String name) {
@@ -128,6 +132,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
     }
 
     private void handleInteraction(MinestomMenuSession session, MenuClick click, MenuInteraction interaction) {
+        playInteractionSound(session.viewer(), interaction);
         switch (interaction.action()) {
             case MenuSlotAction.OpenFrame openFrame -> {
                 session.state().openFrame(openFrame.frameId());
@@ -141,6 +146,13 @@ final class MinestomMenuRuntime implements AutoCloseable {
                     session.renderCurrentFrame();
                 }
             }
+        }
+    }
+
+    private void playInteractionSound(Player player, MenuInteraction interaction) {
+        Key soundCueKey = interaction.soundCueKey();
+        if (soundCueKey != null) {
+            sounds.play(player, soundCueKey);
         }
     }
 

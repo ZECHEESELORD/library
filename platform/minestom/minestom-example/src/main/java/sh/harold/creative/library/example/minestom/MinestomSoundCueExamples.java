@@ -24,7 +24,7 @@ final class MinestomSoundCueExamples {
         feedback.info(
                 player,
                 "Playing sound cues in order: {order}.",
-                Message.slot("order", "menu, npc, confirm, deny, levelup, discovery")
+                Message.slot("order", "menu, scroll, npc, confirm, deny, levelup, discovery")
         );
         CueExample[] values = CueExample.values();
         for (int index = 0; index < values.length; index++) {
@@ -51,6 +51,7 @@ final class MinestomSoundCueExamples {
 
     private enum CueExample {
         MENU("menu", SoundCueKeys.MENU_CLICK, "menu/click"),
+        SCROLL("scroll", SoundCueKeys.MENU_SCROLL, "menu/scroll"),
         NPC("npc", SoundCueKeys.INTERACTION_NPC, "interaction/npc"),
         CONFIRM("confirm", SoundCueKeys.RESULT_CONFIRM, "result/confirm"),
         DENY("deny", SoundCueKeys.RESULT_DENY, "result/deny"),

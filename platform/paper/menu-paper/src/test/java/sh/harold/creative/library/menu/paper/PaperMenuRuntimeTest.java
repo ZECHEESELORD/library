@@ -1,5 +1,7 @@
 package sh.harold.creative.library.menu.paper;
 
+import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import org.bukkit.entity.HumanEntity;
@@ -22,6 +24,13 @@ import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.core.StandardMenuService;
+import sh.harold.creative.library.sound.CuePlayback;
+import sh.harold.creative.library.sound.SoundCue;
+import sh.harold.creative.library.sound.SoundCueKeys;
+import sh.harold.creative.library.sound.SoundCuePacks;
+import sh.harold.creative.library.sound.SoundCueRegistry;
+import sh.harold.creative.library.sound.SoundCueService;
+import sh.harold.creative.library.sound.core.StandardSoundCueRegistry;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -33,6 +42,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -42,29 +52,38 @@ import static org.mockito.Mockito.when;
 
 class PaperMenuRuntimeTest {
 
+    private static final Key SPECIAL_SOUND = Key.key("test", "menu/special");
+
     @Test
     void openClickNavigateAndCloseUsesOwnedInventoryIdentity() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
-        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
         Menu menu = pagedMenu();
 
         runtime.open(player, menu);
 
         Inventory inventory = access.lastOpenedInventory();
+        assertEquals("Profiles (1/3)", inventoryTitle(access, inventory));
         assertEquals("Close", slotTitle(access, inventory, 49));
         assertEquals("Next Page", slotTitle(access, inventory, 53));
+        assertEquals(List.of("Page 2"), slotLore(access, inventory, 53));
 
         InventoryClickEvent nextPage = click(player, inventory, 53, ClickType.LEFT);
         runtime.onInventoryClick(nextPage);
 
         assertTrue(nextPage.isCancelled());
-        assertEquals("Previous Page", slotTitle(access, inventory, 45));
-        assertEquals("Close", slotTitle(access, inventory, 49));
-        assertEquals("Next Page", slotTitle(access, inventory, 53));
+        Inventory secondPageInventory = access.lastOpenedInventory();
+        assertNotSame(inventory, secondPageInventory);
+        assertEquals("Profiles (2/3)", inventoryTitle(access, secondPageInventory));
+        assertEquals("Previous Page", slotTitle(access, secondPageInventory, 45));
+        assertEquals(List.of("Page 1"), slotLore(access, secondPageInventory, 45));
+        assertEquals("Close", slotTitle(access, secondPageInventory, 49));
+        assertEquals("Next Page", slotTitle(access, secondPageInventory, 53));
+        assertEquals(List.of("Page 3"), slotLore(access, secondPageInventory, 53));
 
-        InventoryClickEvent close = click(player, inventory, 49, ClickType.LEFT);
+        InventoryClickEvent close = click(player, secondPageInventory, 49, ClickType.LEFT);
         runtime.onInventoryClick(close);
 
         assertTrue(close.isCancelled());
@@ -76,7 +95,7 @@ class PaperMenuRuntimeTest {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
-        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
         AtomicBoolean enabled = new AtomicBoolean(false);
 
         runtime.open(player, toggleMenu(enabled));
@@ -94,7 +113,7 @@ class PaperMenuRuntimeTest {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
-        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
         Menu menu = pagedMenu();
 
         runtime.open(player, menu);
@@ -124,7 +143,7 @@ class PaperMenuRuntimeTest {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
-        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
 
         runtime.open(player, pagedMenu());
         runtime.onPlayerDisconnect(player);
@@ -139,7 +158,7 @@ class PaperMenuRuntimeTest {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
-        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
 
         runtime.open(player, launcherMenu());
         Inventory rootInventory = access.lastOpenedInventory();
@@ -185,13 +204,15 @@ class PaperMenuRuntimeTest {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
-        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
 
         runtime.open(player, overflowGalleryMenu());
         Inventory inventory = access.lastOpenedInventory();
 
-        assertEquals("Previous Tabs", slotTitle(access, inventory, 0));
-        assertEquals("Next Tabs", slotTitle(access, inventory, 8));
+        assertEquals("Previous Tab", slotTitle(access, inventory, 0));
+        assertEquals(List.of("Page 1"), slotLore(access, inventory, 0));
+        assertEquals("Next Tab", slotTitle(access, inventory, 8));
+        assertEquals(List.of("Page 2"), slotLore(access, inventory, 8));
         assertEquals("Tab 0", slotTitle(access, inventory, 1));
         assertEquals("Tab 6", slotTitle(access, inventory, 7));
         assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
@@ -224,19 +245,21 @@ class PaperMenuRuntimeTest {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
-        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
 
         runtime.open(player, pagedTabGalleryMenu());
         Inventory inventory = access.lastOpenedInventory();
 
         assertEquals("Profile Item 0", slotTitle(access, inventory, 19));
         assertEquals("Next Page", slotTitle(access, inventory, 53));
+        assertEquals(List.of("Page 2"), slotLore(access, inventory, 53));
 
         InventoryClickEvent nextPage = click(player, inventory, 53, ClickType.LEFT);
         runtime.onInventoryClick(nextPage);
 
         assertTrue(nextPage.isCancelled());
         assertEquals("Previous Page", slotTitle(access, inventory, 45));
+        assertEquals(List.of("Page 1"), slotLore(access, inventory, 45));
         assertEquals("Profile Item 21", slotTitle(access, inventory, 19));
         assertEquals("Profile Item 28", slotTitle(access, inventory, 28));
     }
@@ -246,7 +269,7 @@ class PaperMenuRuntimeTest {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
-        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
         AtomicBoolean opened = new AtomicBoolean(false);
 
         runtime.open(player, canvasMenu(opened));
@@ -259,6 +282,33 @@ class PaperMenuRuntimeTest {
 
         assertTrue(open.isCancelled());
         assertTrue(opened.get());
+    }
+
+    @Test
+    void interactionSoundsUseDefaultAndOverrideMappings() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        RecordingSoundCueService sounds = new RecordingSoundCueService();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), sounds);
+
+        runtime.open(player, soundMenu());
+        Inventory inventory = access.lastOpenedInventory();
+
+        runtime.onInventoryClick(click(player, inventory, 9, ClickType.LEFT));
+        runtime.onInventoryClick(click(player, inventory, 10, ClickType.LEFT));
+        runtime.onInventoryClick(click(player, inventory, 11, ClickType.LEFT));
+
+        runtime.open(player, pagedMenu());
+        Inventory pagedInventory = access.lastOpenedInventory();
+        runtime.onInventoryClick(click(player, pagedInventory, 53, ClickType.LEFT));
+
+        assertEquals(List.of(
+                SoundCueKeys.MENU_CLICK,
+                SoundCueKeys.RESULT_CONFIRM,
+                SPECIAL_SOUND,
+                SoundCueKeys.MENU_SCROLL
+        ), sounds.playedKeys());
     }
 
     private static Menu pagedMenu() {
@@ -368,6 +418,25 @@ class PaperMenuRuntimeTest {
                 .build();
     }
 
+    private static Menu soundMenu() {
+        return new StandardMenuService().list()
+                .title("Sounds")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("View Profile")
+                        .action(ActionVerb.VIEW, context -> { })
+                        .build())
+                .addItem(MenuButton.builder(MenuIcon.vanilla("chest"))
+                        .name("Claim Delivery")
+                        .action(ActionVerb.CLAIM, context -> { })
+                        .build())
+                .addItem(MenuButton.builder(MenuIcon.vanilla("gray_dye"))
+                        .name("Unavailable")
+                        .action(ActionVerb.OPEN, context -> { })
+                        .sound(SPECIAL_SOUND)
+                        .build())
+                .build();
+    }
+
     private static Player player(UUID uuid) {
         Player player = mock(Player.class);
         when(player.getUniqueId()).thenReturn(uuid);
@@ -392,6 +461,19 @@ class PaperMenuRuntimeTest {
     private static String slotTitle(TestPaperMenuAccess access, Inventory inventory, int slot) {
         ItemStack itemStack = access.model(inventory).items.get(slot);
         return flatten(itemStack.getItemMeta().displayName());
+    }
+
+    private static List<String> slotLore(TestPaperMenuAccess access, Inventory inventory, int slot) {
+        ItemStack itemStack = access.model(inventory).items.get(slot);
+        List<Component> lore = itemStack.getItemMeta().lore();
+        if (lore == null) {
+            return List.of();
+        }
+        return lore.stream().map(PaperMenuRuntimeTest::flatten).toList();
+    }
+
+    private static String inventoryTitle(TestPaperMenuAccess access, Inventory inventory) {
+        return flatten(access.model(inventory).title());
     }
 
     private static String flatten(Component component) {
@@ -465,6 +547,46 @@ class PaperMenuRuntimeTest {
 
         private InventoryModel(InventoryHolder holder, int size, Component title) {
             this(holder, size, title, new java.util.HashMap<>());
+        }
+    }
+
+    private static final class RecordingSoundCueService implements SoundCueService {
+
+        private final StandardSoundCueRegistry registry = new StandardSoundCueRegistry();
+        private final Map<SoundCue, Key> keysByCue = new IdentityHashMap<>();
+        private final List<Key> playedKeys = new ArrayList<>();
+
+        private RecordingSoundCueService() {
+            register(SoundCueKeys.NAMESPACE, SoundCueKeys.MENU_CLICK, "test:menu_click");
+            register(SoundCueKeys.NAMESPACE, SoundCueKeys.MENU_SCROLL, "test:menu_scroll");
+            register(SoundCueKeys.NAMESPACE, SoundCueKeys.RESULT_CONFIRM, "test:result_confirm");
+            register(SoundCueKeys.NAMESPACE, SoundCueKeys.RESULT_DENY, "test:result_deny");
+            register("test", SPECIAL_SOUND, "test:menu_special");
+        }
+
+        @Override
+        public SoundCueRegistry registry() {
+            return registry;
+        }
+
+        @Override
+        public CuePlayback play(Audience audience, SoundCue cue) {
+            playedKeys.add(keysByCue.get(cue));
+            return CuePlayback.noop();
+        }
+
+        @Override
+        public void close() {
+        }
+
+        private List<Key> playedKeys() {
+            return List.copyOf(playedKeys);
+        }
+
+        private void register(String namespace, Key key, String soundKey) {
+            SoundCue cue = sh.harold.creative.library.sound.SoundCues.sound(soundKey, 0.5f, 1.0f);
+            keysByCue.put(cue, key);
+            registry.register(SoundCuePacks.pack(namespace).cue(key, cue).build());
         }
     }
 

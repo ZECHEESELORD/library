@@ -129,7 +129,8 @@ public final class StandardMenuService implements MenuService {
             int totalPages = Math.max(1, (items.size() + LIST_CONTENT_SIZE - 1) / LIST_CONTENT_SIZE);
             Map<String, MenuFrame> frames = new LinkedHashMap<>();
             for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-                frames.put(listFrameId(pageIndex), new MenuFrame(title, buildListPage(pageIndex, totalPages, items, utilities)));
+                frames.put(listFrameId(pageIndex), new MenuFrame(listFrameTitle(title, pageIndex, totalPages),
+                        buildListPage(pageIndex, totalPages, items, utilities)));
             }
             Menu menu = new StandardMenu(title, MenuGeometry.LIST, LIST_ROWS, listFrameId(0), frames);
             MenuValidator.validate(menu);
@@ -407,10 +408,12 @@ public final class StandardMenuService implements MenuService {
             slots.put(position.slot() + TABS_INDICATOR_ROW_START, tabIndicator(position.slot() + TABS_INDICATOR_ROW_START, active));
         }
         if (navPlan.overflow()) {
-            slots.put(TABS_NAV_LEFT_SLOT, navArrow(TABS_NAV_LEFT_SLOT, "Previous Tabs",
+            slots.put(TABS_NAV_LEFT_SLOT, navArrow(TABS_NAV_LEFT_SLOT, "Previous Tab",
+                    Math.max(0, navStart - 1) + 1,
                     navStart > 0 ? tabFrameId(activeTab.id(), navStart - 1, pageIndex) : null,
                     navStart > 0 ? tabFrameId(activeTab.id(), 0, pageIndex) : null));
-            slots.put(TABS_NAV_RIGHT_SLOT, navArrow(TABS_NAV_RIGHT_SLOT, "Next Tabs",
+            slots.put(TABS_NAV_RIGHT_SLOT, navArrow(TABS_NAV_RIGHT_SLOT, "Next Tab",
+                    Math.min(navPlan.lastStart(), navStart + 1) + 1,
                     navStart < navPlan.lastStart() ? tabFrameId(activeTab.id(), navStart + 1, pageIndex) : null,
                     navStart < navPlan.lastStart() ? tabFrameId(activeTab.id(), navPlan.lastStart(), pageIndex) : null));
         }
@@ -460,12 +463,14 @@ public final class StandardMenuService implements MenuService {
     ) {
         if (previousFrameId != null) {
             slots.put(footerStart + FOOTER_PREVIOUS_OFFSET,
-                    chromeButton(footerStart + FOOTER_PREVIOUS_OFFSET, "Previous Page", MenuIcon.vanilla("arrow"),
+                    navigationButton(footerStart + FOOTER_PREVIOUS_OFFSET, "Previous Page", pageNumberFromFrameId(previousFrameId),
+                            MenuIcon.vanilla("arrow"),
                             Map.of(MenuClick.LEFT, MenuInteraction.of(ActionVerb.PREVIOUS_PAGE, new MenuSlotAction.OpenFrame(previousFrameId)))));
         }
         if (nextFrameId != null) {
             slots.put(footerStart + FOOTER_NEXT_OFFSET,
-                    chromeButton(footerStart + FOOTER_NEXT_OFFSET, "Next Page", MenuIcon.vanilla("arrow"),
+                    navigationButton(footerStart + FOOTER_NEXT_OFFSET, "Next Page", pageNumberFromFrameId(nextFrameId),
+                            MenuIcon.vanilla("arrow"),
                             Map.of(MenuClick.LEFT, MenuInteraction.of(ActionVerb.NEXT_PAGE, new MenuSlotAction.OpenFrame(nextFrameId)))));
         }
         slots.put(footerStart + FOOTER_CLOSE_OFFSET,
@@ -488,23 +493,24 @@ public final class StandardMenuService implements MenuService {
                 Map.of());
     }
 
-    private static MenuSlot navArrow(int slot, String title, String leftFrameId, String rightFrameId) {
+    private static MenuSlot navArrow(int slot, String title, int pageNumber, String leftFrameId, String rightFrameId) {
         if (leftFrameId == null && rightFrameId == null) {
-            return simpleButton(slot, title, NamedTextColor.WHITE, MenuIcon.vanilla("arrow"), Map.of());
+            return navigationButton(slot, title, pageNumber, MenuIcon.vanilla("arrow"), Map.of());
         }
         Map<MenuClick, MenuInteraction> interactions = new EnumMap<>(MenuClick.class);
         if (leftFrameId != null) {
             ActionVerb verb = title.startsWith("Previous") ? ActionVerb.PREVIOUS_PAGE : ActionVerb.NEXT_PAGE;
-            interactions.put(MenuClick.LEFT, new MenuInteraction(verb,
+            interactions.put(MenuClick.LEFT, MenuInteraction.of(verb,
                     title.startsWith("Previous") ? "browse previous tabs" : "browse next tabs",
                     new MenuSlotAction.OpenFrame(leftFrameId)));
         }
         if (rightFrameId != null) {
-            interactions.put(MenuClick.RIGHT, new MenuInteraction(ActionVerb.BROWSE,
+            interactions.put(MenuClick.RIGHT, MenuInteraction.of(ActionVerb.BROWSE,
                     title.startsWith("Previous") ? "jump to first tabs" : "jump to last tabs",
-                    new MenuSlotAction.OpenFrame(rightFrameId)));
+                    new MenuSlotAction.OpenFrame(rightFrameId),
+                    sh.harold.creative.library.sound.SoundCueKeys.MENU_SCROLL));
         }
-        return simpleButton(slot, title, NamedTextColor.WHITE, MenuIcon.vanilla("arrow"), interactions);
+        return navigationButton(slot, title, pageNumber, MenuIcon.vanilla("arrow"), interactions);
     }
 
     private static MenuSlot filler(int slot) {
@@ -520,6 +526,14 @@ public final class StandardMenuService implements MenuService {
         return new MenuSlot(slot, icon,
                 Component.text(title, color).decoration(TextDecoration.ITALIC, false),
                 List.of(),
+                false,
+                interactions);
+    }
+
+    private static MenuSlot navigationButton(int slot, String title, int pageNumber, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
+        return new MenuSlot(slot, icon,
+                Component.text(title, NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false),
+                List.of(Component.text("Page " + pageNumber, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)),
                 false,
                 interactions);
     }
@@ -720,6 +734,24 @@ public final class StandardMenuService implements MenuService {
 
     private static String tabFrameId(String tabId, int navStart, int pageIndex) {
         return "tab:" + tabId + ":nav:" + navStart + ":page:" + pageIndex;
+    }
+
+    private static Component listFrameTitle(Component title, int pageIndex, int totalPages) {
+        if (totalPages <= 1) {
+            return title;
+        }
+        return Component.text().append(title).append(Component.text(" (" + (pageIndex + 1) + "/" + totalPages + ")")).build();
+    }
+
+    private static int pageNumberFromFrameId(String frameId) {
+        int marker = frameId.lastIndexOf(":page:");
+        if (marker >= 0) {
+            return Integer.parseInt(frameId.substring(marker + 6)) + 1;
+        }
+        if (frameId.startsWith("page:")) {
+            return Integer.parseInt(frameId.substring(5)) + 1;
+        }
+        throw new IllegalArgumentException("Frame id does not contain a page index: " + frameId);
     }
 
     private static String plain(Component component) {

@@ -17,8 +17,8 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        menus = new PaperMenuPlatform(this);
         sounds = new PaperSoundCuePlatform(this);
+        menus = new PaperMenuPlatform(this, new sh.harold.creative.library.menu.core.StandardMenuService(), sounds);
         examples = new PaperMenuExampleMenus(menus);
         getServer().getPluginManager().registerEvents(this, this);
         getLogger().info("Paper menu example ready. Joining players open the house-style gallery.");

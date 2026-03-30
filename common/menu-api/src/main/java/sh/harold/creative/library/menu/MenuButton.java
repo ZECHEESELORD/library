@@ -1,11 +1,13 @@
 package sh.harold.creative.library.menu;
 
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.EnumMap;
+import java.util.function.UnaryOperator;
 
 public final class MenuButton implements MenuItem {
 
@@ -81,7 +83,7 @@ public final class MenuButton implements MenuItem {
         }
 
         public Builder action(ActionVerb verb, String promptLabel, MenuAction action) {
-            interactions.put(MenuClick.LEFT, new MenuInteraction(verb, promptLabel, new MenuSlotAction.Execute(action)));
+            interactions.put(MenuClick.LEFT, MenuInteraction.of(verb, promptLabel, new MenuSlotAction.Execute(action)));
             return this;
         }
 
@@ -98,7 +100,52 @@ public final class MenuButton implements MenuItem {
         }
 
         public Builder onRightClick(ActionVerb verb, String promptLabel, MenuAction action) {
-            interactions.put(MenuClick.RIGHT, new MenuInteraction(verb, promptLabel, new MenuSlotAction.Execute(action)));
+            interactions.put(MenuClick.RIGHT, MenuInteraction.of(verb, promptLabel, new MenuSlotAction.Execute(action)));
+            return this;
+        }
+
+        public Builder sound(Key soundCueKey) {
+            return leftSound(soundCueKey);
+        }
+
+        public Builder sound(String soundCueKey) {
+            return leftSound(Key.key(soundCueKey));
+        }
+
+        public Builder leftSound(Key soundCueKey) {
+            return updateInteraction(MenuClick.LEFT, interaction -> interaction.withSound(soundCueKey),
+                    "sound(...) requires a left-click interaction");
+        }
+
+        public Builder leftSound(String soundCueKey) {
+            return leftSound(Key.key(soundCueKey));
+        }
+
+        public Builder rightSound(Key soundCueKey) {
+            return updateInteraction(MenuClick.RIGHT, interaction -> interaction.withSound(soundCueKey),
+                    "rightSound(...) requires a right-click interaction");
+        }
+
+        public Builder rightSound(String soundCueKey) {
+            return rightSound(Key.key(soundCueKey));
+        }
+
+        public Builder withoutSound() {
+            return updateInteraction(MenuClick.LEFT, MenuInteraction::withoutSound,
+                    "withoutSound() requires a left-click interaction");
+        }
+
+        public Builder withoutRightSound() {
+            return updateInteraction(MenuClick.RIGHT, MenuInteraction::withoutSound,
+                    "withoutRightSound() requires a right-click interaction");
+        }
+
+        private Builder updateInteraction(MenuClick click, UnaryOperator<MenuInteraction> transform, String missingMessage) {
+            MenuInteraction interaction = interactions.get(click);
+            if (interaction == null) {
+                throw new IllegalStateException(missingMessage);
+            }
+            interactions.put(click, transform.apply(interaction));
             return this;
         }
 

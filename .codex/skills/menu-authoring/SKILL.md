@@ -35,6 +35,7 @@ House style is mandatory in v1 and owned by `menu-core`.
 
 - Black pane filler is the house default for chrome and canvas-style tab backgrounds; list-tab interiors stay open by default.
 - Prompt-last is mandatory unless `skipPrompt()` is used deliberately on a `MenuButton`.
+- Menu interactions use the stock sound FX library by default: ordinary actions use `menu/click`, page and tab-strip scroll chrome uses `menu/scroll`, and positive commit verbs such as `buy`, `claim`, and `confirm` use `result/confirm`.
 - `list` and `tabs` use the stable footer grammar:
   - slot `45` = previous page
   - slot `48` = back
@@ -59,6 +60,8 @@ Use `MenuButton` for interactive entries.
 
 - A `MenuButton` must have at least one interaction.
 - Default prompt generation uses the configured click verbs and always renders last.
+- Default sound selection comes from the action verb. Use `.sound(...)` or `.rightSound(...)` after defining the click interaction when a specific item should use a different stock cue such as `SoundCueKeys.RESULT_DENY`.
+- If the stock menu cues are not enough for a special case, register or overlay your own cue in a `SoundCueService` and inject that service into the Paper or Minestom menu platform before opening menus.
 - Use `.action(...)` for the common left-click path.
 - Use `.onRightClick(...)` only when a second click path is genuinely needed.
 
@@ -141,6 +144,7 @@ The runtime owns identity and routing.
 - Do not expect the runtime to invent logical tab groups from tab names or icon themes.
 - Do not pack showcase/example list tabs edge-to-edge unless you are intentionally testing tab paging.
 - Do not scatter canvas-tab controls arbitrarily when a centered row-`3` composition would communicate the layout more clearly.
+- Do not bypass the stock menu sound defaults by hard-coding host sound calls inside menu actions; override the interaction cue or inject a custom `SoundCueService` instead.
 - Do not use `MenuDisplayItem` for clickable entries.
 - Do not suppress prompts casually with `skipPrompt()`.
 - Do not hand-author chrome slots that belong to the house footer.

@@ -29,8 +29,9 @@ public final class MinestomExampleBootstrap {
         });
         instance.loadChunk(0, 0).join();
 
-        MinestomMenuPlatform menus = new MinestomMenuPlatform();
         MinestomSoundCuePlatform sounds = new MinestomSoundCuePlatform();
+        MinestomMenuPlatform menus = new MinestomMenuPlatform(new sh.harold.creative.library.menu.core.StandardMenuService(),
+                MinecraftServer.getGlobalEventHandler(), sounds);
         MinestomMenuExampleMenus examples = new MinestomMenuExampleMenus(menus);
         MinestomDevHarnessMessages feedback = new MinestomDevHarnessMessages();
         MinestomMessageFacadeExamples messageExamples = new MinestomMessageFacadeExamples();
@@ -41,6 +42,7 @@ public final class MinestomExampleBootstrap {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             entityExamples.close();
+            menus.close();
             sounds.close();
         }));
 

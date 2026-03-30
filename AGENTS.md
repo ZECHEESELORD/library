@@ -606,6 +606,8 @@ Not one API and two disconnected re implementations.
 - the shared footer grammar is: slot `45` previous page, slot `48` back, slot `49` close, slot `53` next, and the remaining footer utility slots stay caller-owned
 - shared back is runtime-owned rather than caller-authored: `context.open(...)` pushes menu/frame history, child menus render `&aGo Back` with the single lore line `&7To <menuname>`, and root opens do not auto-show back
 - close and tab-strip scroll arrows use simple shared chrome with no prompt-lore block; page arrows keep the standard paging chrome
+- menu interactions use the stock sound FX library by default: ordinary button actions use `menu/click`, page and tab-strip scroll chrome uses `menu/scroll`, and positive commit verbs such as `buy`, `claim`, and `confirm` use `result/confirm`
+- special deny/result cases should override the interaction cue in the menu API, and when the stock cues are not enough callers should register or overlay their own cue in a `SoundCueService` and inject that sound service into the menu platform
 - tab grouping is explicit; do not infer logical groups from tab names
 - list-style tab content is a bordered `3x7` panel starting at slot `19`; its interior stays open by default, so authors should not try to fill every slot unless they are intentionally demonstrating paging, and overflowed list tabs page through the shared footer arrows in the bottom corners
 - custom canvas-style tab content uses explicit slot placement below the nav rows, keeps black filler on by default, and may explicitly toggle that content-area filler off when the authored layout needs open slots

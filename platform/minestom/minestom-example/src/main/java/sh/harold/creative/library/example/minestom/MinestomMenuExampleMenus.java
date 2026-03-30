@@ -9,6 +9,7 @@ import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuItem;
 import sh.harold.creative.library.menu.MenuTabGroup;
 import sh.harold.creative.library.menu.minestom.MinestomMenuPlatform;
+import sh.harold.creative.library.sound.SoundCueKeys;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -225,6 +226,7 @@ final class MinestomMenuExampleMenus {
                 .pair("You have", "360 Gems")
                 .line("Cannot afford this!")
                 .action(ActionVerb.OPEN, context -> context.open(profileSlotFiveMenu()))
+                .sound(SoundCueKeys.RESULT_DENY)
                 .build();
     }
 

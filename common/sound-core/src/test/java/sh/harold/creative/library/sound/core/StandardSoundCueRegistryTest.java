@@ -59,6 +59,7 @@ class StandardSoundCueRegistryTest {
     @Test
     void stockKeysAreStableAdventureKeys() {
         assertEquals("creative-library:menu/click", SoundCueKeys.MENU_CLICK.asString());
+        assertEquals("creative-library:menu/scroll", SoundCueKeys.MENU_SCROLL.asString());
         assertEquals("creative-library:reward/level_up", SoundCueKeys.REWARD_LEVEL_UP.asString());
     }
 }

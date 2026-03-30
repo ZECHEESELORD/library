@@ -16,6 +16,7 @@ import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.MenuTabGroup;
+import sh.harold.creative.library.sound.SoundCueKeys;
 
 import java.util.List;
 import java.util.stream.IntStream;
@@ -39,16 +40,33 @@ class StandardMenuServiceTest {
         MenuFrame firstPage = menu.frames().get("page:0");
         MenuFrame middlePage = menu.frames().get("page:1");
 
+        assertEquals("Profiles (1/3)", ComponentText.flatten(firstPage.title()));
+        assertEquals("Profiles (2/3)", ComponentText.flatten(middlePage.title()));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(firstPage, 48));
         assertEquals("Close", titleAt(firstPage, 49));
         assertEquals(NamedTextColor.RED, titleColorAt(firstPage, 49));
         assertEquals(List.of(), loreAt(firstPage, 49));
         assertEquals("Next Page", titleAt(firstPage, 53));
+        assertEquals(NamedTextColor.GREEN, titleColorAt(firstPage, 53));
+        assertEquals(List.of("Page 2"), loreAt(firstPage, 53));
 
         assertEquals("Previous Page", titleAt(middlePage, 45));
+        assertEquals(NamedTextColor.GREEN, titleColorAt(middlePage, 45));
+        assertEquals(List.of("Page 1"), loreAt(middlePage, 45));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(middlePage, 48));
         assertEquals("Close", titleAt(middlePage, 49));
         assertEquals("Next Page", titleAt(middlePage, 53));
+        assertEquals(List.of("Page 3"), loreAt(middlePage, 53));
+    }
+
+    @Test
+    void singlePagePureListKeepsUnsuffixedTitle() {
+        Menu menu = menus.list()
+                .title("Profiles")
+                .addItems(sampleButtons("Item", 1))
+                .build();
+
+        assertEquals("Profiles", ComponentText.flatten(menu.initialFrame().title()));
     }
 
     @Test
@@ -92,7 +110,7 @@ class StandardMenuServiceTest {
     }
 
     @Test
-    void tabsOverflowUseSimpleNavArrowsAndScrollByWindowStart() {
+    void tabsOverflowUseStandardNavArrowsAndScrollByWindowStart() {
         Menu menu = menus.tabs()
                 .title("Many Tabs")
                 .defaultTab("tab-0")
@@ -105,15 +123,17 @@ class StandardMenuServiceTest {
         MenuFrame scrolled = menu.frames().get("tab:tab-0:nav:1:page:0");
         MenuFrame end = menu.frames().get("tab:tab-0:nav:3:page:0");
 
-        assertEquals("Previous Tabs", titleAt(initial, 0));
-        assertEquals(NamedTextColor.WHITE, titleColorAt(initial, 0));
-        assertEquals(List.of(), loreAt(initial, 0));
+        assertEquals("Previous Tab", titleAt(initial, 0));
+        assertEquals(NamedTextColor.GREEN, titleColorAt(initial, 0));
+        assertEquals(List.of("Page 1"), loreAt(initial, 0));
         assertTrue(interactionAt(initial, 0, MenuClick.LEFT) == null);
-        assertEquals("Next Tabs", titleAt(initial, 8));
-        assertEquals(NamedTextColor.WHITE, titleColorAt(initial, 8));
-        assertEquals(List.of(), loreAt(initial, 8));
+        assertEquals("Next Tab", titleAt(initial, 8));
+        assertEquals(NamedTextColor.GREEN, titleColorAt(initial, 8));
+        assertEquals(List.of("Page 2"), loreAt(initial, 8));
         assertTrue(interactionAt(initial, 8, MenuClick.LEFT) != null);
         assertTrue(interactionAt(initial, 8, MenuClick.RIGHT) != null);
+        assertEquals(SoundCueKeys.MENU_SCROLL, interactionAt(initial, 8, MenuClick.LEFT).soundCueKey());
+        assertEquals(SoundCueKeys.MENU_SCROLL, interactionAt(initial, 8, MenuClick.RIGHT).soundCueKey());
         assertEquals("Tab 0", titleAt(initial, 1));
         assertEquals("Tab 6", titleAt(initial, 7));
         assertEquals("Tab 0 Item 0", titleAt(scrolled, 19));
@@ -139,10 +159,37 @@ class StandardMenuServiceTest {
         assertEquals("Alpha Item 20", titleAt(firstPage, 43));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(firstPage, 18));
         assertEquals("Next Page", titleAt(firstPage, 53));
+        assertEquals(NamedTextColor.GREEN, titleColorAt(firstPage, 53));
+        assertEquals(List.of("Page 2"), loreAt(firstPage, 53));
         assertEquals("Alpha Item 21", titleAt(secondPage, 19));
         assertEquals("Alpha Item 28", titleAt(secondPage, 28));
         assertEquals("Previous Page", titleAt(secondPage, 45));
+        assertEquals(NamedTextColor.GREEN, titleColorAt(secondPage, 45));
+        assertEquals(List.of("Page 1"), loreAt(secondPage, 45));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(secondPage, 48));
+        assertEquals(SoundCueKeys.MENU_SCROLL, interactionAt(firstPage, 53, MenuClick.LEFT).soundCueKey());
+        assertEquals(SoundCueKeys.MENU_SCROLL, interactionAt(secondPage, 45, MenuClick.LEFT).soundCueKey());
+    }
+
+    @Test
+    void menuButtonInteractionsDefaultAndOverrideTheirSoundCues() {
+        MenuButton ordinary = MenuButton.builder(MenuIcon.vanilla("stone"))
+                .name("Ordinary")
+                .action(ActionVerb.VIEW, context -> { })
+                .build();
+        MenuButton claim = MenuButton.builder(MenuIcon.vanilla("chest"))
+                .name("Claim")
+                .action(ActionVerb.CLAIM, context -> { })
+                .build();
+        MenuButton denied = MenuButton.builder(MenuIcon.vanilla("gray_dye"))
+                .name("Denied")
+                .action(ActionVerb.OPEN, context -> { })
+                .sound(SoundCueKeys.RESULT_DENY)
+                .build();
+
+        assertEquals(SoundCueKeys.MENU_CLICK, ordinary.interactions().get(MenuClick.LEFT).soundCueKey());
+        assertEquals(SoundCueKeys.RESULT_CONFIRM, claim.interactions().get(MenuClick.LEFT).soundCueKey());
+        assertEquals(SoundCueKeys.RESULT_DENY, denied.interactions().get(MenuClick.LEFT).soundCueKey());
     }
 
     @Test

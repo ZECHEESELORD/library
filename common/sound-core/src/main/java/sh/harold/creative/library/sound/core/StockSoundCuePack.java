@@ -18,6 +18,7 @@ final class StockSoundCuePack {
     static SoundCuePack create() {
         return SoundCuePacks.pack(SoundCueKeys.NAMESPACE)
                 .cue(SoundCueKeys.MENU_CLICK, sound("minecraft:ui.button.click", 0.7f, 1.0f))
+                .cue(SoundCueKeys.MENU_SCROLL, sound("minecraft:ui.loom.select_pattern", 0.7f, 1.0f))
                 .cue(SoundCueKeys.INTERACTION_NPC, oneOf(
                         sound("minecraft:entity.villager.ambient", 0.55f, 0.95f),
                         sound("minecraft:entity.villager.ambient", 0.55f, 1.1f)

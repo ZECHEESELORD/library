@@ -264,9 +264,12 @@ Notes:
 - Row `0` is centered group-aware tab chrome.
 - Row `1` is state chrome under visible tabs, not a generic spacer row.
 - When the strip overflows, slots `0` and `8` become simple scroll arrows; left click scrolls by one and right click jumps to the start/end.
+- Menu interactions include stock sound cues by default: most buttons use `menu/click`, scroll chrome uses `menu/scroll`, and verbs such as `confirm`, `buy`, and `claim` pick up `result/confirm`.
 - List-style tab content uses the bordered `3x7` panel starting at slot `19`; its interior is open by default, so ordinary showcase tabs should usually leave some negative space instead of packing every slot.
 - Canvas-style tab content keeps black filler by default and should usually rely on that default; call `builder.fillWithBlackPane(false)` only when the authored layout should expose open slots instead.
 - Canvas-style tab examples should center their primary authored content on row `3` before expanding into surrounding rows.
+- The example `Profile Slot #5` card is the model for a special-case override: keep the authored click verb, but call `.sound(SoundCueKeys.RESULT_DENY)` so the unavailable state uses the deny cue.
+- When the stock cues are not enough, register or overlay your own cue in a `SoundCueService`, inject that service into `PaperMenuPlatform` or `MinestomMenuPlatform`, and point the specific interaction at that custom key.
 - If you want to exercise footer paging explicitly, build a list-style tab with more than `27` example items; the shared footer will surface previous/next arrows in the bottom corners.
 
 ## Canvas Preview

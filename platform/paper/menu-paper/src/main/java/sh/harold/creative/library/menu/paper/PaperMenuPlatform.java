@@ -18,6 +18,8 @@ import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.core.StandardMenuService;
+import sh.harold.creative.library.sound.SoundCueService;
+import sh.harold.creative.library.sound.core.StandardSoundCueService;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -27,15 +29,27 @@ public final class PaperMenuPlatform implements AutoCloseable {
     private final MenuService menus;
     private final PaperMenuRuntime runtime;
     private final PaperMenuListener listener;
+    private final SoundCueService sounds;
+    private final boolean closeSounds;
 
     public PaperMenuPlatform(JavaPlugin plugin) {
-        this(plugin, new StandardMenuService());
+        this(plugin, new StandardMenuService(), defaultSounds(plugin), true);
     }
 
     public PaperMenuPlatform(JavaPlugin plugin, MenuService menus) {
+        this(plugin, menus, defaultSounds(plugin), true);
+    }
+
+    public PaperMenuPlatform(JavaPlugin plugin, MenuService menus, SoundCueService sounds) {
+        this(plugin, menus, sounds, false);
+    }
+
+    private PaperMenuPlatform(JavaPlugin plugin, MenuService menus, SoundCueService sounds, boolean closeSounds) {
         Objects.requireNonNull(plugin, "plugin");
         this.menus = Objects.requireNonNull(menus, "menus");
-        this.runtime = new PaperMenuRuntime(new BukkitPaperMenuAccess(), org.bukkit.Bukkit::getPlayer, new PaperMenuRenderer());
+        this.sounds = Objects.requireNonNull(sounds, "sounds");
+        this.closeSounds = closeSounds;
+        this.runtime = new PaperMenuRuntime(new BukkitPaperMenuAccess(), org.bukkit.Bukkit::getPlayer, new PaperMenuRenderer(), sounds);
         this.listener = new PaperMenuListener(runtime);
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
     }
@@ -92,6 +106,20 @@ public final class PaperMenuPlatform implements AutoCloseable {
     public void close() {
         runtime.close();
         HandlerList.unregisterAll(listener);
+        if (closeSounds) {
+            sounds.close();
+        }
+    }
+
+    private static SoundCueService defaultSounds(JavaPlugin plugin) {
+        Objects.requireNonNull(plugin, "plugin");
+        return new StandardSoundCueService((delayTicks, action) -> {
+            if (delayTicks < 0) {
+                throw new IllegalArgumentException("delayTicks cannot be negative");
+            }
+            var task = plugin.getServer().getScheduler().runTaskLater(plugin, Objects.requireNonNull(action, "action"), delayTicks);
+            return task::cancel;
+        });
     }
 
     private static MenuIcon icon(Material material) {

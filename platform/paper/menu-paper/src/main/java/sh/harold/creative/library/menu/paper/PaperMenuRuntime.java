@@ -1,5 +1,6 @@
 package sh.harold.creative.library.menu.paper;
 
+import net.kyori.adventure.key.Key;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -11,6 +12,7 @@ import sh.harold.creative.library.menu.MenuContext;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuSlotAction;
 import sh.harold.creative.library.menu.core.MenuSessionState;
+import sh.harold.creative.library.sound.SoundCueService;
 
 import java.util.Map;
 import java.util.Objects;
@@ -24,11 +26,13 @@ final class PaperMenuRuntime implements AutoCloseable {
     private final PaperMenuAccess access;
     private final Function<UUID, Player> playerLookup;
     private final PaperMenuSlotRenderer renderer;
+    private final SoundCueService sounds;
 
-    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer) {
+    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer, SoundCueService sounds) {
         this.access = Objects.requireNonNull(access, "access");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
+        this.sounds = Objects.requireNonNull(sounds, "sounds");
     }
 
     void open(Player player, Menu menu) {
@@ -149,6 +153,7 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     private void handleInteraction(PaperMenuSession session, Player player, MenuClick click, MenuInteraction interaction) {
+        playInteractionSound(player, interaction);
         switch (interaction.action()) {
             case MenuSlotAction.OpenFrame openFrame -> {
                 session.state().openFrame(openFrame.frameId());
@@ -162,6 +167,13 @@ final class PaperMenuRuntime implements AutoCloseable {
                     session.refresh(player);
                 }
             }
+        }
+    }
+
+    private void playInteractionSound(Player player, MenuInteraction interaction) {
+        Key soundCueKey = interaction.soundCueKey();
+        if (soundCueKey != null) {
+            sounds.play(player, soundCueKey);
         }
     }
 

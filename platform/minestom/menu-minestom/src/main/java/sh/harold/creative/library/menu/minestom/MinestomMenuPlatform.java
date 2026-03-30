@@ -7,6 +7,7 @@ import net.minestom.server.event.Event;
 import net.minestom.server.event.EventNode;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
+import net.minestom.server.timer.TaskSchedule;
 import sh.harold.creative.library.menu.CanvasMenuBuilder;
 import sh.harold.creative.library.menu.ListMenuBuilder;
 import sh.harold.creative.library.menu.Menu;
@@ -19,6 +20,8 @@ import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.core.StandardMenuService;
+import sh.harold.creative.library.sound.SoundCueService;
+import sh.harold.creative.library.sound.core.StandardSoundCueService;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -30,19 +33,31 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     private final MinestomMenuRuntime runtime;
     private final EventNode<Event> parentNode;
     private final EventNode<Event> runtimeNode;
+    private final SoundCueService sounds;
+    private final boolean closeSounds;
 
     public MinestomMenuPlatform() {
-        this(new StandardMenuService(), MinecraftServer.getGlobalEventHandler());
+        this(new StandardMenuService(), MinecraftServer.getGlobalEventHandler(), defaultSounds(), true);
     }
 
     public MinestomMenuPlatform(MenuService menus) {
-        this(menus, MinecraftServer.getGlobalEventHandler());
+        this(menus, MinecraftServer.getGlobalEventHandler(), defaultSounds(), true);
     }
 
     public MinestomMenuPlatform(MenuService menus, EventNode<Event> parentNode) {
+        this(menus, parentNode, defaultSounds(), true);
+    }
+
+    public MinestomMenuPlatform(MenuService menus, EventNode<Event> parentNode, SoundCueService sounds) {
+        this(menus, parentNode, sounds, false);
+    }
+
+    private MinestomMenuPlatform(MenuService menus, EventNode<Event> parentNode, SoundCueService sounds, boolean closeSounds) {
         this.menus = Objects.requireNonNull(menus, "menus");
         this.parentNode = Objects.requireNonNull(parentNode, "parentNode");
-        this.runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        this.sounds = Objects.requireNonNull(sounds, "sounds");
+        this.closeSounds = closeSounds;
+        this.runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), sounds);
         this.runtimeNode = runtime.createEventNode("menu-runtime-" + UUID.randomUUID());
         this.parentNode.addChild(runtimeNode);
     }
@@ -99,6 +114,22 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     public void close() {
         runtime.close();
         parentNode.removeChild(runtimeNode);
+        if (closeSounds) {
+            sounds.close();
+        }
+    }
+
+    private static SoundCueService defaultSounds() {
+        return new StandardSoundCueService((delayTicks, action) -> {
+            if (delayTicks < 0) {
+                throw new IllegalArgumentException("delayTicks cannot be negative");
+            }
+            var task = MinecraftServer.getSchedulerManager().scheduleTask(
+                    Objects.requireNonNull(action, "action"),
+                    delayTicks == 0L ? TaskSchedule.immediate() : TaskSchedule.tick(Math.toIntExact(delayTicks)),
+                    TaskSchedule.stop());
+            return task::cancel;
+        });
     }
 
     private static MenuIcon icon(Material material) {

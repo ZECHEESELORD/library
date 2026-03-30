@@ -1,5 +1,7 @@
 package sh.harold.creative.library.menu.minestom;
 
+import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.minestom.server.MinecraftServer;
@@ -21,10 +23,18 @@ import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.core.StandardMenuService;
+import sh.harold.creative.library.sound.CuePlayback;
+import sh.harold.creative.library.sound.SoundCue;
+import sh.harold.creative.library.sound.SoundCueKeys;
+import sh.harold.creative.library.sound.SoundCuePacks;
+import sh.harold.creative.library.sound.SoundCueRegistry;
+import sh.harold.creative.library.sound.SoundCueService;
+import sh.harold.creative.library.sound.core.StandardSoundCueRegistry;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MinestomMenuRuntimeTest {
 
     private static boolean serverInitialized;
+    private static final Key SPECIAL_SOUND = Key.key("test", "menu/special");
 
     @BeforeAll
     static void initServer() {
@@ -49,7 +60,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void openClickNavigateAndCloseUsesOwnedInventoryIdentity() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
         Menu menu = pagedMenu();
 
         runtime.open(player, menu);
@@ -58,14 +69,17 @@ class MinestomMenuRuntimeTest {
 
         assertEquals("Close", slotTitle(inventory, 49));
         assertEquals("Next Page", slotTitle(inventory, 53));
+        assertEquals(List.of("Page 2"), slotLore(inventory, 53));
 
         InventoryPreClickEvent nextPage = new InventoryPreClickEvent(inventory, player, new Click.Left(53));
         runtime.onInventoryPreClick(nextPage);
 
         assertTrue(nextPage.isCancelled());
         assertEquals("Previous Page", slotTitle(inventory, 45));
+        assertEquals(List.of("Page 1"), slotLore(inventory, 45));
         assertEquals("Close", slotTitle(inventory, 49));
         assertEquals("Next Page", slotTitle(inventory, 53));
+        assertEquals(List.of("Page 3"), slotLore(inventory, 53));
 
         InventoryPreClickEvent close = new InventoryPreClickEvent(inventory, player, new Click.Left(49));
         runtime.onInventoryPreClick(close);
@@ -76,7 +90,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void actionCanReplaceCurrentMenuAndRefreshRenderedContents() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
         AtomicBoolean enabled = new AtomicBoolean(false);
 
         runtime.open(player, toggleMenu(enabled));
@@ -92,7 +106,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void closeAndSpoofedInventoriesDoNotRouteByTitle() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
         runtime.open(player, pagedMenu());
         Inventory inventory = player.lastOpenedInventory();
 
@@ -111,7 +125,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void disconnectCleansUpViewerSession() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
         runtime.open(player, pagedMenu());
         Inventory inventory = player.lastOpenedInventory();
 
@@ -125,7 +139,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void childBackUsesHistoryAndTabSwitchesPushFrameHistory() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
 
         runtime.open(player, launcherMenu());
         Inventory rootInventory = player.lastOpenedInventory();
@@ -169,13 +183,15 @@ class MinestomMenuRuntimeTest {
     @Test
     void navArrowsScrollStripWithoutChangingActiveContent() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
 
         runtime.open(player, overflowGalleryMenu());
         Inventory inventory = player.lastOpenedInventory();
 
-        assertEquals("Previous Tabs", slotTitle(inventory, 0));
-        assertEquals("Next Tabs", slotTitle(inventory, 8));
+        assertEquals("Previous Tab", slotTitle(inventory, 0));
+        assertEquals(List.of("Page 1"), slotLore(inventory, 0));
+        assertEquals("Next Tab", slotTitle(inventory, 8));
+        assertEquals(List.of("Page 2"), slotLore(inventory, 8));
         assertEquals("Tab 0", slotTitle(inventory, 1));
         assertEquals("Tab 6", slotTitle(inventory, 7));
         assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
@@ -206,19 +222,21 @@ class MinestomMenuRuntimeTest {
     @Test
     void pagedTabContentUsesFooterArrowsForLargeTabs() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
 
         runtime.open(player, pagedTabGalleryMenu());
         Inventory inventory = player.lastOpenedInventory();
 
         assertEquals("Profile Item 0", slotTitle(inventory, 19));
         assertEquals("Next Page", slotTitle(inventory, 53));
+        assertEquals(List.of("Page 2"), slotLore(inventory, 53));
 
         InventoryPreClickEvent nextPage = new InventoryPreClickEvent(inventory, player, new Click.Left(53));
         runtime.onInventoryPreClick(nextPage);
 
         assertTrue(nextPage.isCancelled());
         assertEquals("Previous Page", slotTitle(inventory, 45));
+        assertEquals(List.of("Page 1"), slotLore(inventory, 45));
         assertEquals("Profile Item 21", slotTitle(inventory, 19));
         assertEquals("Profile Item 28", slotTitle(inventory, 28));
     }
@@ -226,7 +244,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void canvasRoutesPlacedItemsThroughOwnedInventoryIdentity() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
         AtomicBoolean opened = new AtomicBoolean(false);
 
         runtime.open(player, canvasMenu(opened));
@@ -239,6 +257,31 @@ class MinestomMenuRuntimeTest {
 
         assertTrue(open.isCancelled());
         assertTrue(opened.get());
+    }
+
+    @Test
+    void interactionSoundsUseDefaultAndOverrideMappings() {
+        TestPlayer player = player();
+        RecordingSoundCueService sounds = new RecordingSoundCueService();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), sounds);
+
+        runtime.open(player, soundMenu());
+        Inventory inventory = player.lastOpenedInventory();
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(9)));
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(10)));
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(11)));
+
+        runtime.open(player, pagedMenu());
+        Inventory pagedInventory = player.lastOpenedInventory();
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(pagedInventory, player, new Click.Left(53)));
+
+        assertEquals(List.of(
+                SoundCueKeys.MENU_CLICK,
+                SoundCueKeys.RESULT_CONFIRM,
+                SPECIAL_SOUND,
+                SoundCueKeys.MENU_SCROLL
+        ), sounds.playedKeys());
     }
 
     private static Menu pagedMenu() {
@@ -348,12 +391,39 @@ class MinestomMenuRuntimeTest {
                 .build();
     }
 
+    private static Menu soundMenu() {
+        return new StandardMenuService().list()
+                .title("Sounds")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("View Profile")
+                        .action(ActionVerb.VIEW, context -> { })
+                        .build())
+                .addItem(MenuButton.builder(MenuIcon.vanilla("chest"))
+                        .name("Claim Delivery")
+                        .action(ActionVerb.CLAIM, context -> { })
+                        .build())
+                .addItem(MenuButton.builder(MenuIcon.vanilla("gray_dye"))
+                        .name("Unavailable")
+                        .action(ActionVerb.OPEN, context -> { })
+                        .sound(SPECIAL_SOUND)
+                        .build())
+                .build();
+    }
+
     private static TestPlayer player() {
         return new TestPlayer(UUID.randomUUID());
     }
 
     private static String slotTitle(Inventory inventory, int slot) {
         return flatten(inventory.getItemStack(slot).get(DataComponents.CUSTOM_NAME));
+    }
+
+    private static List<String> slotLore(Inventory inventory, int slot) {
+        var lore = inventory.getItemStack(slot).get(DataComponents.LORE);
+        if (lore == null) {
+            return List.of();
+        }
+        return lore.stream().map(MinestomMenuRuntimeTest::flatten).toList();
     }
 
     private static String flatten(Component component) {
@@ -401,6 +471,46 @@ class MinestomMenuRuntimeTest {
 
         private int closeCount() {
             return closeCount;
+        }
+    }
+
+    private static final class RecordingSoundCueService implements SoundCueService {
+
+        private final StandardSoundCueRegistry registry = new StandardSoundCueRegistry();
+        private final IdentityHashMap<SoundCue, Key> keysByCue = new IdentityHashMap<>();
+        private final List<Key> playedKeys = new ArrayList<>();
+
+        private RecordingSoundCueService() {
+            register(SoundCueKeys.NAMESPACE, SoundCueKeys.MENU_CLICK, "test:menu_click");
+            register(SoundCueKeys.NAMESPACE, SoundCueKeys.MENU_SCROLL, "test:menu_scroll");
+            register(SoundCueKeys.NAMESPACE, SoundCueKeys.RESULT_CONFIRM, "test:result_confirm");
+            register(SoundCueKeys.NAMESPACE, SoundCueKeys.RESULT_DENY, "test:result_deny");
+            register("test", SPECIAL_SOUND, "test:menu_special");
+        }
+
+        @Override
+        public SoundCueRegistry registry() {
+            return registry;
+        }
+
+        @Override
+        public CuePlayback play(Audience audience, SoundCue cue) {
+            playedKeys.add(keysByCue.get(cue));
+            return CuePlayback.noop();
+        }
+
+        @Override
+        public void close() {
+        }
+
+        private List<Key> playedKeys() {
+            return List.copyOf(playedKeys);
+        }
+
+        private void register(String namespace, Key key, String soundKey) {
+            SoundCue cue = sh.harold.creative.library.sound.SoundCues.sound(soundKey, 0.5f, 1.0f);
+            keysByCue.put(cue, key);
+            registry.register(SoundCuePacks.pack(namespace).cue(key, cue).build());
         }
     }
 
