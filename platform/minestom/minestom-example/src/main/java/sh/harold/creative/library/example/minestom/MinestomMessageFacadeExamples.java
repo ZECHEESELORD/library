@@ -60,7 +60,7 @@ public final class MinestomMessageFacadeExamples {
                 Message.info(
                         "Set rank of {player} to {rank}.",
                         Message.slot("player", "ZeCheeseLord"),
-                        Message.slot("rank", Message.value("ADMIN").color(0x55FF55))
+                        Message.slot("rank", ExampleMessageValues.rank("ADMIN"))
                 ).tag(Tag.STAFF),
                 Message.info(
                         "Synced {count} player documents.",
@@ -156,21 +156,21 @@ public final class MinestomMessageFacadeExamples {
                 .title("QUEST COMPLETE", 0x55FF55)
                 .line(
                         "You completed {quest}!",
-                        Message.slot("quest", Message.value("Farmer's Favor").color(NamedTextColor.YELLOW))
+                        Message.slot("quest", ExampleMessageValues.highlight("Farmer's Favor"))
                 )
                 .blank()
                 .line("Rewards:")
                 .bullet(
                         "{reward}",
-                        Message.slot("reward", Message.value("2,500 Coins").color(NamedTextColor.YELLOW))
+                        Message.slot("reward", ExampleMessageValues.coinsReward(2_500))
                 )
                 .bullet(
                         "{reward}",
-                        Message.slot("reward", Message.value("450 Farming XP").color(NamedTextColor.GREEN))
+                        Message.slot("reward", ExampleMessageValues.xpReward(450, "Farming"))
                 )
                 .bullet(
                         "{reward}",
-                        Message.slot("reward", Message.value("Access to the Windmill").color(NamedTextColor.AQUA))
+                        Message.slot("reward", ExampleMessageValues.unlock("Access to the Windmill"))
                 )
                 .build();
     }
@@ -179,8 +179,7 @@ public final class MinestomMessageFacadeExamples {
         return Message.block()
                 .line(
                         "{click:" + slotName + "} to " + action + " {" + slotName + "}!",
-                        Message.slot(slotName, Message.value(label)
-                                .color(0x55FF55)
+                        Message.slot(slotName, Message.value(ExampleMessageValues.linkLabel(label))
                                 .click(Click.openUrl(url)))
                 )
                 .build();

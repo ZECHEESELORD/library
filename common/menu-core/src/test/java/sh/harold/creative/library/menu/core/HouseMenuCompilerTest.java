@@ -2,6 +2,7 @@ package sh.harold.creative.library.menu.core;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.menu.AccentFamily;
@@ -10,6 +11,7 @@ import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuSlot;
+import sh.harold.creative.library.ui.value.UiValues;
 
 import java.util.List;
 
@@ -126,6 +128,60 @@ class HouseMenuCompilerTest {
         assertEquals(List.of(
                 "Selected Power: Silky reforges grant a lot of crit damage for this setup.",
                 "Stored Layout: This wardrobe loadout should stay on one pair line."), lore(slot));
+    }
+
+    @Test
+    void valueLinesPreserveExplicitArgumentColors() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Card")
+                .valueLine("Bits Available ", UiValues.prettyNumber(10_420, 0x55FFFF))
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        Component line = slot.lore().getFirst();
+        assertEquals(NamedTextColor.GRAY, line.children().get(0).color());
+        assertEquals(TextColor.color(0x55FFFF), line.children().get(1).color());
+    }
+
+    @Test
+    void itemTitlesPreserveExplicitFeelColors() {
+        MenuSlot reward = HouseMenuCompiler.compile(13, MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name(FakeSkyBlockMenuTitles.reward("Museum Rewards"))
+                .build());
+        MenuSlot perk = HouseMenuCompiler.compile(13, MenuDisplayItem.builder(MenuIcon.vanilla("beacon"))
+                .name(FakeSkyBlockMenuTitles.perk("Perks"))
+                .build());
+
+        assertEquals(TextColor.color(0xFFAA00), reward.title().color());
+        assertEquals(TextColor.color(0x55FFFF), perk.title().color());
+    }
+
+    @Test
+    void pairValuesPreserveExplicitColors() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Card")
+                .pair("Cost", UiValues.prettyNumber(2_750, 0x55FF55))
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        Component line = slot.lore().getFirst();
+        assertEquals(NamedTextColor.GRAY, line.children().get(0).color());
+        assertEquals(TextColor.color(0x55FF55), line.children().get(1).color());
+    }
+
+    @Test
+    void softValueLinesKeepArgumentColorOnContinuation() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Card")
+                .softValueLine("Selected Route: ", UiValues.literal(
+                        "This deliberately long value should wrap and keep its shared accent color.", 0x55FFFF))
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(TextColor.color(0x55FFFF), slot.lore().get(1).color());
     }
 
     @Test

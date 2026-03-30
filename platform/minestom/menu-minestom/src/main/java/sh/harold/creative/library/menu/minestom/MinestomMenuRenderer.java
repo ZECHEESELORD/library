@@ -15,6 +15,7 @@ public final class MinestomMenuRenderer {
         return ItemStack.of(material)
                 .withCustomName(slot.title())
                 .withLore(slot.lore())
-                .withGlowing(slot.glow());
+                .withGlowing(slot.glow())
+                .withoutExtraTooltip();
     }
 }

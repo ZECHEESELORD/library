@@ -2,7 +2,10 @@ package sh.harold.creative.library.menu.paper;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -19,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PaperMenuRendererTest {
@@ -28,8 +32,14 @@ class PaperMenuRendererTest {
         MenuSlot slot = new MenuSlot(
                 13,
                 MenuIcon.vanilla("emerald"),
-                Component.text("Museum Rewards"),
-                List.of(Component.text("Every 100 SkyBlock XP"), Component.empty(), Component.text("CLICK to view")),
+                Component.text("Museum Rewards", TextColor.color(0xFFAA00)),
+                List.of(
+                        Component.text()
+                                .append(Component.text("Bits Available: ", NamedTextColor.GRAY))
+                                .append(Component.text("10,420", TextColor.color(0x55FFFF)))
+                                .build(),
+                        Component.empty(),
+                        Component.text("CLICK to view")),
                 true,
                 Map.of());
 
@@ -70,9 +80,13 @@ class PaperMenuRendererTest {
 
         assertEquals("minecraft:emerald", createdKey.get());
         assertEquals("Museum Rewards", flatten(renderedMeta.displayName()));
-        assertEquals(List.of("Every 100 SkyBlock XP", "", "CLICK to view"),
+        assertEquals(TextColor.color(0xFFAA00), renderedMeta.displayName().color());
+        assertEquals(List.of("Bits Available: 10,420", "", "CLICK to view"),
                 renderedMeta.lore().stream().map(PaperMenuRendererTest::flatten).toList());
+        assertEquals(NamedTextColor.GRAY, renderedMeta.lore().getFirst().children().get(0).color());
+        assertEquals(TextColor.color(0x55FFFF), renderedMeta.lore().getFirst().children().get(1).color());
         assertTrue(Boolean.TRUE.equals(renderedMeta.getEnchantmentGlintOverride()));
+        verify(meta).addItemFlags(ItemFlag.values());
     }
 
     private static String flatten(Component component) {

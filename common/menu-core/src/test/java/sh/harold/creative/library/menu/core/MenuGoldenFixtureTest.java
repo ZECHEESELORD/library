@@ -2,6 +2,7 @@ package sh.harold.creative.library.menu.core;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.TextColor;
 import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.menu.Menu;
 import sh.harold.creative.library.menu.MenuItem;
@@ -12,6 +13,20 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class MenuGoldenFixtureTest {
+
+    @Test
+    void representativeCardsKeepStyledTitleColors() {
+        List<MenuItem> items = RepresentativeMenuFixtures.representativeItems();
+
+        assertEquals(List.of(
+                        TextColor.color(0xFFFF55),
+                        TextColor.color(0x55FF55),
+                        TextColor.color(0xFFAA00),
+                        TextColor.color(0xAAAAAA)),
+                items.stream()
+                        .map(item -> HouseMenuCompiler.compile(13, item).title().color())
+                        .toList());
+    }
 
     @Test
     void representativeCardsMatchGoldenOutput() {

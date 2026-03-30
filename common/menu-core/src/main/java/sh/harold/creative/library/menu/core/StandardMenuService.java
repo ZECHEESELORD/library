@@ -490,9 +490,12 @@ public final class StandardMenuService implements MenuService {
     }
 
     private static MenuSlot tabButton(int slot, MenuTab tab, boolean active, int navStart) {
-        return chromeButton(slot, plain(tab.name()), tab.icon(),
-                Map.of(MenuClick.LEFT, MenuInteraction.of(ActionVerb.SWITCH_TAB, new MenuSlotAction.OpenFrame(tabFrameId(tab.id(), navStart, 0)))),
-                active);
+        Map<MenuClick, MenuInteraction> interactions = Map.of(
+                MenuClick.LEFT, MenuInteraction.of(ActionVerb.SWITCH_TAB, new MenuSlotAction.OpenFrame(tabFrameId(tab.id(), navStart, 0))));
+        if (tab.secondary() == null && tab.blocks().isEmpty()) {
+            return chromeButton(slot, tab.name(), tab.icon(), interactions, active || tab.glow());
+        }
+        return HouseMenuCompiler.compile(slot, tab.icon(), tab.name(), tab.secondary(), tab.blocks(), active || tab.glow(), interactions, false);
     }
 
     private static MenuSlot tabIndicator(int slot, boolean active) {
@@ -554,14 +557,19 @@ public final class StandardMenuService implements MenuService {
     }
 
     private static MenuSlot chromeButton(int slot, String title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions, boolean glow) {
-        return new MenuSlot(slot, icon, Component.text(title).decoration(TextDecoration.ITALIC, false),
+        return chromeButton(slot, Component.text(title), icon, interactions, glow);
+    }
+
+    private static MenuSlot chromeButton(int slot, Component title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions, boolean glow) {
+        return new MenuSlot(slot, icon, title.decoration(TextDecoration.ITALIC, false),
                 chromeLore(title, interactions), glow, interactions);
     }
 
-    private static List<Component> chromeLore(String title, Map<MenuClick, MenuInteraction> interactions) {
+    private static List<Component> chromeLore(Component title, Map<MenuClick, MenuInteraction> interactions) {
+        String plainTitle = plain(title);
         List<Component> lore = new ArrayList<>();
         lore.add(Component.empty());
-        lore.add(Component.text(title, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        lore.add(Component.text(plainTitle, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
         if (!interactions.isEmpty()) {
             lore.add(Component.empty());
             MenuInteraction left = interactions.get(MenuClick.LEFT);

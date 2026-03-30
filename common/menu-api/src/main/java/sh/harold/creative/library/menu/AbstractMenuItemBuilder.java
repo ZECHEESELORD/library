@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.ComponentLike;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.TextDecoration;
+import sh.harold.creative.library.ui.value.UiValue;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -88,8 +89,36 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return lines(MenuBlock.WrapMode.SOFT, copyText(lines, "lines"));
     }
 
+    public B valueLine(String prefix, Object value) {
+        return valueLines(MenuBlock.WrapMode.SINGLE_LINE, List.of(new MenuBlock.ValueLines.Entry(
+                requireText(prefix, "prefix"),
+                toUiValue(value, "value"))));
+    }
+
+    public B softValueLine(String prefix, Object value) {
+        return valueLines(MenuBlock.WrapMode.SOFT, List.of(new MenuBlock.ValueLines.Entry(
+                requireText(prefix, "prefix"),
+                toUiValue(value, "value"))));
+    }
+
+    public B valueLines(MenuValueLine... lines) {
+        return valueLines(List.of(lines));
+    }
+
+    public B softValueLines(MenuValueLine... lines) {
+        return softValueLines(List.of(lines));
+    }
+
+    public B valueLines(Iterable<MenuValueLine> lines) {
+        return valueLines(MenuBlock.WrapMode.SINGLE_LINE, copyValueLines(lines));
+    }
+
+    public B softValueLines(Iterable<MenuValueLine> lines) {
+        return valueLines(MenuBlock.WrapMode.SOFT, copyValueLines(lines));
+    }
+
     public B pair(String key, Object value) {
-        return pairs(MenuBlock.WrapMode.SINGLE_LINE, List.of(new MenuBlock.Pairs.Entry(requireText(key, "key"), stringify(value, "value"))));
+        return pairs(MenuBlock.WrapMode.SINGLE_LINE, List.of(new MenuBlock.Pairs.Entry(requireText(key, "key"), toUiValue(value, "value"))));
     }
 
     /**
@@ -97,11 +126,27 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
      * cleanly within the shared character-count cap.
      */
     public B softPair(String key, Object value) {
-        return pairs(MenuBlock.WrapMode.SOFT, List.of(new MenuBlock.Pairs.Entry(requireText(key, "key"), stringify(value, "value"))));
+        return pairs(MenuBlock.WrapMode.SOFT, List.of(new MenuBlock.Pairs.Entry(requireText(key, "key"), toUiValue(value, "value"))));
     }
 
     public B pairs(String... rawPairs) {
         return pairs(MenuBlock.WrapMode.SINGLE_LINE, rawPairs);
+    }
+
+    public B pairs(MenuPair... pairs) {
+        return pairs(List.of(pairs));
+    }
+
+    public B softPairs(MenuPair... pairs) {
+        return softPairs(List.of(pairs));
+    }
+
+    public B pairs(Iterable<MenuPair> pairs) {
+        return pairs(MenuBlock.WrapMode.SINGLE_LINE, copyPairs(pairs));
+    }
+
+    public B softPairs(Iterable<MenuPair> pairs) {
+        return pairs(MenuBlock.WrapMode.SOFT, copyPairs(pairs));
     }
 
     /**
@@ -138,7 +183,7 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         }
         List<MenuBlock.Pairs.Entry> entries = new ArrayList<>();
         for (int i = 0; i < rawPairs.length; i += 2) {
-            entries.add(new MenuBlock.Pairs.Entry(requireText(rawPairs[i], "key"), requireText(rawPairs[i + 1], "value")));
+            entries.add(new MenuBlock.Pairs.Entry(requireText(rawPairs[i], "key"), UiValue.of(requireText(rawPairs[i + 1], "value"))));
         }
         return pairs(wrapMode, entries);
     }
@@ -147,7 +192,7 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         Objects.requireNonNull(entries, "entries");
         List<MenuBlock.Pairs.Entry> pairs = new ArrayList<>();
         for (Map.Entry<?, ?> entry : entries.entrySet()) {
-            pairs.add(new MenuBlock.Pairs.Entry(stringify(entry.getKey(), "key"), stringify(entry.getValue(), "value")));
+            pairs.add(new MenuBlock.Pairs.Entry(stringify(entry.getKey(), "key"), toUiValue(entry.getValue(), "value")));
         }
         return pairs(wrapMode, pairs);
     }
@@ -158,7 +203,7 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         Objects.requireNonNull(valueMapper, "valueMapper");
         List<MenuBlock.Pairs.Entry> pairs = new ArrayList<>();
         for (T item : items) {
-            pairs.add(new MenuBlock.Pairs.Entry(requireText(keyMapper.apply(item), "key"), stringify(valueMapper.apply(item), "value")));
+            pairs.add(new MenuBlock.Pairs.Entry(requireText(keyMapper.apply(item), "key"), toUiValue(valueMapper.apply(item), "value")));
         }
         return pairs(wrapMode, pairs);
     }
@@ -238,6 +283,11 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return self();
     }
 
+    private B valueLines(MenuBlock.WrapMode wrapMode, List<MenuBlock.ValueLines.Entry> lines) {
+        blocks.add(new MenuBlock.ValueLines(lines, wrapMode));
+        return self();
+    }
+
     private B pairs(MenuBlock.WrapMode wrapMode, List<MenuBlock.Pairs.Entry> pairs) {
         blocks.add(new MenuBlock.Pairs(pairs, wrapMode));
         return self();
@@ -255,9 +305,46 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return List.copyOf(copy);
     }
 
+    private static List<MenuBlock.ValueLines.Entry> copyValueLines(Iterable<MenuValueLine> lines) {
+        Objects.requireNonNull(lines, "lines");
+        List<MenuBlock.ValueLines.Entry> copy = new ArrayList<>();
+        for (MenuValueLine line : lines) {
+            Objects.requireNonNull(line, "line");
+            copy.add(new MenuBlock.ValueLines.Entry(line.prefix(), line.value()));
+        }
+        if (copy.isEmpty()) {
+            throw new IllegalArgumentException("lines cannot be empty");
+        }
+        return List.copyOf(copy);
+    }
+
+    private static List<MenuBlock.Pairs.Entry> copyPairs(Iterable<MenuPair> pairs) {
+        Objects.requireNonNull(pairs, "pairs");
+        List<MenuBlock.Pairs.Entry> copy = new ArrayList<>();
+        for (MenuPair pair : pairs) {
+            Objects.requireNonNull(pair, "pair");
+            copy.add(new MenuBlock.Pairs.Entry(pair.key(), pair.value()));
+        }
+        if (copy.isEmpty()) {
+            throw new IllegalArgumentException("pairs cannot be empty");
+        }
+        return List.copyOf(copy);
+    }
+
     private static BigDecimal asBigDecimal(Number value, String label) {
         Objects.requireNonNull(value, label);
         return new BigDecimal(String.valueOf(value));
+    }
+
+    private static UiValue toUiValue(Object value, String label) {
+        Objects.requireNonNull(value, label);
+        if (value instanceof UiValue uiValue) {
+            return uiValue;
+        }
+        if (value instanceof ComponentLike componentLike) {
+            return UiValue.of(flatten(componentLike.asComponent()));
+        }
+        return UiValue.of(requireText(String.valueOf(value), label));
     }
 
     private static String stringify(Object value, String label) {

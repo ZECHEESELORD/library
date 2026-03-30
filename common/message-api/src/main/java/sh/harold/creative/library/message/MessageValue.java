@@ -2,6 +2,7 @@ package sh.harold.creative.library.message;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
+import sh.harold.creative.library.ui.value.UiValue;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -22,6 +23,15 @@ public final class MessageValue {
 
     public static MessageValue of(Component component) {
         return new MessageValue(component, null, null, null);
+    }
+
+    public static MessageValue of(UiValue value) {
+        Objects.requireNonNull(value, "value");
+        MessageValue messageValue = new MessageValue(Component.text(value.text()), null, null, null);
+        if (value.colorOverride() != null) {
+            return messageValue.color(value.colorOverride());
+        }
+        return messageValue;
     }
 
     public Component component() {

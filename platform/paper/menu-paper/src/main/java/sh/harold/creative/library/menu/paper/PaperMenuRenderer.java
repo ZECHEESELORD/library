@@ -1,6 +1,7 @@
 package sh.harold.creative.library.menu.paper;
 
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.meta.ItemMeta;
 import sh.harold.creative.library.menu.MenuSlot;
 
@@ -27,5 +28,6 @@ public final class PaperMenuRenderer implements PaperMenuSlotRenderer {
         meta.displayName(slot.title());
         meta.lore(slot.lore());
         meta.setEnchantmentGlintOverride(slot.glow() ? Boolean.TRUE : null);
+        meta.addItemFlags(ItemFlag.values());
     }
 }

@@ -82,6 +82,10 @@ public final class PaperMenuPlatform implements AutoCloseable {
         return MenuDisplayItem.builder(icon(itemStack));
     }
 
+    public MenuTab.Builder tab(String id, Material material) {
+        return MenuTab.builder(id, icon(material));
+    }
+
     public MenuTab tab(String id, String name, Material material, Iterable<? extends MenuItem> items) {
         return MenuTab.of(id, name, icon(material), items);
     }

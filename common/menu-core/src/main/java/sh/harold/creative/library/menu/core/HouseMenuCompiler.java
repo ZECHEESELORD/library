@@ -10,7 +10,9 @@ import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuClick;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuItem;
+import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuSlot;
+import sh.harold.creative.library.ui.value.UiValue;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -33,24 +35,39 @@ final class HouseMenuCompiler {
     }
 
     static MenuSlot compile(int slot, MenuItem item) {
+        return compile(slot, item.icon(), item.name(), item.secondary().orElse(null), item.blocks(), item.glow(), interactions(item), promptSuppressed(item));
+    }
+
+    static MenuSlot compile(
+            int slot,
+            MenuIcon icon,
+            Component name,
+            String secondary,
+            List<MenuBlock> blocks,
+            boolean glow,
+            Map<MenuClick, MenuInteraction> interactions,
+            boolean promptSuppressed
+    ) {
         List<Component> lore = new ArrayList<>();
-        appendSecondary(item, lore);
-        appendBlocks(item, lore);
-        appendPrompt(item, lore);
-        return new MenuSlot(slot, item.icon(), item.name(), lore, item.glow(), interactions(item));
+        appendSecondary(secondary, lore);
+        appendBlocks(blocks, lore);
+        appendPrompt(interactions, promptSuppressed, lore);
+        return new MenuSlot(slot, icon, name, lore, glow, interactions);
     }
 
     static int footerStart(int rows) {
         return (rows - 1) * 9;
     }
 
-    private static void appendSecondary(MenuItem item, List<Component> lore) {
-        item.secondary().ifPresent(secondary -> wrapText(secondary, 0, 0)
-                .forEach(line -> lore.add(text(line, MUTED_NEUTRAL))));
+    private static void appendSecondary(String secondary, List<Component> lore) {
+        if (secondary == null) {
+            return;
+        }
+        wrapText(secondary, 0, 0).forEach(line -> lore.add(text(line, MUTED_NEUTRAL)));
     }
 
-    private static void appendBlocks(MenuItem item, List<Component> lore) {
-        for (MenuBlock block : item.blocks()) {
+    private static void appendBlocks(List<MenuBlock> blocks, List<Component> lore) {
+        for (MenuBlock block : blocks) {
             List<Component> blockLines = renderBlock(block);
             if (blockLines.isEmpty()) {
                 continue;
@@ -62,16 +79,16 @@ final class HouseMenuCompiler {
         }
     }
 
-    private static void appendPrompt(MenuItem item, List<Component> lore) {
-        if (!(item instanceof MenuButton button) || button.promptSuppressed()) {
+    private static void appendPrompt(Map<MenuClick, MenuInteraction> interactions, boolean promptSuppressed, List<Component> lore) {
+        if (interactions.isEmpty() || promptSuppressed) {
             return;
         }
         List<Component> promptLines = new ArrayList<>();
-        MenuInteraction left = button.interactions().get(MenuClick.LEFT);
+        MenuInteraction left = interactions.get(MenuClick.LEFT);
         if (left != null) {
             promptLines.add(promptLine("CLICK", left.promptLabel(), NamedTextColor.YELLOW));
         }
-        MenuInteraction right = button.interactions().get(MenuClick.RIGHT);
+        MenuInteraction right = interactions.get(MenuClick.RIGHT);
         if (right != null) {
             promptLines.add(promptLine("RIGHT CLICK", right.promptLabel(), NamedTextColor.AQUA));
         }
@@ -90,12 +107,17 @@ final class HouseMenuCompiler {
         return Map.of();
     }
 
+    private static boolean promptSuppressed(MenuItem item) {
+        return item instanceof MenuButton button && button.promptSuppressed();
+    }
+
     private static List<Component> renderBlock(MenuBlock block) {
         return switch (block) {
             case MenuBlock.Description description -> wrapText(description.text(), 0, 0).stream()
                     .map(line -> text(line, BODY_NEUTRAL))
                     .toList();
             case MenuBlock.Lines lines -> renderLines(lines.lines(), lines.wrapMode());
+            case MenuBlock.ValueLines valueLines -> renderValueLines(valueLines.lines(), valueLines.wrapMode());
             case MenuBlock.Pairs pairs -> renderPairs(pairs.pairs(), pairs.wrapMode());
             case MenuBlock.Bullets bullets -> renderBullets(bullets.bullets());
             case MenuBlock.Progress progress -> renderProgress(progress);
@@ -114,23 +136,44 @@ final class HouseMenuCompiler {
         return rendered;
     }
 
+    private static List<Component> renderValueLines(List<MenuBlock.ValueLines.Entry> lines, MenuBlock.WrapMode wrapMode) {
+        List<Component> rendered = new ArrayList<>();
+        boolean canWrap = wrapMode == MenuBlock.WrapMode.SOFT && lines.size() == 1;
+        for (MenuBlock.ValueLines.Entry line : lines) {
+            if (canWrap) {
+                List<String> wrapped = softWrap(line.value().text(), line.prefix().length(), line.prefix().length());
+                String indent = " ".repeat(line.prefix().length());
+                for (int i = 0; i < wrapped.size(); i++) {
+                    if (i == 0) {
+                        rendered.add(prefixedValueLine(line.prefix(), wrapped.get(i), line.value(), BODY_NEUTRAL));
+                    } else {
+                        rendered.add(valueText(indent + wrapped.get(i), line.value(), BODY_NEUTRAL));
+                    }
+                }
+            } else {
+                rendered.add(prefixedValueLine(line.prefix(), line.value().text(), line.value(), BODY_NEUTRAL));
+            }
+        }
+        return rendered;
+    }
+
     private static List<Component> renderPairs(List<MenuBlock.Pairs.Entry> pairs, MenuBlock.WrapMode wrapMode) {
         List<Component> rendered = new ArrayList<>();
         boolean canWrap = wrapMode == MenuBlock.WrapMode.SOFT && pairs.size() == 1;
         for (MenuBlock.Pairs.Entry pair : pairs) {
             String prefix = pair.key() + ": ";
             if (canWrap) {
-                List<String> wrapped = softWrap(pair.value(), prefix.length(), prefix.length());
+                List<String> wrapped = softWrap(pair.value().text(), prefix.length(), prefix.length());
                 String indent = " ".repeat(prefix.length());
                 for (int i = 0; i < wrapped.size(); i++) {
                     if (i == 0) {
-                        rendered.add(pairLine(pair.key(), wrapped.get(i)));
+                        rendered.add(pairLine(pair.key(), wrapped.get(i), pair.value()));
                     } else {
-                        rendered.add(text(indent + wrapped.get(i), STRONG_NEUTRAL));
+                        rendered.add(valueText(indent + wrapped.get(i), pair.value(), STRONG_NEUTRAL));
                     }
                 }
             } else {
-                rendered.add(pairLine(pair.key(), pair.value()));
+                rendered.add(pairLine(pair.key(), pair.value().text(), pair.value()));
             }
         }
         return rendered;
@@ -183,12 +226,21 @@ final class HouseMenuCompiler {
         return List.of(firstLine, secondLine);
     }
 
-    private static Component pairLine(String key, String value) {
+    private static Component pairLine(String key, String value, UiValue styledValue) {
+        return prefixedValueLine(key + ": ", value, styledValue, STRONG_NEUTRAL);
+    }
+
+    private static Component prefixedValueLine(String prefix, String value, UiValue styledValue, TextColor defaultValueColor) {
         return Component.text()
-                .append(text(key + ": ", BODY_NEUTRAL))
-                .append(text(value, STRONG_NEUTRAL))
+                .append(text(prefix, BODY_NEUTRAL))
+                .append(valueText(value, styledValue, defaultValueColor))
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
+    }
+
+    private static Component valueText(String text, UiValue value, TextColor defaultColor) {
+        TextColor color = value.colorOverride() == null ? defaultColor : value.colorOverride();
+        return text(text, color);
     }
 
     private static Component promptLine(String clickLabel, String promptLabel, NamedTextColor color) {

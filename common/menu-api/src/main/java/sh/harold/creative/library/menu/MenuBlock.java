@@ -1,10 +1,12 @@
 package sh.harold.creative.library.menu;
 
+import sh.harold.creative.library.ui.value.UiValue;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
-public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines, MenuBlock.Pairs, MenuBlock.Bullets, MenuBlock.Progress {
+public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines, MenuBlock.ValueLines, MenuBlock.Pairs, MenuBlock.Bullets, MenuBlock.Progress {
 
     enum WrapMode {
         /**
@@ -34,6 +36,26 @@ public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines
         }
     }
 
+    record ValueLines(List<Entry> lines, WrapMode wrapMode) implements MenuBlock {
+
+        public ValueLines {
+            Objects.requireNonNull(lines, "lines");
+            lines = List.copyOf(lines);
+            if (lines.isEmpty()) {
+                throw new IllegalArgumentException("lines cannot be empty");
+            }
+            wrapMode = Objects.requireNonNull(wrapMode, "wrapMode");
+        }
+
+        public record Entry(String prefix, UiValue value) {
+
+            public Entry {
+                Objects.requireNonNull(prefix, "prefix");
+                Objects.requireNonNull(value, "value");
+            }
+        }
+    }
+
     record Pairs(List<Entry> pairs, WrapMode wrapMode) implements MenuBlock {
 
         public Pairs {
@@ -45,11 +67,11 @@ public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines
             wrapMode = Objects.requireNonNull(wrapMode, "wrapMode");
         }
 
-        public record Entry(String key, String value) {
+        public record Entry(String key, UiValue value) {
 
             public Entry {
                 requireText(key, "key");
-                requireText(value, "value");
+                Objects.requireNonNull(value, "value");
             }
         }
     }

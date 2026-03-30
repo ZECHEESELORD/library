@@ -15,6 +15,7 @@ import sh.harold.creative.library.message.NoticeMessage;
 import sh.harold.creative.library.message.Tag;
 import sh.harold.creative.library.message.TopicMessage;
 import sh.harold.creative.library.message.Topics;
+import sh.harold.creative.library.ui.value.UiValues;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -53,6 +54,22 @@ class MessageRenderingTest {
         Component expected = Component.text()
                 .append(Component.text("You are holding ", NamedTextColor.GRAY))
                 .append(Component.text("Aspect of the Dragons", NamedTextColor.GOLD))
+                .append(Component.text(".", NamedTextColor.GRAY))
+                .build();
+
+        assertEquals(expected, renderChat(message));
+    }
+
+    @Test
+    void uiValueBindingsRenderSharedPrettyValues() {
+        NoticeMessage message = Message.info(
+                "Bits available: {bits}.",
+                Message.slot("bits", UiValues.prettyNumber(10_420, 0x55FFFF))
+        );
+
+        Component expected = Component.text()
+                .append(Component.text("Bits available: ", NamedTextColor.GRAY))
+                .append(Component.text("10,420", TextColor.color(0x55FFFF)))
                 .append(Component.text(".", NamedTextColor.GRAY))
                 .build();
 

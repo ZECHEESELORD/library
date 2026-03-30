@@ -12,6 +12,7 @@ import sh.harold.creative.library.menu.MenuFrame;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuItem;
+import sh.harold.creative.library.menu.MenuPair;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
@@ -117,6 +118,33 @@ class StandardMenuServiceTest {
         assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 18));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 48));
         assertEquals("Close", titleAt(frame, 49));
+    }
+
+    @Test
+    void tabsCanUseAuthoredRepresentativeItemSummaries() {
+        Menu menu = menus.tabs()
+                .title("Modes")
+                .defaultTab("upgrades")
+                .addTab(MenuTab.builder("upgrades", MenuIcon.vanilla("nether_star"))
+                        .name(Component.text("Account & Profile Upgrades", NamedTextColor.LIGHT_PURPLE))
+                        .description("Upgrade your account and profile unlocks from one place.")
+                        .pairs(
+                                MenuPair.of("Profile", "Nothing Going On..."),
+                                MenuPair.of("Account", "Bazaar Flipper II"))
+                        .items(sampleButtons("Upgrade", 1))
+                        .build())
+                .addTab(MenuTab.of("mail", "Mail", MenuIcon.vanilla("book"), sampleButtons("Mail", 1)))
+                .build();
+
+        MenuFrame frame = menu.initialFrame();
+        int slot = slotWithTitle(frame, "Account & Profile Upgrades");
+        List<String> lore = loreAt(frame, slot);
+
+        assertEquals(NamedTextColor.LIGHT_PURPLE, frame.slots().get(slot).title().color());
+        assertTrue(lore.getFirst().startsWith("Upgrade your account"));
+        assertTrue(lore.contains("Profile: Nothing Going On..."));
+        assertTrue(lore.contains("Account: Bazaar Flipper II"));
+        assertEquals("CLICK to view!", lore.getLast());
     }
 
     @Test
@@ -396,6 +424,14 @@ class StandardMenuServiceTest {
 
     private static String iconAt(MenuFrame frame, int slot) {
         return frame.slots().get(slot).icon().key();
+    }
+
+    private static int slotWithTitle(MenuFrame frame, String title) {
+        return frame.slots().entrySet().stream()
+                .filter(entry -> titleAt(frame, entry.getKey()).equals(title))
+                .mapToInt(java.util.Map.Entry::getKey)
+                .findFirst()
+                .orElseThrow();
     }
 
     private static boolean glowAt(MenuFrame frame, int slot) {

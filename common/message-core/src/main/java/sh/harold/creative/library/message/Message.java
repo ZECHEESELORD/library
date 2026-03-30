@@ -2,6 +2,7 @@ package sh.harold.creative.library.message;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.ComponentLike;
+import sh.harold.creative.library.ui.value.UiValue;
 import sh.harold.creative.library.message.core.DefaultMessageBlockBuilder;
 import sh.harold.creative.library.message.core.DefaultNoticeMessage;
 import sh.harold.creative.library.message.core.DefaultTopicMessage;
@@ -51,6 +52,9 @@ public final class Message {
         Objects.requireNonNull(value, "value");
         if (value instanceof MessageValue messageValue) {
             return messageValue;
+        }
+        if (value instanceof UiValue uiValue) {
+            return MessageValue.of(uiValue);
         }
         if (value instanceof Component component) {
             return value(component);

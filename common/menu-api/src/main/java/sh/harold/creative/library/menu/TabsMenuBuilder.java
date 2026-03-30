@@ -7,6 +7,7 @@ public interface TabsMenuBuilder {
     /**
      * House footer policy for v1 tab menus:
      * row 0 = tab strip,
+     * each row-0 tab item is a representative browse card whose title, description, and summary lore describe what lives inside that tab,
      * row 1 = tab-state chrome under the visible strip,
      * shared footer mode reserves row 5 for previous/back/close/next chrome by default,
      * custom footer mode makes rows 2-5 caller-owned,

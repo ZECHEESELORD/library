@@ -3,6 +3,7 @@ rootProject.name = "library"
 include(
     ":common:data-api",
     ":common:data-memory",
+    ":common:ui-values-api",
     ":common:message-api",
     ":common:message-core",
     ":common:sound-api",
