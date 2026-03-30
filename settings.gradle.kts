@@ -1,6 +1,8 @@
 rootProject.name = "library"
 
 include(
+    ":common:camera-motion-api",
+    ":common:camera-motion-core",
     ":common:data-api",
     ":common:data-memory",
     ":common:ui-values-api",
@@ -19,6 +21,7 @@ include(
     ":common:house-service-entity",
     ":platform:paper:message-paper",
     ":platform:paper:sound-paper",
+    ":platform:paper:camera-motion-paper",
     ":platform:paper:screen-overlay-paper",
     ":platform:paper:menu-paper",
     ":platform:paper:paper-example",
@@ -27,6 +30,7 @@ include(
     ":platform:paper:paper-entity-example",
     ":platform:minestom:message-minestom",
     ":platform:minestom:sound-minestom",
+    ":platform:minestom:camera-motion-minestom",
     ":platform:minestom:screen-overlay-minestom",
     ":platform:minestom:menu-minestom",
     ":platform:minestom:minestom-example",

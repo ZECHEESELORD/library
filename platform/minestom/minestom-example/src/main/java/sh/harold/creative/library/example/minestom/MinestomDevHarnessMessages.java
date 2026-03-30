@@ -25,10 +25,11 @@ final class MinestomDevHarnessMessages {
     void sendQuickStart(Player player) {
         info(
                 player,
-                "Use {menus}, {messages}, {sounds}, {overlays}, and {npcs} for the Minestom dev harness.",
+                "Use {menus}, {messages}, {sounds}, {camera}, {overlays}, and {npcs} for the Minestom dev harness.",
                 Message.slot("menus", command("/testmenus")),
                 Message.slot("messages", command("/testmessages")),
                 Message.slot("sounds", command("/testsoundfx")),
+                Message.slot("camera", command("/testcamera")),
                 Message.slot("overlays", command("/testoverlays")),
                 Message.slot("npcs", command("/testnpcs"))
         );
@@ -50,6 +51,10 @@ final class MinestomDevHarnessMessages {
                 .bullet(
                         "{command} all|menu|npc|confirm|deny|levelup|discovery",
                         Message.slot("command", command("/testsoundfx"))
+                )
+                .bullet(
+                        "{command} all|recoil|rumble|concussion|stagger|cinematic|stop",
+                        Message.slot("command", command("/testcamera"))
                 )
                 .bullet(
                         "{command} demo|clear",
