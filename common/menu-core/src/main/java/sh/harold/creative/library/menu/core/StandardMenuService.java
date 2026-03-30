@@ -566,20 +566,20 @@ public final class StandardMenuService implements MenuService {
             lore.add(Component.empty());
             MenuInteraction left = interactions.get(MenuClick.LEFT);
             if (left != null) {
-                lore.add(promptLine(interactions.size() == 1 ? "CLICK" : "LEFT CLICK", left.promptLabel()));
+                lore.add(promptLine("CLICK", left.promptLabel(), NamedTextColor.YELLOW));
             }
             MenuInteraction right = interactions.get(MenuClick.RIGHT);
             if (right != null) {
-                lore.add(promptLine("RIGHT CLICK", right.promptLabel()));
+                lore.add(promptLine("RIGHT CLICK", right.promptLabel(), NamedTextColor.AQUA));
             }
         }
         return List.copyOf(lore);
     }
 
-    private static Component promptLine(String clickLabel, String promptLabel) {
+    private static Component promptLine(String clickLabel, String promptLabel, NamedTextColor color) {
         return Component.text()
-                .append(Component.text(clickLabel, NamedTextColor.YELLOW, TextDecoration.BOLD))
-                .append(Component.text(" to " + emphaticPromptLabel(promptLabel), NamedTextColor.YELLOW))
+                .append(Component.text(clickLabel, color, TextDecoration.BOLD))
+                .append(Component.text(" to " + emphaticPromptLabel(promptLabel), color))
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
     }

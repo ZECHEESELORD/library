@@ -142,6 +142,31 @@ class HouseMenuCompilerTest {
     }
 
     @Test
+    void dualPromptsUseClickAndRightClickWithoutExtraSpacing() {
+        MenuButton button = MenuButton.builder(MenuIcon.vanilla("book"))
+                .name("Button")
+                .line("Body")
+                .action(ActionVerb.OPEN, context -> {})
+                .onRightClick(ActionVerb.BROWSE, context -> {})
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, button);
+
+        assertEquals(List.of("Body", "", "CLICK to open!", "RIGHT CLICK to browse!"), lore(slot));
+
+        Component leftPrompt = slot.lore().get(2);
+        Component rightPrompt = slot.lore().get(3);
+
+        assertEquals(NamedTextColor.YELLOW, leftPrompt.children().get(0).color());
+        assertEquals(TextDecoration.State.TRUE, leftPrompt.children().get(0).decoration(TextDecoration.BOLD));
+        assertEquals(NamedTextColor.YELLOW, leftPrompt.children().get(1).color());
+
+        assertEquals(NamedTextColor.AQUA, rightPrompt.children().get(0).color());
+        assertEquals(TextDecoration.State.TRUE, rightPrompt.children().get(0).decoration(TextDecoration.BOLD));
+        assertEquals(NamedTextColor.AQUA, rightPrompt.children().get(1).color());
+    }
+
+    @Test
     void progressUsesHouseFormattingAndAccentSegmentation() {
         MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("experience_bottle"))
                 .name("Progress")

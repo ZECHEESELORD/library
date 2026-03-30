@@ -67,17 +67,13 @@ final class HouseMenuCompiler {
             return;
         }
         List<Component> promptLines = new ArrayList<>();
-        if (button.interactions().size() == 1 && button.interactions().containsKey(MenuClick.LEFT)) {
-            promptLines.add(promptLine("CLICK", button.interactions().get(MenuClick.LEFT).promptLabel()));
-        } else {
-            MenuInteraction left = button.interactions().get(MenuClick.LEFT);
-            if (left != null) {
-                promptLines.add(promptLine("LEFT CLICK", left.promptLabel()));
-            }
-            MenuInteraction right = button.interactions().get(MenuClick.RIGHT);
-            if (right != null) {
-                promptLines.add(promptLine("RIGHT CLICK", right.promptLabel()));
-            }
+        MenuInteraction left = button.interactions().get(MenuClick.LEFT);
+        if (left != null) {
+            promptLines.add(promptLine("CLICK", left.promptLabel(), NamedTextColor.YELLOW));
+        }
+        MenuInteraction right = button.interactions().get(MenuClick.RIGHT);
+        if (right != null) {
+            promptLines.add(promptLine("RIGHT CLICK", right.promptLabel(), NamedTextColor.AQUA));
         }
         if (!promptLines.isEmpty()) {
             if (!lore.isEmpty()) {
@@ -195,10 +191,10 @@ final class HouseMenuCompiler {
                 .build();
     }
 
-    private static Component promptLine(String clickLabel, String promptLabel) {
+    private static Component promptLine(String clickLabel, String promptLabel, NamedTextColor color) {
         return Component.text()
-                .append(text(clickLabel, NamedTextColor.YELLOW, true))
-                .append(text(" to " + emphaticPromptLabel(promptLabel), NamedTextColor.YELLOW))
+                .append(text(clickLabel, color, true))
+                .append(text(" to " + emphaticPromptLabel(promptLabel), color))
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
     }
