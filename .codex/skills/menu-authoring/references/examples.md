@@ -16,7 +16,7 @@ Examples use Paper snippets for brevity. Minestom uses the same shape through `M
 
 Pure `list()` menus use a centered open `7x4` content panel in slots `10-16`, `19-25`, `28-34`, and `37-43`. Unused slots inside that panel stay blank by default, so showcase galleries should add more than `28` entries when they want to demonstrate scrolling.
 
-Lore wrapping is character-count based: wrapped blocks start breaking once they move past roughly `20` characters and must break by `30` when possible. Item titles do not widen lore wrapping, and grouped `lines(...)` / `pairs(...)` blocks keep one entry per lore line.
+Lore wrapping is character-count based: a block stays on one line when it still fits within `30` characters, otherwise the compiler rebalances it into the fewest reasonably even lines under that cap with `20` as the soft target. Item titles do not widen lore wrapping, and grouped `lines(...)` / `pairs(...)` blocks keep one entry per lore line.
 
 ## Your SkyBlock Profile
 
@@ -65,7 +65,7 @@ and more...
 
 Also accessible via /stats
 
-CLICK to view
+CLICK to view!
 ```
 
 ## Farming XLIX
@@ -96,8 +96,7 @@ Rendered card:
 ```text
 Farming XLIX
 Harvest crops and shear
-sheep to earn Farming
-XP!
+sheep to earn Farming XP!
 
 Progress to Level L: 85.8%
 -------------------- 3,432,908.3/4,000,000
@@ -109,13 +108,14 @@ Progress to Level L: 85.8%
 • +1,000,000 Coins
 • +20 SkyBlock XP
 
-CLICK to view
+CLICK to view!
 ```
 
 Notes:
 
 - The plain snapshot hides the accent-family colors.
-- The real progress block uses the fixed two-line house pattern and house-owned bar width.
+- The real progress block uses the fixed two-line house pattern, house-owned bar width, and a strikethrough line across the bar so the dashes read as one continuous meter.
+- The description stays as authored; the balanced wrapper removes the orphaned `XP!` line without forcing manual copy splits.
 
 ## Museum Rewards
 
@@ -154,7 +154,7 @@ Milestone: 3/40
 Progress to Milestone 4: 35%
 -------------------- 35/100
 
-CLICK to view
+CLICK to view!
 ```
 
 ## Profile Slot #5
@@ -188,7 +188,7 @@ You have: 360 Gems
 
 Cannot afford this!
 
-CLICK to open
+CLICK to open!
 ```
 
 ## Tabs Gallery

@@ -15,17 +15,15 @@ import sh.harold.creative.library.menu.MenuSlot;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 final class HouseMenuCompiler {
 
-    private static final int DEFAULT_WRAP_WIDTH = 148;
-    private static final int MIN_WRAP_WIDTH = 120;
-    private static final int MAX_WRAP_WIDTH = 176;
-    private static final int SOFT_WRAP_BUFFER = 10;
+    private static final int SOFT_WRAP_START = 20;
+    private static final int HARD_WRAP_LIMIT = 30;
     private static final int PROGRESS_BAR_WIDTH = 20;
+    private static final double SCORE_EPSILON = 0.000001d;
 
     private static final TextColor STRONG_NEUTRAL = NamedTextColor.WHITE;
     private static final TextColor BODY_NEUTRAL = NamedTextColor.GRAY;
@@ -35,10 +33,9 @@ final class HouseMenuCompiler {
     }
 
     static MenuSlot compile(int slot, MenuItem item) {
-        int wrapWidth = resolveWrapWidth(item);
         List<Component> lore = new ArrayList<>();
-        appendSecondary(item, lore, wrapWidth);
-        appendBlocks(item, lore, wrapWidth);
+        appendSecondary(item, lore);
+        appendBlocks(item, lore);
         appendPrompt(item, lore);
         return new MenuSlot(slot, item.icon(), item.name(), lore, item.glow(), interactions(item));
     }
@@ -47,14 +44,14 @@ final class HouseMenuCompiler {
         return (rows - 1) * 9;
     }
 
-    private static void appendSecondary(MenuItem item, List<Component> lore, int wrapWidth) {
-        item.secondary().ifPresent(secondary -> wrapText(secondary, wrapWidth, 0)
+    private static void appendSecondary(MenuItem item, List<Component> lore) {
+        item.secondary().ifPresent(secondary -> wrapText(secondary, 0, 0)
                 .forEach(line -> lore.add(text(line, MUTED_NEUTRAL))));
     }
 
-    private static void appendBlocks(MenuItem item, List<Component> lore, int wrapWidth) {
+    private static void appendBlocks(MenuItem item, List<Component> lore) {
         for (MenuBlock block : item.blocks()) {
-            List<Component> blockLines = renderBlock(block, wrapWidth);
+            List<Component> blockLines = renderBlock(block);
             if (blockLines.isEmpty()) {
                 continue;
             }
@@ -97,22 +94,23 @@ final class HouseMenuCompiler {
         return Map.of();
     }
 
-    private static List<Component> renderBlock(MenuBlock block, int wrapWidth) {
+    private static List<Component> renderBlock(MenuBlock block) {
         return switch (block) {
-            case MenuBlock.Description description -> wrapText(description.text(), wrapWidth, 0).stream()
+            case MenuBlock.Description description -> wrapText(description.text(), 0, 0).stream()
                     .map(line -> text(line, BODY_NEUTRAL))
                     .toList();
-            case MenuBlock.Lines lines -> renderLines(lines.lines(), lines.wrapMode(), wrapWidth);
-            case MenuBlock.Pairs pairs -> renderPairs(pairs.pairs(), pairs.wrapMode(), wrapWidth);
-            case MenuBlock.Bullets bullets -> renderBullets(bullets.bullets(), wrapWidth);
+            case MenuBlock.Lines lines -> renderLines(lines.lines(), lines.wrapMode());
+            case MenuBlock.Pairs pairs -> renderPairs(pairs.pairs(), pairs.wrapMode());
+            case MenuBlock.Bullets bullets -> renderBullets(bullets.bullets());
             case MenuBlock.Progress progress -> renderProgress(progress);
         };
     }
 
-    private static List<Component> renderLines(List<String> lines, MenuBlock.WrapMode wrapMode, int wrapWidth) {
+    private static List<Component> renderLines(List<String> lines, MenuBlock.WrapMode wrapMode) {
         List<Component> rendered = new ArrayList<>();
+        boolean canWrap = wrapMode == MenuBlock.WrapMode.SOFT && lines.size() == 1;
         for (String line : lines) {
-            List<String> wrapped = wrapMode == MenuBlock.WrapMode.SOFT ? softWrap(line, wrapWidth, 0) : List.of(line);
+            List<String> wrapped = canWrap ? softWrap(line, 0, 0) : List.of(line);
             for (String wrappedLine : wrapped) {
                 rendered.add(text(wrappedLine, BODY_NEUTRAL));
             }
@@ -120,19 +118,19 @@ final class HouseMenuCompiler {
         return rendered;
     }
 
-    private static List<Component> renderPairs(List<MenuBlock.Pairs.Entry> pairs, MenuBlock.WrapMode wrapMode, int wrapWidth) {
+    private static List<Component> renderPairs(List<MenuBlock.Pairs.Entry> pairs, MenuBlock.WrapMode wrapMode) {
         List<Component> rendered = new ArrayList<>();
+        boolean canWrap = wrapMode == MenuBlock.WrapMode.SOFT && pairs.size() == 1;
         for (MenuBlock.Pairs.Entry pair : pairs) {
             String prefix = pair.key() + ": ";
-            if (wrapMode == MenuBlock.WrapMode.SOFT) {
-                List<String> wrapped = softWrap(prefix + pair.value(), wrapWidth, MinecraftFontMetrics.width(prefix));
+            if (canWrap) {
+                List<String> wrapped = softWrap(pair.value(), prefix.length(), prefix.length());
                 String indent = " ".repeat(prefix.length());
                 for (int i = 0; i < wrapped.size(); i++) {
-                    String line = wrapped.get(i);
                     if (i == 0) {
-                        rendered.add(pairLine(pair.key(), line.substring(prefix.length())));
+                        rendered.add(pairLine(pair.key(), wrapped.get(i)));
                     } else {
-                        rendered.add(text(indent + line, STRONG_NEUTRAL));
+                        rendered.add(text(indent + wrapped.get(i), STRONG_NEUTRAL));
                     }
                 }
             } else {
@@ -142,10 +140,10 @@ final class HouseMenuCompiler {
         return rendered;
     }
 
-    private static List<Component> renderBullets(List<String> bullets, int wrapWidth) {
+    private static List<Component> renderBullets(List<String> bullets) {
         List<Component> rendered = new ArrayList<>();
         for (String bullet : bullets) {
-            List<String> wrapped = softWrap(bullet, wrapWidth - MinecraftFontMetrics.width("• "), MinecraftFontMetrics.width("  "));
+            List<String> wrapped = softWrap(bullet, 2, 2);
             for (int i = 0; i < wrapped.size(); i++) {
                 if (i == 0) {
                     rendered.add(Component.text()
@@ -178,8 +176,8 @@ final class HouseMenuCompiler {
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
         Component secondLine = Component.text()
-                .append(text(filledBar, accent.light()))
-                .append(text(emptyBar, BODY_NEUTRAL))
+                .append(text(filledBar, accent.light(), false, true))
+                .append(text(emptyBar, BODY_NEUTRAL, false, true))
                 .append(Component.space())
                 .append(text(HouseNumberFormatter.format(progress.current()), accent.light()))
                 .append(text("/", accent.dark()))
@@ -200,9 +198,13 @@ final class HouseMenuCompiler {
     private static Component promptLine(String clickLabel, String promptLabel) {
         return Component.text()
                 .append(text(clickLabel, NamedTextColor.YELLOW, true))
-                .append(text(" to " + promptLabel, NamedTextColor.YELLOW))
+                .append(text(" to " + emphaticPromptLabel(promptLabel), NamedTextColor.YELLOW))
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
+    }
+
+    private static String emphaticPromptLabel(String promptLabel) {
+        return promptLabel.endsWith("!") ? promptLabel : promptLabel + "!";
     }
 
     private static Component text(String text, TextColor color) {
@@ -210,69 +212,145 @@ final class HouseMenuCompiler {
     }
 
     private static Component text(String text, TextColor color, boolean bold) {
+        return text(text, color, bold, false);
+    }
+
+    private static Component text(String text, TextColor color, boolean bold, boolean strikethrough) {
         return Component.text(text, color)
                 .decoration(TextDecoration.BOLD, bold)
+                .decoration(TextDecoration.STRIKETHROUGH, strikethrough)
                 .decoration(TextDecoration.ITALIC, false);
     }
 
-    private static int resolveWrapWidth(MenuItem item) {
-        int best = 0;
-        best = Math.max(best, MinecraftFontMetrics.width(item.name()));
-        for (MenuBlock block : item.blocks()) {
-            switch (block) {
-                case MenuBlock.Lines lines when lines.wrapMode() == MenuBlock.WrapMode.SINGLE_LINE -> {
-                    for (String line : lines.lines()) {
-                        best = Math.max(best, MinecraftFontMetrics.width(line));
-                    }
-                }
-                case MenuBlock.Pairs pairs when pairs.wrapMode() == MenuBlock.WrapMode.SINGLE_LINE -> {
-                    for (MenuBlock.Pairs.Entry pair : pairs.pairs()) {
-                        best = Math.max(best, MinecraftFontMetrics.width(pair.key() + ": " + pair.value()));
-                    }
-                }
-                default -> {
-                }
-            }
-        }
-        int clamped = best == 0 ? DEFAULT_WRAP_WIDTH : Math.max(MIN_WRAP_WIDTH, Math.min(MAX_WRAP_WIDTH, best));
-        return ((clamped + 3) / 8) * 8;
+    private static List<String> softWrap(String text, int firstIndentChars, int continuationIndentChars) {
+        return wrapText(text, firstIndentChars, continuationIndentChars);
     }
 
-    private static List<String> softWrap(String text, int wrapWidth, int continuationIndentWidth) {
-        int width = MinecraftFontMetrics.width(text);
-        if (width <= wrapWidth + SOFT_WRAP_BUFFER) {
-            return List.of(text);
+    private static List<String> wrapText(String text, int firstIndentChars, int continuationIndentChars) {
+        String normalized = normalize(text);
+        if (normalized.length() + firstIndentChars <= HARD_WRAP_LIMIT) {
+            return List.of(normalized);
         }
-        return wrapText(text, wrapWidth, continuationIndentWidth);
+        String[] words = normalized.split(" ");
+        WrappedLayout best = new WrappedLayout(List.of(), List.of(), List.of());
+        List<WrappedLayout> candidates = new ArrayList<>();
+        collectLayouts(words, 0, firstIndentChars, continuationIndentChars, false,
+                new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), candidates);
+        for (WrappedLayout candidate : candidates) {
+            if (best.lines().isEmpty() || compareLayouts(candidate, best) < 0) {
+                best = candidate;
+            }
+        }
+        return best.lines().isEmpty() ? List.of(normalized) : best.lines();
     }
 
-    private static List<String> wrapText(String text, int wrapWidth, int continuationIndentWidth) {
-        List<String> lines = new ArrayList<>();
-        String[] words = text.trim().split("\\s+");
-        StringBuilder current = new StringBuilder();
-        int currentWidth = 0;
-        boolean continuation = false;
-        for (String word : words) {
-            int wordWidth = MinecraftFontMetrics.width(word);
-            int spacerWidth = current.isEmpty() ? 0 : MinecraftFontMetrics.width(" ");
-            int budget = continuation ? wrapWidth - continuationIndentWidth : wrapWidth;
-            if (!current.isEmpty() && currentWidth + spacerWidth + wordWidth > budget) {
-                lines.add(current.toString());
-                current = new StringBuilder();
-                currentWidth = 0;
-                continuation = true;
-                budget = wrapWidth - continuationIndentWidth;
+    private static String normalize(String text) {
+        return text.trim().replaceAll("\\s+", " ");
+    }
+
+    private static void collectLayouts(
+            String[] words,
+            int start,
+            int firstIndentChars,
+            int continuationIndentChars,
+            boolean continuation,
+            List<String> lines,
+            List<Integer> visibleLengths,
+            List<Integer> breaks,
+            List<WrappedLayout> candidates
+    ) {
+        int indentChars = continuation ? continuationIndentChars : firstIndentChars;
+        for (int end : candidateEnds(words, start, indentChars)) {
+            String line = joinWords(words, start, end);
+            lines.add(line);
+            visibleLengths.add(indentChars + line.length());
+            breaks.add(end);
+            if (end == words.length - 1) {
+                candidates.add(new WrappedLayout(List.copyOf(lines), List.copyOf(visibleLengths), List.copyOf(breaks)));
+            } else {
+                collectLayouts(words, end + 1, firstIndentChars, continuationIndentChars, true,
+                        lines, visibleLengths, breaks, candidates);
             }
-            if (!current.isEmpty()) {
-                current.append(' ');
-                currentWidth += spacerWidth;
+            lines.remove(lines.size() - 1);
+            visibleLengths.remove(visibleLengths.size() - 1);
+            breaks.remove(breaks.size() - 1);
+        }
+    }
+
+    private static List<Integer> candidateEnds(String[] words, int start, int indentChars) {
+        List<Integer> ends = new ArrayList<>();
+        int budget = Math.max(1, HARD_WRAP_LIMIT - indentChars);
+        int currentLength = 0;
+        for (int end = start; end < words.length; end++) {
+            int spacer = end == start ? 0 : 1;
+            int candidateLength = currentLength + spacer + words[end].length();
+            if (candidateLength > budget) {
+                if (end == start) {
+                    ends.add(end);
+                }
+                break;
             }
-            current.append(word);
-            currentWidth += wordWidth;
+            currentLength = candidateLength;
+            ends.add(end);
         }
-        if (!current.isEmpty()) {
-            lines.add(current.toString());
+        return ends;
+    }
+
+    private static String joinWords(String[] words, int start, int end) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = start; i <= end; i++) {
+            if (i > start) {
+                builder.append(' ');
+            }
+            builder.append(words[i]);
         }
-        return lines;
+        return builder.toString();
+    }
+
+    private static int compareLayouts(WrappedLayout left, WrappedLayout right) {
+        int lineCountComparison = Integer.compare(left.lines().size(), right.lines().size());
+        if (lineCountComparison != 0) {
+            return lineCountComparison;
+        }
+        int scoreComparison = Double.compare(left.imbalanceScore(), right.imbalanceScore());
+        if (scoreComparison != 0 && Math.abs(left.imbalanceScore() - right.imbalanceScore()) > SCORE_EPSILON) {
+            return scoreComparison;
+        }
+        int softTargetComparison = Double.compare(left.softTargetScore(), right.softTargetScore());
+        if (softTargetComparison != 0 && Math.abs(left.softTargetScore() - right.softTargetScore()) > SCORE_EPSILON) {
+            return softTargetComparison;
+        }
+        for (int i = 0; i < left.breaks().size(); i++) {
+            int breakComparison = Integer.compare(right.breaks().get(i), left.breaks().get(i));
+            if (breakComparison != 0) {
+                return breakComparison;
+            }
+        }
+        return 0;
+    }
+
+    private record WrappedLayout(List<String> lines, List<Integer> visibleLengths, List<Integer> breaks) {
+
+        private double imbalanceScore() {
+            double average = visibleLengths.stream()
+                    .mapToInt(Integer::intValue)
+                    .average()
+                    .orElse(0.0d);
+            double score = 0.0d;
+            for (int length : visibleLengths) {
+                double delta = length - average;
+                score += delta * delta;
+            }
+            return score;
+        }
+
+        private double softTargetScore() {
+            double score = 0.0d;
+            for (int length : visibleLengths) {
+                double overflow = Math.max(0, length - SOFT_WRAP_START);
+                score += overflow * overflow;
+            }
+            return score;
+        }
     }
 }

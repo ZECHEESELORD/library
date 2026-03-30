@@ -33,11 +33,21 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return self();
     }
 
+    /**
+     * Adds the short subtitle/state line directly under the title.
+     * The shared compiler rebalances it into the fewest reasonably even lore lines under the
+     * standard character-count cap, and ignores the item title when placing breaks.
+     */
     public B secondary(String secondary) {
         this.secondary = requireText(secondary, "secondary");
         return self();
     }
 
+    /**
+     * Adds the main wrapped paragraph block.
+     * The shared compiler uses balanced character-count wrapping and ignores the item title when
+     * placing description breaks.
+     */
     public B description(String description) {
         blocks.add(new MenuBlock.Description(requireText(description, "description")));
         return self();
@@ -47,6 +57,10 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return lines(MenuBlock.WrapMode.SINGLE_LINE, List.of(requireText(line, "line")));
     }
 
+    /**
+     * Adds one long line that may rebalance into wrapped lore when it no longer fits cleanly
+     * within the shared character-count cap.
+     */
     public B softLine(String line) {
         return lines(MenuBlock.WrapMode.SOFT, List.of(requireText(line, "line")));
     }
@@ -55,6 +69,9 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return lines(List.of(lines));
     }
 
+    /**
+     * Adds a list-style line block that only wraps when it contains a single long entry.
+     */
     public B softLines(String... lines) {
         return softLines(List.of(lines));
     }
@@ -63,6 +80,10 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return lines(MenuBlock.WrapMode.SINGLE_LINE, copyText(lines, "lines"));
     }
 
+    /**
+     * Adds a list-style line block.
+     * Multi-entry line blocks stay one entry per lore line even when authored through a soft variant.
+     */
     public B softLines(Iterable<String> lines) {
         return lines(MenuBlock.WrapMode.SOFT, copyText(lines, "lines"));
     }
@@ -71,6 +92,10 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return pairs(MenuBlock.WrapMode.SINGLE_LINE, List.of(new MenuBlock.Pairs.Entry(requireText(key, "key"), stringify(value, "value"))));
     }
 
+    /**
+     * Adds one long key/value fact that may rebalance into wrapped lore when it no longer fits
+     * cleanly within the shared character-count cap.
+     */
     public B softPair(String key, Object value) {
         return pairs(MenuBlock.WrapMode.SOFT, List.of(new MenuBlock.Pairs.Entry(requireText(key, "key"), stringify(value, "value"))));
     }
@@ -79,6 +104,9 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return pairs(MenuBlock.WrapMode.SINGLE_LINE, rawPairs);
     }
 
+    /**
+     * Adds a grouped key/value block that only wraps when it contains a single long pair.
+     */
     public B softPairs(String... rawPairs) {
         return pairs(MenuBlock.WrapMode.SOFT, rawPairs);
     }
@@ -87,6 +115,10 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return pairs(MenuBlock.WrapMode.SINGLE_LINE, entries);
     }
 
+    /**
+     * Adds a grouped key/value block.
+     * Multi-entry pair blocks stay one entry per lore line even when authored through a soft variant.
+     */
     public B softPairs(Map<?, ?> entries) {
         return pairs(MenuBlock.WrapMode.SOFT, entries);
     }

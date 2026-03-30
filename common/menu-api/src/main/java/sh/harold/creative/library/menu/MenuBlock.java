@@ -7,7 +7,15 @@ import java.util.Objects;
 public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines, MenuBlock.Pairs, MenuBlock.Bullets, MenuBlock.Progress {
 
     enum WrapMode {
+        /**
+         * Render each entry on a single lore line.
+         */
         SINGLE_LINE,
+        /**
+         * Allow a single long entry to rebalance into wrapped lore using the shared
+         * character-count rules.
+         * Multi-entry {@code lines(...)} and {@code pairs(...)} blocks still keep one entry per lore line.
+         */
         SOFT
     }
 

@@ -2,6 +2,7 @@ package sh.harold.creative.library.menu.core;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.menu.AccentFamily;
 import sh.harold.creative.library.menu.ActionVerb;
@@ -42,6 +43,92 @@ class HouseMenuCompilerTest {
     }
 
     @Test
+    void descriptionWrapsByCharacterCountAndIgnoresTitleLength() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("An Extremely Long Menu Title That Should Not Affect Lore Wrapping")
+                .description("View your equipment, stats, and more!")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of(
+                "View your equipment,",
+                "stats, and more!"), lore(slot));
+    }
+
+    @Test
+    void softLineStaysSingleLineWhenItFitsWithinThirtyCharacters() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Card")
+                .softLine("Alpha Bravo Charlie Delta Echo")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of("Alpha Bravo Charlie Delta Echo"), lore(slot));
+    }
+
+    @Test
+    void descriptionBalancesLinesToAvoidHangingLastWord() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("golden_hoe"))
+                .name("Farming XLIX")
+                .description("Harvest crops and shear sheep to earn Farming XP!")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of(
+                "Harvest crops and shear",
+                "sheep to earn Farming XP!"), lore(slot));
+    }
+
+    @Test
+    void bulletsKeepHangingIndentWhileBalancingLines() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("golden_hoe"))
+                .name("Farming XLIX")
+                .bullet("Grants +196 to +200 Farming Fortune")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of(
+                "• Grants +196 to +200",
+                "  Farming Fortune"), lore(slot));
+    }
+
+    @Test
+    void multiEntrySoftLinesStayOnSingleLoreLines() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Card")
+                .softLines(
+                        "This deliberately long stat line should stay intact.",
+                        "This second deliberately long stat line should also stay intact.")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of(
+                "This deliberately long stat line should stay intact.",
+                "This second deliberately long stat line should also stay intact."), lore(slot));
+    }
+
+    @Test
+    void multiEntrySoftPairsStayOnSingleLoreLines() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Card")
+                .softPairs(
+                        "Selected Power", "Silky reforges grant a lot of crit damage for this setup.",
+                        "Stored Layout", "This wardrobe loadout should stay on one pair line.")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of(
+                "Selected Power: Silky reforges grant a lot of crit damage for this setup.",
+                "Stored Layout: This wardrobe loadout should stay on one pair line."), lore(slot));
+    }
+
+    @Test
     void promptRendersLastAfterBodyBlocks() {
         MenuButton button = MenuButton.builder(MenuIcon.vanilla("book"))
                 .name("Button")
@@ -51,7 +138,7 @@ class HouseMenuCompilerTest {
 
         MenuSlot slot = HouseMenuCompiler.compile(13, button);
 
-        assertEquals(List.of("Body", "", "CLICK to view"), lore(slot));
+        assertEquals(List.of("Body", "", "CLICK to view!"), lore(slot));
     }
 
     @Test
@@ -76,7 +163,9 @@ class HouseMenuCompilerTest {
 
         assertEquals(6, secondLine.children().size());
         assertEquals(AccentFamily.GOLD.light(), secondLine.children().get(0).color());
+        assertEquals(TextDecoration.State.TRUE, secondLine.children().get(0).decoration(TextDecoration.STRIKETHROUGH));
         assertEquals(NamedTextColor.GRAY, secondLine.children().get(1).color());
+        assertEquals(TextDecoration.State.TRUE, secondLine.children().get(1).decoration(TextDecoration.STRIKETHROUGH));
         assertEquals(AccentFamily.GOLD.dark(), secondLine.children().get(4).color());
         assertEquals(AccentFamily.GOLD.light(), secondLine.children().get(5).color());
     }

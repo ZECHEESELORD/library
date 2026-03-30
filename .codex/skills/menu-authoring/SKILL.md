@@ -62,7 +62,7 @@ House style is mandatory in v1 and owned by `menu-core`.
 Use `MenuButton` for interactive entries.
 
 - A `MenuButton` must have at least one interaction.
-- Default prompt generation uses the configured click verbs and always renders last.
+- Default prompt generation uses the configured click verbs, always renders last, and ends the prompt with `!` such as `CLICK to view!`.
 - Default sound selection comes from the action verb. Use `.sound(...)` or `.rightSound(...)` after defining the click interaction when a specific item should use a different stock cue such as `SoundCueKeys.RESULT_DENY`.
 - If the stock menu cues are not enough for a special case, register or overlay your own cue in a `SoundCueService` and inject that service into the Paper or Minestom menu platform before opening menus.
 - Use `.action(...)` for the common left-click path.
@@ -111,12 +111,13 @@ Prefer the smallest generic primitive that fits.
 Wrapping is owned by the compiler.
 
 - Wrapping is character-count based, not font-metric based.
-- `secondary(...)` and `description(...)` auto-wrap, start breaking once a line moves past roughly `20` characters, and must break by `30` when possible.
+- `secondary(...)` and `description(...)` auto-wrap with balanced line fitting: keep one line when the text still fits within `30` characters, otherwise rebalance into the fewest reasonably even lines under that cap with `20` as the soft target.
 - `bullet(...)` soft-wraps with a hanging continuation indent.
 - `line(...)` and `pair(...)` are single-line by default.
 - The item title never widens lore wrapping; only the lore text itself matters.
 - Use `softLine`, `softLines`, `softPair`, or `softPairs` only for genuinely long dynamic values such as gear names or value-heavy lines.
 - Multi-entry `lines(...)` and `pairs(...)` blocks stay one entry per lore line even when authored through a soft variant; use the soft variants for a single long entry, not a stat list.
+- If balanced fitting still reads awkwardly, rewrite the authored copy instead of forcing manual line breaks into the DSL.
 
 Progress is a special house block.
 
@@ -124,6 +125,7 @@ Progress is a special house block.
 - Use the accent-family overload only with the approved families.
 - Pass numbers, not preformatted strings.
 - The compiler formats grouped numbers and percent output for you.
+- The bar line uses house-owned strikethrough styling across both the filled and empty segments to read as one continuous bar.
 - Progress does not use generic lore wrapping.
 
 ## Runtime And Compiled Model

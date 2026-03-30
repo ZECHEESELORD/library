@@ -601,6 +601,9 @@ Not one API and two disconnected re implementations.
 - the public menu API must describe concepts that exist on both Paper and Minestom
 - the shared core owns layout and state logic
 - the shared core owns mandatory house chrome, breadcrumb back behavior, prompt-last behavior, wrapping, and progress rendering
+- menu lore wrapping is character-count based: blocks stay on one line when they fit within `30` characters, otherwise the compiler rebalances them into the fewest reasonably even lines under that cap with `20` as the soft target, the item title never widens lore wrapping, and grouped `lines(...)` / `pairs(...)` lists stay one entry per line
+- progress blocks use the fixed two-line house format, and the dash bar line carries strikethrough styling across both filled and empty segments so it reads as one continuous meter
+- default menu prompts end with `!`, such as `CLICK to view!`, and remain prompt-last unless prompt rendering is deliberately suppressed
 - `tabs` uses row `0` for a centered grouped tab strip, row `1` for gray/lime nav chrome under visible tabs, and rows `2+` for tab content
 - `tabs` uses the shared footer grammar by default and only opts out of it explicitly for custom canvas-style tab content
 - the shared footer grammar is: slot `45` previous page, slot `48` back, slot `49` close, slot `53` next, and the remaining footer utility slots stay caller-owned

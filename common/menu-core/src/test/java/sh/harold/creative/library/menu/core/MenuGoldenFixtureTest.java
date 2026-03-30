@@ -43,27 +43,25 @@ class MenuGoldenFixtureTest {
                 
                 Also accessible via /stats
                 
-                CLICK to view
+                CLICK to view!
                 ---
                 SLOT 13
                 TITLE Farming XLIX
                 LORE
-                Harvest crops and
-                shear sheep to
-                earn Farming XP!
+                Harvest crops and shear
+                sheep to earn Farming XP!
                 
                 Progress to Level L: 85.8%
                 -------------------- 3,432,908.3/4,000,000
                 
                 • Farmhand L
-                • Grants +196 to
-                  +200 Farming
-                  Fortune
+                • Grants +196 to +200
+                  Farming Fortune
                 • +5 Health
                 • +1,000,000 Coins
                 • +20 SkyBlock XP
                 
-                CLICK to view
+                CLICK to view!
                 ---
                 SLOT 13
                 TITLE Museum Rewards
@@ -80,7 +78,7 @@ class MenuGoldenFixtureTest {
                 Progress to Milestone 4: 35%
                 -------------------- 35/100
                 
-                CLICK to view
+                CLICK to view!
                 ---
                 SLOT 13
                 TITLE Profile Slot #5
@@ -93,7 +91,7 @@ class MenuGoldenFixtureTest {
                 
                 Cannot afford this!
                 
-                CLICK to open""", snapshot);
+                CLICK to open!""", snapshot);
     }
 
     @Test
