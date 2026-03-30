@@ -61,6 +61,39 @@ class AbstractManagedEntityTest {
     }
 
     @Test
+    void repeatedInteractionsFromSameInteractorAreDebouncedForFiveTicks() {
+        TestManagedEntity entity = new TestManagedEntity();
+        List<InteractionKind> calls = new ArrayList<>();
+        InteractorRef interactor = new InteractorRef(UUID.randomUUID());
+
+        entity.interactionHandler(context -> calls.add(context.kind()));
+        entity.interactionNowNanos(1_000L);
+        entity.handleInteraction(interactor, InteractionKind.PRIMARY);
+        entity.interactionNowNanos(1_000L + 249_000_000L);
+        entity.handleInteraction(interactor, InteractionKind.ATTACK);
+        entity.interactionNowNanos(1_000L + 250_000_000L);
+        entity.handleInteraction(interactor, InteractionKind.SECONDARY);
+
+        assertEquals(List.of(InteractionKind.PRIMARY, InteractionKind.SECONDARY), calls);
+    }
+
+    @Test
+    void debounceIsScopedPerInteractor() {
+        TestManagedEntity entity = new TestManagedEntity();
+        List<UUID> calls = new ArrayList<>();
+        InteractorRef first = new InteractorRef(UUID.randomUUID());
+        InteractorRef second = new InteractorRef(UUID.randomUUID());
+
+        entity.interactionHandler(context -> calls.add(context.interactor().uniqueId()));
+        entity.interactionNowNanos(5_000L);
+        entity.handleInteraction(first, InteractionKind.PRIMARY);
+        entity.interactionNowNanos(6_000L);
+        entity.handleInteraction(second, InteractionKind.PRIMARY);
+
+        assertEquals(List.of(first.uniqueId(), second.uniqueId()), calls);
+    }
+
+    @Test
     void initialFlagsAndTagsStayImmutable() {
         TestManagedEntity entity = new TestManagedEntity();
 
@@ -70,6 +103,7 @@ class AbstractManagedEntityTest {
     }
 
     private static final class TestManagedEntity extends AbstractManagedEntity {
+        private long interactionNowNanos = 1_000L;
 
         private TestManagedEntity() {
             super(
@@ -86,6 +120,15 @@ class AbstractManagedEntityTest {
         private void installRunnableCapability() {
             registerCapability(Runnable.class, () -> {
             });
+        }
+
+        private void interactionNowNanos(long interactionNowNanos) {
+            this.interactionNowNanos = interactionNowNanos;
+        }
+
+        @Override
+        protected long interactionNowNanos() {
+            return interactionNowNanos;
         }
 
         @Override

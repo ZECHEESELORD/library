@@ -21,6 +21,7 @@ import net.minestom.server.entity.metadata.display.BlockDisplayMeta;
 import net.minestom.server.entity.metadata.display.ItemDisplayMeta;
 import net.minestom.server.entity.metadata.display.TextDisplayMeta;
 import net.minestom.server.entity.metadata.other.ArmorStandMeta;
+import net.minestom.server.entity.metadata.other.InteractionMeta;
 import net.minestom.server.entity.metadata.villager.VillagerMeta;
 import net.minestom.server.event.Event;
 import net.minestom.server.event.EventNode;
@@ -611,18 +612,24 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
     private static final class MinestomHouseRenderer implements HousePresentationRenderer {
         private static final double LINE_SPACING = 0.3;
+        private static final double SPACER_WIDTH = 0.01;
 
-        private final List<Entity> displays = new ArrayList<>();
+        private final List<Entity> attachments = new ArrayList<>();
 
         private MinestomHouseRenderer(Entity anchor, HousePresentation presentation) {
             List<Component> lines = presentation.lines();
             Entity vehicle = anchor;
             for (int index = lines.size() - 1; index >= 0; index--) {
-                double offset = (lines.size() - 1 - index) * LINE_SPACING;
-                Entity display = spawnLine(anchor.getInstance(), anchor.getPosition(), offset, lines.get(index));
+                Entity display = spawnLine(anchor.getInstance(), anchor.getPosition(), lines.get(index));
                 vehicle.addPassenger(display);
-                displays.add(display);
+                attachments.add(display);
                 vehicle = display;
+                if (index > 0) {
+                    Entity spacer = spawnSpacer(anchor.getInstance(), anchor.getPosition());
+                    vehicle.addPassenger(spacer);
+                    attachments.add(spacer);
+                    vehicle = spacer;
+                }
             }
         }
 
@@ -633,25 +640,45 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
         @Override
         public void close() {
-            for (Entity display : displays) {
-                display.remove();
+            for (int index = attachments.size() - 1; index >= 0; index--) {
+                attachments.get(index).remove();
             }
-            displays.clear();
+            attachments.clear();
         }
 
-        private static Entity spawnLine(Instance instance, Pos anchorPosition, double offset, Component text) {
+        private static Entity spawnLine(Instance instance, Pos anchorPosition, Component text) {
             Entity entity = createEntity(EntityTypes.ARMOR_STAND);
             entity.editEntityMeta(ArmorStandMeta.class, meta -> {
                 meta.setSmall(true);
-                meta.setMarker(true);
                 meta.setHasNoBasePlate(true);
+                meta.setMarker(true);
             });
             entity.setCustomName(text);
             entity.setCustomNameVisible(true);
             entity.setInvisible(true);
             entity.setSilent(true);
             entity.setNoGravity(true);
-            entity.setInstance(instance, anchorPosition.add(0.0, offset, 0.0)).join();
+            entity.setHasPhysics(false);
+            entity.setBoundingBox(SPACER_WIDTH, SPACER_WIDTH, SPACER_WIDTH);
+            entity.setInstance(instance, anchorPosition).join();
+            return entity;
+        }
+
+        private static Entity spawnSpacer(Instance instance, Pos anchorPosition) {
+            Entity entity = createEntity(EntityTypes.INTERACTION);
+            entity.editEntityMeta(InteractionMeta.class, meta -> {
+                meta.setWidth((float) SPACER_WIDTH);
+                meta.setHeight((float) LINE_SPACING);
+                meta.setResponse(false);
+            });
+            entity.setCustomName(Component.empty());
+            entity.setCustomNameVisible(false);
+            entity.setInvisible(true);
+            entity.setSilent(true);
+            entity.setNoGravity(true);
+            entity.setHasPhysics(false);
+            entity.setBoundingBox(SPACER_WIDTH, LINE_SPACING, SPACER_WIDTH);
+            entity.setInstance(instance, anchorPosition).join();
             return entity;
         }
     }

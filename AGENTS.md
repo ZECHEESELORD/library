@@ -282,7 +282,7 @@ platform/
 - `menu-core` owns layout, slot mapping, page math, tab state, and render model
 - `entity-api` defines the host-neutral generic entity surface
 - `entity-core` owns shared validation, lifecycle guards, and capability support
-- `house-service-entity` owns the mandatory structured House presentation for service entities
+- `house-service-entity` owns the mandatory structured House presentation for service entities, with a required name line, fixed `CLICK` line, and an optional descriptor line for richer roles
 - `entity-paper` and `entity-minestom` are native host adapters
 - `entity-paper-citizens` is a narrow Paper bridge for player-like humanoid entities only
 - `message-paper`, `message-minestom`, `message-velocity` are sender adapters only
@@ -376,7 +376,7 @@ When adding, reviewing, or proposing entity-layer or NPC-related work, use the r
 - use `EntitySpec` plus the platform `spawn(...)` path for generic entities
 - use `HouseServiceSpec` plus `spawnService(...)` for NPCs, guides, vendors, bankers, menu-openers, and other interactive named service entities
 - House style is mandatory anywhere NPCs are involved
-- callers must provide structured House fields such as name and description; do not make raw hologram lines the normal path
+- callers must provide structured House fields such as name and optional description; do not make raw hologram lines the normal path
 - entity-family-specific behavior belongs behind typed capabilities; unsupported capability behavior must be absent, not faked
 - `entity-api` must stay host-neutral
 - `entity-core` may own shared validation, lifecycle, and owner-thread guards, but not host lifecycle glue
@@ -412,7 +412,7 @@ Belongs in `house-service-entity`:
 - `HousePresentation`
 - `HouseValidator`
 - `HouseServiceEntity`
-- the mandatory 3-line House presentation model
+- the mandatory structured House presentation model: colored name, optional gray bracketed descriptor, and fixed `CLICK`
 
 Belongs in platform entity adapters:
 - native spawning and despawn

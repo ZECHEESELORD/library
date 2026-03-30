@@ -12,17 +12,25 @@ import sh.harold.creative.library.entity.InteractionKind;
 import sh.harold.creative.library.entity.InteractorRef;
 import sh.harold.creative.library.entity.ManagedEntity;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 
 public abstract class AbstractManagedEntity implements ManagedEntity {
+    private static final long INTERNAL_INTERACTION_DEBOUNCE_TICKS = 5L;
+    private static final long MILLIS_PER_TICK = 50L;
+    private static final long INTERNAL_INTERACTION_DEBOUNCE_NANOS =
+            TimeUnit.MILLISECONDS.toNanos(INTERNAL_INTERACTION_DEBOUNCE_TICKS * MILLIS_PER_TICK);
 
     private final UUID id;
     private final EntityTypeKey type;
     private final Set<Key> tags;
     private final EntityCapabilityRegistry capabilityRegistry = new EntityCapabilityRegistry();
+    private final Map<UUID, Long> lastInteractionNanosByInteractor = new HashMap<>();
 
     private volatile boolean spawned = true;
     private volatile EntityTransform transform;
@@ -216,9 +224,20 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
     public final void handleInteraction(InteractorRef interactor, InteractionKind kind) {
         requireMutable();
         EntityInteractionHandler handler = interactionHandler;
-        if (handler != null) {
-            handler.onInteract(new EntityInteractionContext(this, interactor, kind));
+        if (handler == null) {
+            return;
         }
+        long now = interactionNowNanos();
+        Long last = lastInteractionNanosByInteractor.get(interactor.uniqueId());
+        if (last != null && now - last < INTERNAL_INTERACTION_DEBOUNCE_NANOS) {
+            return;
+        }
+        lastInteractionNanosByInteractor.put(interactor.uniqueId(), now);
+        handler.onInteract(new EntityInteractionContext(this, interactor, kind));
+    }
+
+    protected long interactionNowNanos() {
+        return System.nanoTime();
     }
 
     @Override

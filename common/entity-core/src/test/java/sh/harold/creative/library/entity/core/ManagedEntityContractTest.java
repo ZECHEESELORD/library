@@ -52,6 +52,21 @@ class ManagedEntityContractTest {
     }
 
     @Test
+    void interactionDebounceDoesNotBlockAfterWindowExpires() {
+        ContractEntity entity = new ContractEntity();
+        AtomicInteger calls = new AtomicInteger();
+        InteractorRef interactor = new InteractorRef(UUID.randomUUID());
+
+        entity.interactionHandler(context -> calls.incrementAndGet());
+        entity.interactionNowNanos(100L);
+        entity.handleInteraction(interactor, InteractionKind.SECONDARY);
+        entity.interactionNowNanos(100L + 250_000_000L);
+        entity.handleInteraction(interactor, InteractionKind.ATTACK);
+
+        assertEquals(2, calls.get());
+    }
+
+    @Test
     void wrongThreadGuardFailsFastForBaseAndCapabilityMutations() {
         ContractEntity entity = new ContractEntity();
         entity.installMutableCapability();
@@ -83,6 +98,7 @@ class ManagedEntityContractTest {
 
     private static final class ContractEntity extends AbstractManagedEntity {
         private boolean ownerThread = true;
+        private long interactionNowNanos = 100L;
 
         private ContractEntity() {
             super(
@@ -101,11 +117,20 @@ class ManagedEntityContractTest {
             this.ownerThread = ownerThread;
         }
 
+        private void interactionNowNanos(long interactionNowNanos) {
+            this.interactionNowNanos = interactionNowNanos;
+        }
+
         @Override
         protected void assertOwnerThread() {
             if (!ownerThread) {
                 throw new IllegalStateException("Entity mutations must run on the owner thread");
             }
+        }
+
+        @Override
+        protected long interactionNowNanos() {
+            return interactionNowNanos;
         }
 
         @Override

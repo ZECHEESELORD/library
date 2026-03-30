@@ -15,7 +15,7 @@ Use the entity stack as two layers: generic entities first, House service entiti
 - Do not author raw hologram lines, arbitrary name stacks, or ad hoc prompt text as the normal path.
 - Do not bypass the common API with raw Bukkit, Minestom, or Citizens calls unless you are inside the backend adapter that owns that host.
 - Use `capability(...)` and branch on absence. Unsupported behavior must be absent, not faked.
-- Do not bypass the structured `name` + `description` House inputs with alternate label stacks or backend-owned text shortcuts.
+- Do not bypass the structured `name` + optional `description` House inputs with alternate label stacks or backend-owned text shortcuts.
 - Read `references/examples.md` before introducing a new caller pattern or approving a new entity proposal.
 - Check `docs/entity-capability-matrix.md` when support claims matter.
 - Check `docs/entity-manual-verification.md` when visual or runtime behavior matters.
@@ -30,7 +30,7 @@ Use the generic entity layer for:
 Use the House service layer for:
 - named interactive NPCs
 - guides, bankers, vendors, blacksmiths, menu-openers, and other service entities
-- any entity where the caller expects the fixed 3-line House presentation
+- any entity where the caller expects the standard House presentation: colored name, optional descriptor, and fixed `CLICK`
 
 Do not use the House service layer for:
 - generic ambient mobs
@@ -81,6 +81,23 @@ Resultant behavior:
 - line 3: fixed `CLICK`
 - the base entity keeps a hidden dark-gray `[NPC] <uuid8>` diagnostic name
 - callers do not control raw line ordering or free-form hologram text
+
+Use the optional description line only when it adds real value to the NPC's role.
+
+```java
+HouseServiceEntity friendsGuide = platform.spawnService(world, HouseServiceSpec.builder(
+                EntitySpec.builder(EntityTypes.VILLAGER)
+                        .transform(...)
+                        .build())
+        .name("&aFriends Guide")
+        .clickHandler(context -> openFriendsGuide(context.interactor()))
+        .build());
+```
+
+Resultant behavior:
+- simple NPCs may omit the descriptor line entirely
+- visible lines become just the colored NPC name and fixed `CLICK`
+- use the gray bracketed descriptor for richer RPG or multi-responsibility NPCs where the extra label improves clarity
 
 Use capability lookup for specialized behavior.
 

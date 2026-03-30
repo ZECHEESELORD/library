@@ -12,6 +12,7 @@ import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Interaction;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
@@ -230,21 +231,32 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
 
     private static final class CitizensHouseRenderer implements HousePresentationRenderer {
         private static final double LINE_SPACING = 0.3;
+        private static final float SPACER_WIDTH = 0.01f;
 
-        private final List<ArmorStand> displays = new ArrayList<>();
+        private final List<Entity> attachments = new ArrayList<>();
 
         private CitizensHouseRenderer(Entity anchor, HousePresentation presentation) {
             List<Component> lines = presentation.lines();
             Entity vehicle = anchor;
             for (int index = lines.size() - 1; index >= 0; index--) {
-                double offset = (lines.size() - 1 - index) * LINE_SPACING;
-                ArmorStand display = spawnLine(anchor.getWorld(), anchor.getLocation(), offset, lines.get(index));
+                ArmorStand display = spawnLine(anchor.getWorld(), anchor.getLocation(), lines.get(index));
                 if (!vehicle.addPassenger(display)) {
                     display.remove();
+                    close();
                     throw new IllegalStateException("Failed to mount Citizens House line armor stand to " + vehicle.getUniqueId());
                 }
-                displays.add(display);
+                attachments.add(display);
                 vehicle = display;
+                if (index > 0) {
+                    Interaction spacer = spawnSpacer(anchor.getWorld(), anchor.getLocation());
+                    if (!vehicle.addPassenger(spacer)) {
+                        spacer.remove();
+                        close();
+                        throw new IllegalStateException("Failed to mount Citizens House line spacer to " + vehicle.getUniqueId());
+                    }
+                    attachments.add(spacer);
+                    vehicle = spacer;
+                }
             }
         }
 
@@ -255,15 +267,15 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
 
         @Override
         public void close() {
-            for (ArmorStand display : displays) {
-                display.remove();
+            for (int index = attachments.size() - 1; index >= 0; index--) {
+                attachments.get(index).remove();
             }
-            displays.clear();
+            attachments.clear();
         }
 
-        private static ArmorStand spawnLine(World world, Location anchorLocation, double offset, Component text) {
+        private static ArmorStand spawnLine(World world, Location anchorLocation, Component text) {
             return world.spawn(
-                    anchorLocation.clone().add(0.0, offset, 0.0),
+                    anchorLocation.clone(),
                     ArmorStand.class,
                     display -> {
                         display.customName(text);
@@ -277,7 +289,24 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
                         display.setSilent(true);
                         display.setCollidable(false);
                         display.setPersistent(false);
-                        display.setCanTick(false);
+                    }
+            );
+        }
+
+        private static Interaction spawnSpacer(World world, Location anchorLocation) {
+            return world.spawn(
+                    anchorLocation.clone(),
+                    Interaction.class,
+                    spacer -> {
+                        spacer.setInteractionWidth(SPACER_WIDTH);
+                        spacer.setInteractionHeight((float) LINE_SPACING);
+                        spacer.setResponsive(false);
+                        spacer.setGravity(false);
+                        spacer.setInvulnerable(true);
+                        spacer.setSilent(true);
+                        spacer.setPersistent(false);
+                        spacer.customName(null);
+                        spacer.setCustomNameVisible(false);
                     }
             );
         }
