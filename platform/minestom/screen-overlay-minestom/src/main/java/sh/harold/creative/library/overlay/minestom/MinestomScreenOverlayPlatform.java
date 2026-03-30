@@ -21,7 +21,6 @@ import net.minestom.server.instance.Instance;
 import net.minestom.server.timer.Scheduler;
 import net.minestom.server.timer.Task;
 import net.minestom.server.timer.TaskSchedule;
-import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import sh.harold.creative.library.overlay.ScreenOverlayHandle;
@@ -272,11 +271,10 @@ public final class MinestomScreenOverlayPlatform implements AutoCloseable {
     }
 
     private static final class MinestomOverlayShell {
-        private final List<Entity> faces = new ArrayList<>(ScreenOverlayShellGeometry.faces().size());
+        private final List<MinestomOverlayFace> faces = new ArrayList<>(ScreenOverlayShellGeometry.faces().size());
 
         private MinestomOverlayShell(Player owner) {
             Instance instance = Objects.requireNonNull(owner.getInstance(), "player instance");
-            Pos anchor = anchorPosition(owner);
             for (OverlayFace face : ScreenOverlayShellGeometry.faces()) {
                 Entity entity = new Entity(EntityType.TEXT_DISPLAY);
                 entity.setAutoViewable(false);
@@ -285,23 +283,23 @@ public final class MinestomScreenOverlayPlatform implements AutoCloseable {
                 entity.setHasPhysics(false);
                 entity.setBoundingBox(0.001, 0.001, 0.001);
                 entity.editEntityMeta(TextDisplayMeta.class, meta -> configure(meta, face));
-                entity.setInstance(instance, anchor).join();
+                entity.setInstance(instance, facePosition(owner, face)).join();
                 entity.addViewer(owner);
-                faces.add(entity);
+                faces.add(new MinestomOverlayFace(face, entity));
             }
         }
 
         private Instance instance() {
-            return faces.getFirst().getInstance();
+            return faces.getFirst().entity().getInstance();
         }
 
         private void updateOwned(Player owner, ScreenOverlayComposite composite) {
-            Pos anchor = anchorPosition(owner);
             int backgroundColor = composite.argb();
             byte textOpacity = (byte) composite.alphaByte();
-            for (Entity face : faces) {
-                face.teleport(anchor).join();
-                face.editEntityMeta(TextDisplayMeta.class, meta -> {
+            for (MinestomOverlayFace face : faces) {
+                Entity entity = face.entity();
+                entity.teleport(facePosition(owner, face.face())).join();
+                entity.editEntityMeta(TextDisplayMeta.class, meta -> {
                     meta.setBackgroundColor(backgroundColor);
                     meta.setTextOpacity(textOpacity);
                 });
@@ -312,7 +310,7 @@ public final class MinestomScreenOverlayPlatform implements AutoCloseable {
             if (faces.isEmpty()) {
                 return;
             }
-            Entity anchor = faces.getFirst();
+            Entity anchor = faces.getFirst().entity();
             if (anchor.isRemoved()) {
                 closeDirect();
                 return;
@@ -321,9 +319,9 @@ public final class MinestomScreenOverlayPlatform implements AutoCloseable {
         }
 
         private void closeDirect() {
-            for (Entity face : faces) {
-                if (!face.isRemoved()) {
-                    face.remove();
+            for (MinestomOverlayFace face : faces) {
+                if (!face.entity().isRemoved()) {
+                    face.entity().remove();
                 }
             }
             faces.clear();
@@ -331,7 +329,7 @@ public final class MinestomScreenOverlayPlatform implements AutoCloseable {
 
         private static void configure(TextDisplayMeta meta, OverlayFace face) {
             meta.setText(BLANK_TEXT);
-            meta.setLineWidth(1);
+            meta.setLineWidth(ScreenOverlayShellGeometry.BLANK_TEXT_LINE_WIDTH);
             meta.setAlignment(TextDisplayMeta.Alignment.CENTER);
             meta.setUseDefaultBackground(false);
             meta.setShadow(false);
@@ -349,19 +347,22 @@ public final class MinestomScreenOverlayPlatform implements AutoCloseable {
             meta.setShadowRadius(0.0f);
             meta.setShadowStrength(0.0f);
 
-            Matrix4f transform = ScreenOverlayShellGeometry.faceTransform(face);
-            Vector3f translation = transform.getTranslation(new Vector3f());
-            Vector3f scale = transform.getScale(new Vector3f());
-            Quaternionf rotation = transform.getNormalizedRotation(new Quaternionf());
+            Vector3f translation = ScreenOverlayShellGeometry.localFaceTranslation(face);
+            Vector3f scale = ScreenOverlayShellGeometry.localFaceScale(face);
+            Quaternionf rotation = ScreenOverlayShellGeometry.localFaceRotation(face);
             meta.setTranslation(new Vec(translation.x, translation.y, translation.z));
             meta.setScale(new Vec(scale.x, scale.y, scale.z));
             meta.setLeftRotation(new float[]{rotation.x, rotation.y, rotation.z, rotation.w});
             meta.setRightRotation(new float[]{0.0f, 0.0f, 0.0f, 1.0f});
         }
 
-        private static Pos anchorPosition(Player owner) {
+        private static Pos facePosition(Player owner, OverlayFace face) {
             Pos base = owner.getPosition();
-            return new Pos(base.x(), base.y(), base.z(), 0.0f, 0.0f);
+            Vector3f offset = ScreenOverlayShellGeometry.faceCenterOffset(face);
+            return new Pos(base.x() + offset.x, base.y() + offset.y, base.z() + offset.z, 0.0f, 0.0f);
         }
+    }
+
+    private record MinestomOverlayFace(OverlayFace face, Entity entity) {
     }
 }

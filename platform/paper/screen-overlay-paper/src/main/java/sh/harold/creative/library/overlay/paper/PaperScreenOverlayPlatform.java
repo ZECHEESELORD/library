@@ -2,6 +2,7 @@ package sh.harold.creative.library.overlay.paper;
 
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import org.joml.Vector3f;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -235,14 +236,13 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
     }
 
     private final class PaperOverlayShell {
-        private final List<TextDisplay> faces = new ArrayList<>(ScreenOverlayShellGeometry.faces().size());
+        private final List<PaperOverlayFace> faces = new ArrayList<>(ScreenOverlayShellGeometry.faces().size());
 
         private PaperOverlayShell(Player owner) {
-            Location anchor = anchorLocation(owner);
             for (OverlayFace face : ScreenOverlayShellGeometry.faces()) {
-                TextDisplay display = owner.getWorld().spawn(anchor, TextDisplay.class, textDisplay -> configure(textDisplay, face));
+                TextDisplay display = owner.getWorld().spawn(faceLocation(owner, face), TextDisplay.class, textDisplay -> configure(textDisplay, face));
                 owner.showEntity(plugin, display);
-                faces.add(display);
+                faces.add(new PaperOverlayFace(face, display));
             }
             for (Player viewer : plugin.getServer().getOnlinePlayers()) {
                 if (viewer.getUniqueId().equals(owner.getUniqueId())) {
@@ -253,36 +253,36 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
         }
 
         private World world() {
-            return faces.getFirst().getWorld();
+            return faces.getFirst().display().getWorld();
         }
 
         private void update(Player owner, ScreenOverlayComposite composite) {
-            Location anchor = anchorLocation(owner);
             Color background = Color.fromARGB(composite.argb());
             byte opacity = (byte) composite.alphaByte();
-            for (TextDisplay display : faces) {
-                display.teleport(anchor);
+            for (PaperOverlayFace face : faces) {
+                TextDisplay display = face.display();
+                display.teleport(faceLocation(owner, face.face()));
                 display.setBackgroundColor(background);
                 display.setTextOpacity(opacity);
             }
         }
 
         private void hideFrom(Player viewer) {
-            for (TextDisplay display : faces) {
-                viewer.hideEntity(plugin, display);
+            for (PaperOverlayFace face : faces) {
+                viewer.hideEntity(plugin, face.display());
             }
         }
 
         private void close() {
-            for (TextDisplay display : faces) {
-                display.remove();
+            for (PaperOverlayFace face : faces) {
+                face.display().remove();
             }
             faces.clear();
         }
 
         private void configure(TextDisplay display, OverlayFace face) {
             display.text(BLANK_TEXT);
-            display.setLineWidth(1);
+            display.setLineWidth(ScreenOverlayShellGeometry.BLANK_TEXT_LINE_WIDTH);
             display.setAlignment(TextDisplay.TextAlignment.CENTER);
             display.setBillboard(Display.Billboard.FIXED);
             display.setBrightness(FULL_BRIGHT);
@@ -304,12 +304,16 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
             display.setInvulnerable(true);
             display.setPersistent(false);
             display.setVisibleByDefault(false);
-            display.setTransformationMatrix(new org.joml.Matrix4f(ScreenOverlayShellGeometry.faceTransform(face)));
+            display.setTransformationMatrix(new org.joml.Matrix4f(ScreenOverlayShellGeometry.localFaceTransform(face)));
         }
 
-        private Location anchorLocation(Player owner) {
+        private Location faceLocation(Player owner, OverlayFace face) {
             Location base = owner.getLocation();
-            return new Location(base.getWorld(), base.getX(), base.getY(), base.getZ(), 0.0f, 0.0f);
+            Vector3f offset = ScreenOverlayShellGeometry.faceCenterOffset(face);
+            return new Location(base.getWorld(), base.getX() + offset.x, base.getY() + offset.y, base.getZ() + offset.z, 0.0f, 0.0f);
         }
+    }
+
+    private record PaperOverlayFace(OverlayFace face, TextDisplay display) {
     }
 }
