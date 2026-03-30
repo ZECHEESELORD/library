@@ -6,6 +6,8 @@ public interface ListMenuBuilder {
 
     /**
      * House footer policy for v1 list menus:
+     * centered content panel = slots 10-16, 19-25, 28-34, and 37-43,
+     * that 7x4 interior stays open by default when no item is authored,
      * slot 45 = previous page,
      * slot 48 = back,
      * slot 49 = close,

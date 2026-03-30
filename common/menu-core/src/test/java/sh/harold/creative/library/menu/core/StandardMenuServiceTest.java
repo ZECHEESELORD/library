@@ -42,6 +42,10 @@ class StandardMenuServiceTest {
 
         assertEquals("Profiles (1/3)", ComponentText.flatten(firstPage.title()));
         assertEquals("Profiles (2/3)", ComponentText.flatten(middlePage.title()));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(firstPage, 9));
+        assertEquals("Item Item 0", titleAt(firstPage, 10));
+        assertEquals("Item Item 27", titleAt(firstPage, 43));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(firstPage, 44));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(firstPage, 48));
         assertEquals("Close", titleAt(firstPage, 49));
         assertEquals(NamedTextColor.RED, titleColorAt(firstPage, 49));
@@ -66,7 +70,12 @@ class StandardMenuServiceTest {
                 .addItems(sampleButtons("Item", 1))
                 .build();
 
-        assertEquals("Profiles", ComponentText.flatten(menu.initialFrame().title()));
+        MenuFrame frame = menu.initialFrame();
+        assertEquals("Profiles", ComponentText.flatten(frame.title()));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 9));
+        assertEquals("Item Item 0", titleAt(frame, 10));
+        assertEquals("minecraft:air", iconAt(frame, 11));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 17));
     }
 
     @Test

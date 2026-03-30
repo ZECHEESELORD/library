@@ -42,6 +42,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MinestomMenuRuntimeTest {
@@ -75,13 +76,15 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(nextPage);
 
         assertTrue(nextPage.isCancelled());
-        assertEquals("Previous Page", slotTitle(inventory, 45));
-        assertEquals(List.of("Page 1"), slotLore(inventory, 45));
-        assertEquals("Close", slotTitle(inventory, 49));
-        assertEquals("Next Page", slotTitle(inventory, 53));
-        assertEquals(List.of("Page 3"), slotLore(inventory, 53));
+        Inventory secondPageInventory = player.lastOpenedInventory();
+        assertNotSame(inventory, secondPageInventory);
+        assertEquals("Previous Page", slotTitle(secondPageInventory, 45));
+        assertEquals(List.of("Page 1"), slotLore(secondPageInventory, 45));
+        assertEquals("Close", slotTitle(secondPageInventory, 49));
+        assertEquals("Next Page", slotTitle(secondPageInventory, 53));
+        assertEquals(List.of("Page 3"), slotLore(secondPageInventory, 53));
 
-        InventoryPreClickEvent close = new InventoryPreClickEvent(inventory, player, new Click.Left(49));
+        InventoryPreClickEvent close = new InventoryPreClickEvent(secondPageInventory, player, new Click.Left(49));
         runtime.onInventoryPreClick(close);
         assertTrue(close.isCancelled());
         assertEquals(1, player.closeCount());
@@ -95,11 +98,11 @@ class MinestomMenuRuntimeTest {
 
         runtime.open(player, toggleMenu(enabled));
         Inventory inventory = player.lastOpenedInventory();
-        assertEquals("Disabled", slotTitle(inventory, 9));
+        assertEquals("Disabled", slotTitle(inventory, 10));
 
-        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(9)));
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(10)));
 
-        assertEquals("Enabled", slotTitle(inventory, 9));
+        assertEquals("Enabled", slotTitle(inventory, 10));
         assertEquals(1, player.openCount());
     }
 
@@ -143,9 +146,9 @@ class MinestomMenuRuntimeTest {
 
         runtime.open(player, launcherMenu());
         Inventory rootInventory = player.lastOpenedInventory();
-        assertEquals("Open Gallery", slotTitle(rootInventory, 9));
+        assertEquals("Open Gallery", slotTitle(rootInventory, 10));
 
-        InventoryPreClickEvent openChild = new InventoryPreClickEvent(rootInventory, player, new Click.Left(9));
+        InventoryPreClickEvent openChild = new InventoryPreClickEvent(rootInventory, player, new Click.Left(10));
         runtime.onInventoryPreClick(openChild);
 
         assertTrue(openChild.isCancelled());
@@ -177,7 +180,7 @@ class MinestomMenuRuntimeTest {
 
         assertTrue(backToRoot.isCancelled());
         Inventory finalInventory = player.lastOpenedInventory();
-        assertEquals("Open Gallery", slotTitle(finalInventory, 9));
+        assertEquals("Open Gallery", slotTitle(finalInventory, 10));
     }
 
     @Test
@@ -268,9 +271,9 @@ class MinestomMenuRuntimeTest {
         runtime.open(player, soundMenu());
         Inventory inventory = player.lastOpenedInventory();
 
-        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(9)));
         runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(10)));
         runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(11)));
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(12)));
 
         runtime.open(player, pagedMenu());
         Inventory pagedInventory = player.lastOpenedInventory();

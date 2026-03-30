@@ -127,10 +127,7 @@ final class PaperMenuExampleMenus {
     Menu listGallery() {
         return menus.list()
                 .title("House Style List Gallery")
-                .addItem(yourSkyBlockProfileButton())
-                .addItem(farmingXlixButton())
-                .addItem(museumRewardsButton())
-                .addItem(profileSlotFiveButton())
+                .addItems(listGalleryButtons())
                 .build();
     }
 
@@ -202,6 +199,134 @@ final class PaperMenuExampleMenus {
         return List.copyOf(items);
     }
 
+    private List<MenuItem> listGalleryButtons() {
+        return List.of(
+                yourSkyBlockProfileButton(),
+                farmingXlixButton(),
+                museumRewardsButton(),
+                profileSlotFiveButton(),
+                galleryExampleButton(Material.ENDER_CHEST, "Accessory Bag",
+                        "Review talisman loadouts and stored enrichments.", ActionVerb.MANAGE,
+                        "Selected Power: Silky",
+                        "Saved Layouts: 5"),
+                galleryExampleButton(Material.LEATHER_CHESTPLATE, "Wardrobe",
+                        "Swap between saved combat, mining, and farming sets.", ActionVerb.MANAGE,
+                        "Active Set: Crimson",
+                        "Quick Equip: Enabled"),
+                galleryExampleButton(Material.ARMOR_STAND, "Equipment Rack",
+                        "Inspect your belt, cloak, necklace, and gauntlet setup.", ActionVerb.VIEW,
+                        "Combat Power: 1,924",
+                        "Missing Slots: 0"),
+                galleryExampleButton(Material.CHEST, "Ender Chest Pages",
+                        "Open storage pages for overflow tools, trophies, and fuels.", ActionVerb.OPEN,
+                        "Unlocked Pages: 5/9",
+                        "Overflow Slots: 12"),
+                galleryExampleButton(Material.POTION, "Potion Bag",
+                        "Review active brews, stored effects, and God Potion coverage.", ActionVerb.OPEN,
+                        "Favorite Brew: Harvest Harbinger",
+                        "Auto Consume: Off"),
+                galleryExampleButton(Material.ARROW, "Quiver",
+                        "Manage arrow swaps for Dragons, Kuudra, and dungeon runs.", ActionVerb.MANAGE,
+                        "Selected Arrow: Armorshred",
+                        "Stored Types: 4"),
+                galleryExampleButton(Material.BARREL, "Sack of Sacks",
+                        "Browse compact sacks for crops, ores, and trophy fish.", ActionVerb.BROWSE,
+                        "Filled Sacks: 11",
+                        "Pickup Mode: Enabled"),
+                galleryExampleButton(Material.BONE, "Pet Menu",
+                        "Check active pet perks, held items, and pet-score progress.", ActionVerb.VIEW,
+                        "Active Pet: Elephant",
+                        "Pet Score: 418"),
+                galleryExampleButton(Material.COMPASS, "Travel Scrollbook",
+                        "Jump between islands with your unlocked travel scrolls.", ActionVerb.OPEN,
+                        "Pinned Route: Garden",
+                        "Unlocked Scrolls: 9"),
+                galleryExampleButton(Material.MAP, "Garden Plot Map",
+                        "Preview crop layouts, visitor access, and sprinkler coverage.", ActionVerb.VIEW,
+                        "Barn Skin: Oak",
+                        "Unlocked Plots: 13"),
+                galleryExampleButton(Material.HOPPER, "Composter",
+                        "Track fuel timers, organic matter, and crop upgrades.", ActionVerb.MANAGE,
+                        "Fuel Time: 5h 42m",
+                        "Organic Matter: 84%"),
+                galleryExampleButton(Material.WRITABLE_BOOK, "Visitor Queue",
+                        "Review pending Garden visitors and their shopping lists.", ActionVerb.BROWSE,
+                        "Waiting Visitors: 3",
+                        "Best Offer: 1,200 Copper"),
+                galleryExampleButton(Material.WHEAT, "Bazaar Orders",
+                        "Collect completed fills and rebalance your active buy orders.", ActionVerb.CLAIM,
+                        "Instant Sell: Off",
+                        "Open Orders: 7"),
+                galleryExampleButton(Material.GOLD_INGOT, "Auction House",
+                        "Monitor bids, sold listings, and your current watchlist.", ActionVerb.BROWSE,
+                        "Won Auctions: 2",
+                        "Watchlist Items: 14"),
+                galleryExampleButton(Material.EMERALD, "Bank Upgrades",
+                        "Review interest tiers, coop access, and coin cap upgrades.", ActionVerb.BUY,
+                        "Interest Tier: Premier",
+                        "Coop Withdrawals: On"),
+                galleryExampleButton(Material.ANVIL, "Forge Queue",
+                        "Check Dwarven forge timers and recipe progress at a glance.", ActionVerb.MANAGE,
+                        "Active Slots: 3/5",
+                        "Next Ready: Refined Titanium"),
+                galleryExampleButton(Material.DIAMOND_SWORD, "Dungeon Classes",
+                        "Inspect class milestones, best runs, and selected loadouts.", ActionVerb.VIEW,
+                        "Favorite Class: Berserk",
+                        "Best Floor: M7"),
+                galleryExampleButton(Material.SPIDER_EYE, "Bestiary",
+                        "Browse family progress and combat XP from tracked mobs.", ActionVerb.BROWSE,
+                        "Families Maxed: 18",
+                        "Next Milestone: Graveyard"),
+                galleryExampleButton(Material.IRON_SWORD, "Slayer",
+                        "Review boss milestones, recipes, and daily boss streaks.", ActionVerb.VIEW,
+                        "Highest Tier: Inferno IV",
+                        "XP to Next: 4,800"),
+                galleryExampleButton(Material.HAY_BLOCK, "Collections",
+                        "Track crop, mob, and mining unlocks across your profile.", ActionVerb.BROWSE,
+                        "Maxed Collections: 21",
+                        "Nearest Unlock: Cactus IX"),
+                galleryExampleButton(Material.CRAFTING_TABLE, "Minions",
+                        "Check fuel setups, compactors, and storage links.", ActionVerb.MANAGE,
+                        "Working Minions: 24",
+                        "AFK Bucket: Enabled"),
+                galleryExampleButton(Material.CLOCK, "Jacob's Contests",
+                        "See your next crop schedule and personal best medals.", ActionVerb.VIEW,
+                        "Next Crop: Nether Wart",
+                        "Gold Medals: 19"),
+                galleryExampleButton(Material.FISHING_ROD, "Trophy Fishing",
+                        "Review your bronze-to-diamond catches and lava hotspots.", ActionVerb.VIEW,
+                        "Diamond Fish: 7",
+                        "Favorite Spot: Burning Desert"),
+                galleryExampleButton(Material.MAP, "Crystal Hollows Map",
+                        "Open your scanned routes for nucleus runs and gemstone loops.", ActionVerb.OPEN,
+                        "Route Set: Jasper South",
+                        "Commission Path: Loaded"),
+                galleryExampleButton(Material.ENDER_PEARL, "Rift Guide",
+                        "Browse tears, timecharms, and the next unlocked district.", ActionVerb.OPEN,
+                        "Time Left: 9m 34s",
+                        "Next Unlock: Living Cave"),
+                galleryExampleButton(Material.MAGMA_CREAM, "Kuudra Progress",
+                        "Inspect chest tiers, follower faction rep, and key stock.", ActionVerb.VIEW,
+                        "Highest Tier: Fiery",
+                        "Heavy Pearls: 27"),
+                galleryExampleButton(Material.BLAZE_POWDER, "Crimson Isles Reputation",
+                        "Track Barbarian and Mage standing with your recent tasks.", ActionVerb.VIEW,
+                        "Barbarian Rep: 11",
+                        "Mage Rep: 9"),
+                galleryExampleButton(Material.COOKIE, "Booster Cookie Buffs",
+                        "Review active buffs, bits income, and your stacked duration.", ActionVerb.VIEW,
+                        "Bits Available: 10,420",
+                        "Duration Left: 3d 5h"),
+                galleryExampleButton(Material.PAPER, "Bingo Card",
+                        "Open the seasonal goals board and unclaimed challenge marks.", ActionVerb.OPEN,
+                        "Challenges Done: 12",
+                        "Unclaimed Rewards: 2"),
+                galleryExampleButton(Material.MINECART, "SkyMall Daily",
+                        "Preview today's Dwarven passives and the next reroll window.", ActionVerb.VIEW,
+                        "Today's Buff: Lucky Looting",
+                        "Reroll In: 18h"));
+    }
+
     private MenuButton profileSlotFiveButton() {
         return menus.button(Material.GRAY_DYE)
                 .name("Profile Slot #5")
@@ -220,6 +345,18 @@ final class PaperMenuExampleMenus {
                 .description(description)
                 .action(verb, context -> { })
                 .build();
+    }
+
+    private MenuButton galleryExampleButton(Material material, String name, String description, ActionVerb verb, String... details) {
+        var builder = menus.button(material)
+                .name(name)
+                .description(description);
+        if (details.length == 1) {
+            builder.line(details[0]);
+        } else if (details.length > 1) {
+            builder.lines(details);
+        }
+        return builder.action(verb, context -> { }).build();
     }
 
     private MenuButton canvasFillerToggleButton(boolean enabled, String tabId) {

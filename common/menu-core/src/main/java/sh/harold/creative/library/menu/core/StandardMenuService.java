@@ -36,9 +36,13 @@ import java.util.function.Function;
 public final class StandardMenuService implements MenuService {
 
     private static final int LIST_ROWS = 6;
-    private static final int LIST_CONTENT_START = 9;
-    private static final int LIST_CONTENT_END = 44;
-    private static final int LIST_CONTENT_SIZE = LIST_CONTENT_END - LIST_CONTENT_START + 1;
+    private static final List<Integer> LIST_CONTENT_SLOTS = List.of(
+            10, 11, 12, 13, 14, 15, 16,
+            19, 20, 21, 22, 23, 24, 25,
+            28, 29, 30, 31, 32, 33, 34,
+            37, 38, 39, 40, 41, 42, 43
+    );
+    private static final int LIST_CONTENT_SIZE = LIST_CONTENT_SLOTS.size();
 
     private static final int TABS_CONTENT_START = 18;
     private static final int TABS_SHARED_CONTENT_END = 44;
@@ -343,21 +347,28 @@ public final class StandardMenuService implements MenuService {
             Map<UtilitySlot, MenuItem> utilities
     ) {
         Map<Integer, MenuSlot> slots = createFilledSlots(LIST_ROWS);
+        clearListContentArea(slots);
         int footerStart = HouseMenuCompiler.footerStart(LIST_ROWS);
         validateUtilitySlots(utilities, footerStart,
                 reservedSharedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0, totalPages > 1 && pageIndex + 1 < totalPages));
         int firstItem = pageIndex * LIST_CONTENT_SIZE;
         int lastItem = Math.min(items.size(), firstItem + LIST_CONTENT_SIZE);
-        int contentSlot = LIST_CONTENT_START;
+        int slotIndex = 0;
         for (int i = firstItem; i < lastItem; i++) {
-            slots.put(contentSlot, HouseMenuCompiler.compile(contentSlot, items.get(i)));
-            contentSlot++;
+            int slot = LIST_CONTENT_SLOTS.get(slotIndex++);
+            slots.put(slot, HouseMenuCompiler.compile(slot, items.get(i)));
         }
         applyUtilities(slots, footerStart, utilities);
         applySharedFooter(slots, footerStart,
                 pageIndex > 0 ? listFrameId(pageIndex - 1) : null,
                 pageIndex + 1 < totalPages ? listFrameId(pageIndex + 1) : null);
         return orderedSlots(slots, LIST_ROWS);
+    }
+
+    private static void clearListContentArea(Map<Integer, MenuSlot> slots) {
+        for (int slot : LIST_CONTENT_SLOTS) {
+            slots.put(slot, empty(slot));
+        }
     }
 
     private static List<MenuSlot> buildTabPage(

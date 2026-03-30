@@ -605,7 +605,9 @@ Not one API and two disconnected re implementations.
 - `tabs` uses the shared footer grammar by default and only opts out of it explicitly for custom canvas-style tab content
 - the shared footer grammar is: slot `45` previous page, slot `48` back, slot `49` close, slot `53` next, and the remaining footer utility slots stay caller-owned
 - shared back is runtime-owned rather than caller-authored: `context.open(...)` pushes menu/frame history, child menus render `&aGo Back` with the single lore line `&7To <menuname>`, and root opens do not auto-show back
-- close and tab-strip scroll arrows use simple shared chrome with no prompt-lore block; page arrows keep the standard paging chrome
+- close uses simple shared chrome with no lore; navigation arrows use the standard shared format `&aPrevious Tab|Page` / `&aNext Tab|Page` with the single lore line `&ePage N`
+- pure `list()` menus use a centered open `7x4` content panel at coordinates `(1,1)` through `(7,4)`; the interior stays blank by default and the left/right edge columns remain house-owned filler
+- pure `list()` menus append `(N/M)` to the rendered inventory title only when they actually paginate; tabbed and canvas menus keep their authored titles
 - menu interactions use the stock sound FX library by default: ordinary button actions use `menu/click`, page and tab-strip scroll chrome uses `menu/scroll`, and positive commit verbs such as `buy`, `claim`, and `confirm` use `result/confirm`
 - special deny/result cases should override the interaction cue in the menu API, and when the stock cues are not enough callers should register or overlay their own cue in a `SoundCueService` and inject that sound service into the menu platform
 - tab grouping is explicit; do not infer logical groups from tab names

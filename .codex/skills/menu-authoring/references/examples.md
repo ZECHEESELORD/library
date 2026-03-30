@@ -14,13 +14,17 @@ Examples use Paper snippets for brevity. Minestom uses the same shape through `M
 | `tabs()` | Category switching across list-like panes | Each tab needs its own custom layout |
 | `canvas()` | Pinned layouts, detail pages, preview cards | General browsing or automatic paging |
 
+Pure `list()` menus use a centered open `7x4` content panel in slots `10-16`, `19-25`, `28-34`, and `37-43`. Unused slots inside that panel stay blank by default, so showcase galleries should add more than `28` entries when they want to demonstrate scrolling.
+
+Lore wrapping is character-count based: wrapped blocks start breaking once they move past roughly `20` characters and must break by `30` when possible. Item titles do not widen lore wrapping, and grouped `lines(...)` / `pairs(...)` blocks keep one entry per lore line.
+
 ## Your SkyBlock Profile
 
 Why this builder:
 
 - Use a `MenuButton` because this is a clickable browse entry.
 - Use `list()` because it belongs in a gallery of peer profile-related entries.
-- Use `lines(...)` for the stat cluster because it is one contiguous block.
+- Use `lines(...)` for the stat cluster because it is one contiguous block and each stat should stay on its own lore line.
 
 ```java
 Menu menu = menus.list()
@@ -91,17 +95,16 @@ Rendered card:
 
 ```text
 Farming XLIX
-Harvest crops and
-shear sheep to
-earn Farming XP!
+Harvest crops and shear
+sheep to earn Farming
+XP!
 
 Progress to Level L: 85.8%
 -------------------- 3,432,908.3/4,000,000
 
 • Farmhand L
-• Grants +196 to
-  +200 Farming
-  Fortune
+• Grants +196 to +200
+  Farming Fortune
 • +5 Health
 • +1,000,000 Coins
 • +20 SkyBlock XP
@@ -118,7 +121,7 @@ Notes:
 
 Why this builder:
 
-- Use `pairs(...)` because `Total XP` and `Milestone` are one compact grouped fact block.
+- Use `pairs(...)` because `Total XP` and `Milestone` are one compact grouped fact block and each fact should stay on one lore line.
 - Use singular `line(...)` for the warning because it should stand as its own block.
 - Keep `progress(...)` separate instead of assembling your own bar lines.
 
@@ -243,7 +246,7 @@ Rendered layout snapshot:
 GEOMETRY TABS
 INITIAL tab:profiles:nav:0:page:0
 FRAME tab:profiles:nav:0:page:0
-0:Previous Tabs
+0:Previous Tab
 1:Profiles
 2:Progress
 3:Museum
@@ -251,7 +254,7 @@ FRAME tab:profiles:nav:0:page:0
 5:[gap]
 6:Party
 7:Guild
-8:Next Tabs
+8:Next Tab
 10:[lime indicator]
 15:[gray indicator]
 19:Your SkyBlock Profile
@@ -263,7 +266,7 @@ Notes:
 
 - Row `0` is centered group-aware tab chrome.
 - Row `1` is state chrome under visible tabs, not a generic spacer row.
-- When the strip overflows, slots `0` and `8` become simple scroll arrows; left click scrolls by one and right click jumps to the start/end.
+- When the strip overflows, slots `0` and `8` become standard navigation arrows; left click scrolls by one and right click jumps to the start/end.
 - Menu interactions include stock sound cues by default: most buttons use `menu/click`, scroll chrome uses `menu/scroll`, and verbs such as `confirm`, `buy`, and `claim` pick up `result/confirm`.
 - List-style tab content uses the bordered `3x7` panel starting at slot `19`; its interior is open by default, so ordinary showcase tabs should usually leave some negative space instead of packing every slot.
 - Canvas-style tab content keeps black filler by default and should usually rely on that default; call `builder.fillWithBlackPane(false)` only when the authored layout should expose open slots instead.
@@ -271,6 +274,8 @@ Notes:
 - The example `Profile Slot #5` card is the model for a special-case override: keep the authored click verb, but call `.sound(SoundCueKeys.RESULT_DENY)` so the unavailable state uses the deny cue.
 - When the stock cues are not enough, register or overlay your own cue in a `SoundCueService`, inject that service into `PaperMenuPlatform` or `MinestomMenuPlatform`, and point the specific interaction at that custom key.
 - If you want to exercise footer paging explicitly, build a list-style tab with more than `27` example items; the shared footer will surface previous/next arrows in the bottom corners.
+- Pure paginated `list()` menus render their inventory title as `Title (N/M)` while single-page lists keep the unsuffixed title.
+- Pure `list()` menus keep the centered `7x4` panel open by default; the example list gallery should intentionally exceed `28` entries so the footer paging arrows are visible in demos.
 
 ## Canvas Preview
 

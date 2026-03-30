@@ -100,11 +100,11 @@ class PaperMenuRuntimeTest {
 
         runtime.open(player, toggleMenu(enabled));
         Inventory inventory = access.lastOpenedInventory();
-        assertEquals("Disabled", slotTitle(access, inventory, 9));
+        assertEquals("Disabled", slotTitle(access, inventory, 10));
 
-        runtime.onInventoryClick(click(player, inventory, 9, ClickType.LEFT));
+        runtime.onInventoryClick(click(player, inventory, 10, ClickType.LEFT));
 
-        assertEquals("Enabled", slotTitle(access, inventory, 9));
+        assertEquals("Enabled", slotTitle(access, inventory, 10));
         assertEquals(1, access.openedInventories.size());
     }
 
@@ -162,9 +162,9 @@ class PaperMenuRuntimeTest {
 
         runtime.open(player, launcherMenu());
         Inventory rootInventory = access.lastOpenedInventory();
-        assertEquals("Open Gallery", slotTitle(access, rootInventory, 9));
+        assertEquals("Open Gallery", slotTitle(access, rootInventory, 10));
 
-        InventoryClickEvent openChild = click(player, rootInventory, 9, ClickType.LEFT);
+        InventoryClickEvent openChild = click(player, rootInventory, 10, ClickType.LEFT);
         runtime.onInventoryClick(openChild);
 
         assertTrue(openChild.isCancelled());
@@ -196,7 +196,7 @@ class PaperMenuRuntimeTest {
 
         assertTrue(backToRoot.isCancelled());
         Inventory finalInventory = access.lastOpenedInventory();
-        assertEquals("Open Gallery", slotTitle(access, finalInventory, 9));
+        assertEquals("Open Gallery", slotTitle(access, finalInventory, 10));
     }
 
     @Test
@@ -295,9 +295,9 @@ class PaperMenuRuntimeTest {
         runtime.open(player, soundMenu());
         Inventory inventory = access.lastOpenedInventory();
 
-        runtime.onInventoryClick(click(player, inventory, 9, ClickType.LEFT));
         runtime.onInventoryClick(click(player, inventory, 10, ClickType.LEFT));
         runtime.onInventoryClick(click(player, inventory, 11, ClickType.LEFT));
+        runtime.onInventoryClick(click(player, inventory, 12, ClickType.LEFT));
 
         runtime.open(player, pagedMenu());
         Inventory pagedInventory = access.lastOpenedInventory();

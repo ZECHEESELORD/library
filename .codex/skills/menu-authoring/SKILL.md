@@ -14,7 +14,7 @@ Menu copy inside this API belongs to the menu DSL. Do not route menu titles or c
 Use `list()` for browseable comparable entries.
 
 - Use when items are peers and the menu is primarily about browsing, paging, or selecting from a collection.
-- Expect the content area to live in slots `9-44` and the footer to be house-owned.
+- Expect a centered open `7x4` content panel in slots `10-16`, `19-25`, `28-34`, and `37-43`, with the footer house-owned.
 - Do not use for pinned dashboards or detail pages.
 
 Use `tabs()` for category switching across list-like panes.
@@ -45,7 +45,10 @@ House style is mandatory in v1 and owned by `menu-core`.
 - Shared back is runtime-owned, not caller-authored: `context.open(...)` pushes breadcrumb history, menus reached through that path render `&aGo Back` at slot `48`, and the single lore line is `&7To <menuname>` using the previous history entry's menu title.
 - Root platform opens do not auto-show back, even though frame history may still exist internally.
 - Close is always the simple shared `&cClose` button with no lore.
-- Tab-strip scroll arrows are simple title-only arrows with no prompt lore; page arrows keep the existing footer paging chrome.
+- Navigation arrows use the standard shared format: `&aPrevious Tab`, `&aNext Tab`, `&aPrevious Page`, or `&aNext Page`, with the single lore line `&ePage N`.
+- For tab-strip arrows, `Page N` means the left-click destination tab window using 1-based numbering; disabled edge arrows clamp that number to the current end window.
+- Pure `list()` menus use a centered open `7x4` panel at coordinates `(1,1)` through `(7,4)`; unused slots inside that panel stay blank by default instead of rendering filler.
+- Pure `list()` menus append `(N/M)` to the rendered inventory title only when the list actually has more than one page.
 - `tabs` centers the rendered tab cluster in row `0`; if the strip overflows, slots `0` and `8` become nav arrows and the visible slice is centered inside slots `1-7`.
 - `tabs` uses row `1` for nav chrome: gray stained glass under visible inactive tabs, lime stained glass with glow under the visible active tab, and black filler for gaps, arrows, or padding.
 - `tabs` accepts two content modes:
@@ -107,10 +110,13 @@ Prefer the smallest generic primitive that fits.
 
 Wrapping is owned by the compiler.
 
-- `secondary(...)` and `description(...)` auto-wrap.
+- Wrapping is character-count based, not font-metric based.
+- `secondary(...)` and `description(...)` auto-wrap, start breaking once a line moves past roughly `20` characters, and must break by `30` when possible.
 - `bullet(...)` soft-wraps with a hanging continuation indent.
 - `line(...)` and `pair(...)` are single-line by default.
+- The item title never widens lore wrapping; only the lore text itself matters.
 - Use `softLine`, `softLines`, `softPair`, or `softPairs` only for genuinely long dynamic values such as gear names or value-heavy lines.
+- Multi-entry `lines(...)` and `pairs(...)` blocks stay one entry per lore line even when authored through a soft variant; use the soft variants for a single long entry, not a stat list.
 
 Progress is a special house block.
 
