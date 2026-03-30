@@ -7,6 +7,7 @@ import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuItem;
 import sh.harold.creative.library.menu.MenuTab;
+import sh.harold.creative.library.menu.MenuTabGroup;
 
 import java.util.List;
 
@@ -72,14 +73,20 @@ final class RepresentativeMenuFixtures {
                 .build();
     }
 
-    static Menu tabbedGalleryMenu() {
+    static Menu groupedTabGalleryMenu() {
         return new StandardMenuService().tabs()
-                .title("House Style Gallery")
-                .defaultTab("profiles")
-                .addTab(MenuTab.of("profiles", "Profiles", MenuIcon.vanilla("player_head"),
-                        List.of(yourSkyBlockProfile(), profileSlotFive())))
-                .addTab(MenuTab.of("progress", "Progress", MenuIcon.vanilla("experience_bottle"),
-                        List.of(farmingXlix(), museumRewards())))
+                .title("Block Browser")
+                .defaultTab("oak")
+                .addGroup(MenuTabGroup.of("wood", List.of(
+                        MenuTab.of("oak", "Oak", MenuIcon.vanilla("oak_planks"), List.of(namedButton("Oak Planks"))),
+                        MenuTab.of("acacia", "Acacia", MenuIcon.vanilla("acacia_planks"), List.of(namedButton("Acacia Planks"))),
+                        MenuTab.of("cedar", "Cedar", MenuIcon.vanilla("spruce_planks"), List.of(namedButton("Cedar Planks"))),
+                        MenuTab.of("dark-oak", "Dark Oak", MenuIcon.vanilla("dark_oak_planks"), List.of(namedButton("Dark Oak Planks")))
+                )))
+                .addGroup(MenuTabGroup.of("stone", List.of(
+                        MenuTab.of("stone", "Stone", MenuIcon.vanilla("stone"), List.of(namedButton("Stone Blocks"))),
+                        MenuTab.of("cobble", "Cobblestone", MenuIcon.vanilla("cobblestone"), List.of(namedButton("Cobblestone Blocks")))
+                )))
                 .build();
     }
 
@@ -89,5 +96,12 @@ final class RepresentativeMenuFixtures {
                 farmingXlix(),
                 museumRewards(),
                 profileSlotFive());
+    }
+
+    private static MenuButton namedButton(String name) {
+        return MenuButton.builder(MenuIcon.vanilla("stone"))
+                .name(name)
+                .action(ActionVerb.VIEW, context -> { })
+                .build();
     }
 }

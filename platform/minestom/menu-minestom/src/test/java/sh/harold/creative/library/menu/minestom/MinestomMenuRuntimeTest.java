@@ -133,24 +133,80 @@ class MinestomMenuRuntimeTest {
         Inventory inventory = player.lastOpenedInventory();
 
         assertEquals("Back", slotTitle(inventory, 45));
-        assertEquals("» Profiles", slotTitle(inventory, 0));
-        assertEquals("Progress", slotTitle(inventory, 1));
-        assertEquals(" ", slotTitle(inventory, 9));
-        assertEquals("Your SkyBlock Profile", slotTitle(inventory, 18));
+        assertEquals("Profiles", slotTitle(inventory, 3));
+        assertEquals("Progress", slotTitle(inventory, 4));
+        assertEquals("Your SkyBlock Profile", slotTitle(inventory, 19));
 
-        InventoryPreClickEvent switchTab = new InventoryPreClickEvent(inventory, player, new Click.Left(1));
+        InventoryPreClickEvent switchTab = new InventoryPreClickEvent(inventory, player, new Click.Left(4));
         runtime.onInventoryPreClick(switchTab);
 
         assertTrue(switchTab.isCancelled());
-        assertEquals("Profiles", slotTitle(inventory, 0));
-        assertEquals("» Progress", slotTitle(inventory, 1));
-        assertEquals("Farming XLIX", slotTitle(inventory, 18));
+        assertEquals("Profiles", slotTitle(inventory, 3));
+        assertEquals("Progress", slotTitle(inventory, 4));
+        assertEquals("Farming XLIX", slotTitle(inventory, 19));
 
         InventoryPreClickEvent back = new InventoryPreClickEvent(inventory, player, new Click.Left(45));
         runtime.onInventoryPreClick(back);
 
         assertTrue(back.isCancelled());
         assertTrue(backed.get());
+    }
+
+    @Test
+    void navArrowsScrollStripWithoutChangingActiveContent() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+
+        runtime.open(player, overflowGalleryMenu());
+        Inventory inventory = player.lastOpenedInventory();
+
+        assertEquals("Previous Tabs", slotTitle(inventory, 0));
+        assertEquals("Next Tabs", slotTitle(inventory, 8));
+        assertEquals("Tab 0", slotTitle(inventory, 1));
+        assertEquals("Tab 6", slotTitle(inventory, 7));
+        assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
+
+        InventoryPreClickEvent scrollRight = new InventoryPreClickEvent(inventory, player, new Click.Left(8));
+        runtime.onInventoryPreClick(scrollRight);
+
+        assertTrue(scrollRight.isCancelled());
+        assertEquals("Tab 1", slotTitle(inventory, 1));
+        assertEquals("Tab 7", slotTitle(inventory, 7));
+        assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
+
+        InventoryPreClickEvent jumpEnd = new InventoryPreClickEvent(inventory, player, new Click.Right(8));
+        runtime.onInventoryPreClick(jumpEnd);
+
+        assertTrue(jumpEnd.isCancelled());
+        assertEquals("Tab 3", slotTitle(inventory, 1));
+        assertEquals("Tab 9", slotTitle(inventory, 7));
+        assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
+
+        InventoryPreClickEvent switchTab = new InventoryPreClickEvent(inventory, player, new Click.Left(7));
+        runtime.onInventoryPreClick(switchTab);
+
+        assertTrue(switchTab.isCancelled());
+        assertEquals("Tab 9 Item 0", slotTitle(inventory, 19));
+    }
+
+    @Test
+    void pagedTabContentUsesFooterArrowsForLargeTabs() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer());
+
+        runtime.open(player, pagedTabGalleryMenu());
+        Inventory inventory = player.lastOpenedInventory();
+
+        assertEquals("Profile Item 0", slotTitle(inventory, 19));
+        assertEquals("Next Page", slotTitle(inventory, 53));
+
+        InventoryPreClickEvent nextPage = new InventoryPreClickEvent(inventory, player, new Click.Left(53));
+        runtime.onInventoryPreClick(nextPage);
+
+        assertTrue(nextPage.isCancelled());
+        assertEquals("Previous Page", slotTitle(inventory, 45));
+        assertEquals("Profile Item 21", slotTitle(inventory, 19));
+        assertEquals("Profile Item 28", slotTitle(inventory, 28));
     }
 
     @Test
@@ -217,6 +273,43 @@ class MinestomMenuRuntimeTest {
                                 .build(),
                         MenuButton.builder(MenuIcon.vanilla("book"))
                                 .name("Museum Rewards")
+                                .action(ActionVerb.VIEW, context -> { })
+                                .build()
+                )))
+                .build();
+    }
+
+    private static Menu overflowGalleryMenu() {
+        StandardMenuService menus = new StandardMenuService();
+        var builder = menus.tabs()
+                .title("Overflow")
+                .defaultTab("tab-0");
+        for (int i = 0; i < 10; i++) {
+            int index = i;
+            builder.addTab(MenuTab.of("tab-" + index, "Tab " + index, MenuIcon.vanilla("stone"), List.of(
+                    MenuButton.builder(MenuIcon.vanilla("stone"))
+                            .name("Tab " + index + " Item 0")
+                            .action(ActionVerb.VIEW, context -> { })
+                            .build()
+            )));
+        }
+        return builder.build();
+    }
+
+    private static Menu pagedTabGalleryMenu() {
+        return new StandardMenuService().tabs()
+                .title("Paged Tabs")
+                .defaultTab("profiles")
+                .addTab(MenuTab.of("profiles", "Profiles", MenuIcon.vanilla("player_head"),
+                        IntStream.range(0, 29)
+                                .mapToObj(i -> MenuButton.builder(MenuIcon.vanilla("player_head"))
+                                        .name("Profile Item " + i)
+                                        .action(ActionVerb.VIEW, context -> { })
+                                        .build())
+                                .toList()))
+                .addTab(MenuTab.of("progress", "Progress", MenuIcon.vanilla("experience_bottle"), List.of(
+                        MenuButton.builder(MenuIcon.vanilla("golden_hoe"))
+                                .name("Farming XLIX")
                                 .action(ActionVerb.VIEW, context -> { })
                                 .build()
                 )))

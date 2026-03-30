@@ -16,11 +16,13 @@ import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuItem;
 import sh.harold.creative.library.menu.MenuService;
 import sh.harold.creative.library.menu.MenuTab;
+import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.core.StandardMenuService;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class MinestomMenuPlatform implements AutoCloseable {
 
@@ -79,6 +81,14 @@ public final class MinestomMenuPlatform implements AutoCloseable {
 
     public MenuTab tab(String id, Component name, Material material, Iterable<? extends MenuItem> items) {
         return MenuTab.of(id, name, icon(material), items);
+    }
+
+    public MenuTab tab(String id, String name, Material material, Consumer<MenuTabContent.CanvasBuilder> consumer) {
+        return MenuTab.canvas(id, name, icon(material), consumer);
+    }
+
+    public MenuTab tab(String id, Component name, Material material, Consumer<MenuTabContent.CanvasBuilder> consumer) {
+        return MenuTab.canvas(id, name, icon(material), consumer);
     }
 
     public void open(Player player, Menu menu) {

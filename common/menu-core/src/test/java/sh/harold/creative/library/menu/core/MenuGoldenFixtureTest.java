@@ -98,17 +98,19 @@ class MenuGoldenFixtureTest {
 
     @Test
     void tabbedGalleryMenuMatchesGoldenLayout() {
-        Menu menu = RepresentativeMenuFixtures.tabbedGalleryMenu();
+        Menu menu = RepresentativeMenuFixtures.groupedTabGalleryMenu();
 
         assertEquals("""
                 GEOMETRY TABS
-                INITIAL tab:profiles:page:0
-                FRAME tab:profiles:page:0
-                0:» Profiles
-                1:Progress
-                9:[blank]
-                18:Your SkyBlock Profile
-                19:Profile Slot #5
+                INITIAL tab:oak:nav:0:page:0
+                FRAME tab:oak:nav:0:page:0
+                1:Oak
+                4:Dark Oak
+                5:[black_stained_glass_pane]
+                6:Stone
+                10:[lime_stained_glass_pane glow]
+                11:[gray_stained_glass_pane]
+                19:Oak Planks
                 49:Close""", menuSnapshot(menu));
     }
 
@@ -123,11 +125,19 @@ class MenuGoldenFixtureTest {
         builder.append("INITIAL ").append(menu.initialFrameId()).append('\n');
         String frameId = menu.initialFrameId();
         builder.append("FRAME ").append(frameId);
-        for (int slot : List.of(0, 1, 9, 18, 19, 49)) {
-            String title = flatten(menu.frames().get(frameId).slots().get(slot).title());
-            builder.append('\n').append(slot).append(':').append(title.isBlank() ? "[blank]" : title);
+        for (int slot : List.of(1, 4, 5, 6, 10, 11, 19, 49)) {
+            builder.append('\n').append(slot).append(':').append(slotSnapshot(menu.frames().get(frameId).slots().get(slot)));
         }
         return builder.toString();
+    }
+
+    private static String slotSnapshot(MenuSlot slot) {
+        String title = flatten(slot.title());
+        if (!title.isBlank()) {
+            return title;
+        }
+        String icon = slot.icon().key().replace("minecraft:", "");
+        return slot.glow() ? "[" + icon + " glow]" : "[" + icon + "]";
     }
 
     private static String flatten(Component component) {

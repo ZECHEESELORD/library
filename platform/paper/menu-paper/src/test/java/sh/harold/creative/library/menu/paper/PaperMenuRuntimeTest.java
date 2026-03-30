@@ -147,24 +147,84 @@ class PaperMenuRuntimeTest {
         Inventory inventory = access.lastOpenedInventory();
 
         assertEquals("Back", slotTitle(access, inventory, 45));
-        assertEquals("» Profiles", slotTitle(access, inventory, 0));
-        assertEquals("Progress", slotTitle(access, inventory, 1));
-        assertEquals(" ", slotTitle(access, inventory, 9));
-        assertEquals("Your SkyBlock Profile", slotTitle(access, inventory, 18));
+        assertEquals("Profiles", slotTitle(access, inventory, 3));
+        assertEquals("Progress", slotTitle(access, inventory, 4));
+        assertEquals("Your SkyBlock Profile", slotTitle(access, inventory, 19));
 
-        InventoryClickEvent switchTab = click(player, inventory, 1, ClickType.LEFT);
+        InventoryClickEvent switchTab = click(player, inventory, 4, ClickType.LEFT);
         runtime.onInventoryClick(switchTab);
 
         assertTrue(switchTab.isCancelled());
-        assertEquals("Profiles", slotTitle(access, inventory, 0));
-        assertEquals("» Progress", slotTitle(access, inventory, 1));
-        assertEquals("Farming XLIX", slotTitle(access, inventory, 18));
+        assertEquals("Profiles", slotTitle(access, inventory, 3));
+        assertEquals("Progress", slotTitle(access, inventory, 4));
+        assertEquals("Farming XLIX", slotTitle(access, inventory, 19));
 
         InventoryClickEvent back = click(player, inventory, 45, ClickType.LEFT);
         runtime.onInventoryClick(back);
 
         assertTrue(back.isCancelled());
         assertTrue(backed.get());
+    }
+
+    @Test
+    void navArrowsScrollStripWithoutChangingActiveContent() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+
+        runtime.open(player, overflowGalleryMenu());
+        Inventory inventory = access.lastOpenedInventory();
+
+        assertEquals("Previous Tabs", slotTitle(access, inventory, 0));
+        assertEquals("Next Tabs", slotTitle(access, inventory, 8));
+        assertEquals("Tab 0", slotTitle(access, inventory, 1));
+        assertEquals("Tab 6", slotTitle(access, inventory, 7));
+        assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
+
+        InventoryClickEvent scrollRight = click(player, inventory, 8, ClickType.LEFT);
+        runtime.onInventoryClick(scrollRight);
+
+        assertTrue(scrollRight.isCancelled());
+        assertEquals("Tab 1", slotTitle(access, inventory, 1));
+        assertEquals("Tab 7", slotTitle(access, inventory, 7));
+        assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
+
+        InventoryClickEvent jumpEnd = click(player, inventory, 8, ClickType.RIGHT);
+        runtime.onInventoryClick(jumpEnd);
+
+        assertTrue(jumpEnd.isCancelled());
+        assertEquals("Tab 3", slotTitle(access, inventory, 1));
+        assertEquals("Tab 9", slotTitle(access, inventory, 7));
+        assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
+
+        InventoryClickEvent switchTab = click(player, inventory, 7, ClickType.LEFT);
+        runtime.onInventoryClick(switchTab);
+
+        assertTrue(switchTab.isCancelled());
+        assertEquals("Tab 9 Item 0", slotTitle(access, inventory, 19));
+    }
+
+    @Test
+    void pagedTabContentUsesFooterArrowsForLargeTabs() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
+
+        runtime.open(player, pagedTabGalleryMenu());
+        Inventory inventory = access.lastOpenedInventory();
+
+        assertEquals("Profile Item 0", slotTitle(access, inventory, 19));
+        assertEquals("Next Page", slotTitle(access, inventory, 53));
+
+        InventoryClickEvent nextPage = click(player, inventory, 53, ClickType.LEFT);
+        runtime.onInventoryClick(nextPage);
+
+        assertTrue(nextPage.isCancelled());
+        assertEquals("Previous Page", slotTitle(access, inventory, 45));
+        assertEquals("Profile Item 21", slotTitle(access, inventory, 19));
+        assertEquals("Profile Item 28", slotTitle(access, inventory, 28));
     }
 
     @Test
@@ -233,6 +293,43 @@ class PaperMenuRuntimeTest {
                                 .build(),
                         MenuButton.builder(MenuIcon.vanilla("book"))
                                 .name("Museum Rewards")
+                                .action(ActionVerb.VIEW, context -> { })
+                                .build()
+                )))
+                .build();
+    }
+
+    private static Menu overflowGalleryMenu() {
+        StandardMenuService menus = new StandardMenuService();
+        var builder = menus.tabs()
+                .title("Overflow")
+                .defaultTab("tab-0");
+        for (int i = 0; i < 10; i++) {
+            int index = i;
+            builder.addTab(MenuTab.of("tab-" + index, "Tab " + index, MenuIcon.vanilla("stone"), List.of(
+                    MenuButton.builder(MenuIcon.vanilla("stone"))
+                            .name("Tab " + index + " Item 0")
+                            .action(ActionVerb.VIEW, context -> { })
+                            .build()
+            )));
+        }
+        return builder.build();
+    }
+
+    private static Menu pagedTabGalleryMenu() {
+        return new StandardMenuService().tabs()
+                .title("Paged Tabs")
+                .defaultTab("profiles")
+                .addTab(MenuTab.of("profiles", "Profiles", MenuIcon.vanilla("player_head"),
+                        IntStream.range(0, 29)
+                                .mapToObj(i -> MenuButton.builder(MenuIcon.vanilla("player_head"))
+                                        .name("Profile Item " + i)
+                                        .action(ActionVerb.VIEW, context -> { })
+                                        .build())
+                                .toList()))
+                .addTab(MenuTab.of("progress", "Progress", MenuIcon.vanilla("experience_bottle"), List.of(
+                        MenuButton.builder(MenuIcon.vanilla("golden_hoe"))
+                                .name("Farming XLIX")
                                 .action(ActionVerb.VIEW, context -> { })
                                 .build()
                 )))
