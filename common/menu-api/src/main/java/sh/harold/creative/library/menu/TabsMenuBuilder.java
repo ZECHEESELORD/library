@@ -8,7 +8,7 @@ public interface TabsMenuBuilder {
      * House footer policy for v1 tab menus:
      * row 0 = tab strip,
      * row 1 = tab-state chrome under the visible strip,
-     * shared footer mode reserves row 5 for back/close/paging utilities by default,
+     * shared footer mode reserves row 5 for previous/back/close/next chrome by default,
      * custom footer mode makes rows 2-5 caller-owned,
      * tabs may be grouped explicitly and may use list or canvas content specs,
      * list tab panels leave their bordered 3x7 interior open by default,
@@ -19,8 +19,6 @@ public interface TabsMenuBuilder {
     TabsMenuBuilder title(String title);
 
     TabsMenuBuilder title(Component title);
-
-    TabsMenuBuilder back(MenuAction action);
 
     TabsMenuBuilder utility(UtilitySlot slot, MenuItem item);
 

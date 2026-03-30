@@ -55,8 +55,8 @@ public final class StandardMenuService implements MenuService {
     );
     private static final int TABS_LIST_CONTENT_SIZE = TABS_LIST_CONTENT_SLOTS.size();
 
-    private static final int FOOTER_PREVIOUS_OR_BACK_OFFSET = 0;
-    private static final int FOOTER_SECONDARY_LEFT_OFFSET = 1;
+    private static final int FOOTER_PREVIOUS_OFFSET = 0;
+    private static final int FOOTER_BACK_OFFSET = 3;
     private static final int FOOTER_CLOSE_OFFSET = 4;
     private static final int FOOTER_NEXT_OFFSET = 8;
 
@@ -80,7 +80,6 @@ public final class StandardMenuService implements MenuService {
         private Component title = Component.text("Menu");
         private final List<MenuItem> items = new ArrayList<>();
         private final Map<UtilitySlot, MenuItem> utilities = new LinkedHashMap<>();
-        private sh.harold.creative.library.menu.MenuAction backAction;
 
         @Override
         public ListMenuBuilder title(String title) {
@@ -91,12 +90,6 @@ public final class StandardMenuService implements MenuService {
         @Override
         public ListMenuBuilder title(Component title) {
             this.title = Objects.requireNonNull(title, "title");
-            return this;
-        }
-
-        @Override
-        public ListMenuBuilder back(sh.harold.creative.library.menu.MenuAction action) {
-            this.backAction = Objects.requireNonNull(action, "action");
             return this;
         }
 
@@ -136,9 +129,9 @@ public final class StandardMenuService implements MenuService {
             int totalPages = Math.max(1, (items.size() + LIST_CONTENT_SIZE - 1) / LIST_CONTENT_SIZE);
             Map<String, MenuFrame> frames = new LinkedHashMap<>();
             for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-                frames.put(listFrameId(pageIndex), new MenuFrame(title, buildListPage(pageIndex, totalPages, items, utilities, backAction)));
+                frames.put(listFrameId(pageIndex), new MenuFrame(title, buildListPage(pageIndex, totalPages, items, utilities)));
             }
-            Menu menu = new StandardMenu(MenuGeometry.LIST, LIST_ROWS, listFrameId(0), frames);
+            Menu menu = new StandardMenu(title, MenuGeometry.LIST, LIST_ROWS, listFrameId(0), frames);
             MenuValidator.validate(menu);
             return menu;
         }
@@ -149,7 +142,6 @@ public final class StandardMenuService implements MenuService {
         private Component title = Component.text("Menu");
         private final List<PendingTabGroup> groups = new ArrayList<>();
         private final Map<UtilitySlot, MenuItem> utilities = new LinkedHashMap<>();
-        private sh.harold.creative.library.menu.MenuAction backAction;
         private String defaultTabId;
         private boolean sharedFooter = true;
         private int implicitGroupCount;
@@ -163,12 +155,6 @@ public final class StandardMenuService implements MenuService {
         @Override
         public TabsMenuBuilder title(Component title) {
             this.title = Objects.requireNonNull(title, "title");
-            return this;
-        }
-
-        @Override
-        public TabsMenuBuilder back(sh.harold.creative.library.menu.MenuAction action) {
-            this.backAction = Objects.requireNonNull(action, "action");
             return this;
         }
 
@@ -225,14 +211,14 @@ public final class StandardMenuService implements MenuService {
                 for (int navStart = 0; navStart < navPlan.windowCount(); navStart++) {
                     for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
                         String frameId = tabFrameId(flatTab.tab().id(), navStart, pageIndex);
-                        frames.put(frameId, new MenuFrame(title, buildTabPage(flatTab.tab(), pageIndex, totalPages, utilities, backAction, flatTabs,
+                        frames.put(frameId, new MenuFrame(title, buildTabPage(flatTab.tab(), pageIndex, totalPages, utilities, flatTabs,
                                 navPlan, navStart, sharedFooter)));
                     }
                 }
             }
 
             String initialFrameId = tabFrameId(initialTabId, initialNavStart, 0);
-            Menu menu = new StandardMenu(MenuGeometry.TABS, LIST_ROWS, initialFrameId, frames);
+            Menu menu = new StandardMenu(title, MenuGeometry.TABS, LIST_ROWS, initialFrameId, frames);
             MenuValidator.validate(menu);
             return menu;
         }
@@ -266,9 +252,6 @@ public final class StandardMenuService implements MenuService {
         private void validateFooterMode(List<FlatTab> flatTabs) {
             if (sharedFooter) {
                 return;
-            }
-            if (backAction != null) {
-                throw new IllegalStateException("Custom-footer tabs may not use back(...)");
             }
             if (!utilities.isEmpty()) {
                 throw new IllegalStateException("Custom-footer tabs may not use shared footer utility slots");
@@ -305,7 +288,6 @@ public final class StandardMenuService implements MenuService {
         private Component title = Component.text("Menu");
         private final Map<Integer, MenuItem> placed = new LinkedHashMap<>();
         private final Map<UtilitySlot, MenuItem> utilities = new LinkedHashMap<>();
-        private sh.harold.creative.library.menu.MenuAction backAction;
         private int rows = 6;
 
         @Override
@@ -330,12 +312,6 @@ public final class StandardMenuService implements MenuService {
         }
 
         @Override
-        public CanvasMenuBuilder back(sh.harold.creative.library.menu.MenuAction action) {
-            this.backAction = Objects.requireNonNull(action, "action");
-            return this;
-        }
-
-        @Override
         public CanvasMenuBuilder utility(UtilitySlot slot, MenuItem item) {
             utilities.put(Objects.requireNonNull(slot, "slot"), Objects.requireNonNull(item, "item"));
             return this;
@@ -352,8 +328,8 @@ public final class StandardMenuService implements MenuService {
 
         @Override
         public Menu build() {
-            Map<String, MenuFrame> frames = Map.of("canvas:0", new MenuFrame(title, buildCanvasPage(rows, placed, utilities, backAction)));
-            Menu menu = new StandardMenu(MenuGeometry.CANVAS, rows, "canvas:0", frames);
+            Map<String, MenuFrame> frames = Map.of("canvas:0", new MenuFrame(title, buildCanvasPage(rows, placed, utilities)));
+            Menu menu = new StandardMenu(title, MenuGeometry.CANVAS, rows, "canvas:0", frames);
             MenuValidator.validate(menu);
             return menu;
         }
@@ -363,13 +339,12 @@ public final class StandardMenuService implements MenuService {
             int pageIndex,
             int totalPages,
             List<MenuItem> items,
-            Map<UtilitySlot, MenuItem> utilities,
-            sh.harold.creative.library.menu.MenuAction backAction
+            Map<UtilitySlot, MenuItem> utilities
     ) {
         Map<Integer, MenuSlot> slots = createFilledSlots(LIST_ROWS);
         int footerStart = HouseMenuCompiler.footerStart(LIST_ROWS);
         validateUtilitySlots(utilities, footerStart,
-                reservedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0, totalPages > 1 && pageIndex + 1 < totalPages, backAction != null));
+                reservedSharedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0, totalPages > 1 && pageIndex + 1 < totalPages));
         int firstItem = pageIndex * LIST_CONTENT_SIZE;
         int lastItem = Math.min(items.size(), firstItem + LIST_CONTENT_SIZE);
         int contentSlot = LIST_CONTENT_START;
@@ -378,7 +353,7 @@ public final class StandardMenuService implements MenuService {
             contentSlot++;
         }
         applyUtilities(slots, footerStart, utilities);
-        applySharedFooter(slots, footerStart, utilities, backAction, totalPages, pageIndex,
+        applySharedFooter(slots, footerStart,
                 pageIndex > 0 ? listFrameId(pageIndex - 1) : null,
                 pageIndex + 1 < totalPages ? listFrameId(pageIndex + 1) : null);
         return orderedSlots(slots, LIST_ROWS);
@@ -389,7 +364,6 @@ public final class StandardMenuService implements MenuService {
             int pageIndex,
             int totalPages,
             Map<UtilitySlot, MenuItem> utilities,
-            sh.harold.creative.library.menu.MenuAction backAction,
             List<FlatTab> flatTabs,
             NavPlan navPlan,
             int navStart,
@@ -407,9 +381,9 @@ public final class StandardMenuService implements MenuService {
         if (sharedFooter) {
             int footerStart = HouseMenuCompiler.footerStart(LIST_ROWS);
             validateUtilitySlots(utilities, footerStart,
-                    reservedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0, totalPages > 1 && pageIndex + 1 < totalPages, backAction != null));
+                    reservedSharedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0, totalPages > 1 && pageIndex + 1 < totalPages));
             applyUtilities(slots, footerStart, utilities);
-            applySharedFooter(slots, footerStart, utilities, backAction, totalPages, pageIndex,
+            applySharedFooter(slots, footerStart,
                     pageIndex > 0 ? tabFrameId(activeTab.id(), navStart, pageIndex - 1) : null,
                     pageIndex + 1 < totalPages ? tabFrameId(activeTab.id(), navStart, pageIndex + 1) : null);
         }
@@ -481,24 +455,13 @@ public final class StandardMenuService implements MenuService {
     private static void applySharedFooter(
             Map<Integer, MenuSlot> slots,
             int footerStart,
-            Map<UtilitySlot, MenuItem> utilities,
-            sh.harold.creative.library.menu.MenuAction backAction,
-            int totalPages,
-            int pageIndex,
             String previousFrameId,
             String nextFrameId
     ) {
         if (previousFrameId != null) {
-            slots.put(footerStart + FOOTER_PREVIOUS_OR_BACK_OFFSET,
-                    chromeButton(footerStart + FOOTER_PREVIOUS_OR_BACK_OFFSET, "Previous Page", MenuIcon.vanilla("arrow"),
+            slots.put(footerStart + FOOTER_PREVIOUS_OFFSET,
+                    chromeButton(footerStart + FOOTER_PREVIOUS_OFFSET, "Previous Page", MenuIcon.vanilla("arrow"),
                             Map.of(MenuClick.LEFT, MenuInteraction.of(ActionVerb.PREVIOUS_PAGE, new MenuSlotAction.OpenFrame(previousFrameId)))));
-        } else if (backAction != null) {
-            slots.put(footerStart + FOOTER_PREVIOUS_OR_BACK_OFFSET,
-                    backButton(footerStart + FOOTER_PREVIOUS_OR_BACK_OFFSET, backAction));
-        }
-        if (previousFrameId != null && backAction != null) {
-            int backSlot = footerStart + FOOTER_SECONDARY_LEFT_OFFSET;
-            slots.put(backSlot, backButton(backSlot, backAction));
         }
         if (nextFrameId != null) {
             slots.put(footerStart + FOOTER_NEXT_OFFSET,
@@ -506,7 +469,7 @@ public final class StandardMenuService implements MenuService {
                             Map.of(MenuClick.LEFT, MenuInteraction.of(ActionVerb.NEXT_PAGE, new MenuSlotAction.OpenFrame(nextFrameId)))));
         }
         slots.put(footerStart + FOOTER_CLOSE_OFFSET,
-                chromeButton(footerStart + FOOTER_CLOSE_OFFSET, "Close", MenuIcon.vanilla("barrier"),
+                simpleButton(footerStart + FOOTER_CLOSE_OFFSET, "Close", NamedTextColor.RED, MenuIcon.vanilla("barrier"),
                         Map.of(MenuClick.LEFT, MenuInteraction.of(ActionVerb.CLOSE, new MenuSlotAction.Close()))));
     }
 
@@ -527,7 +490,7 @@ public final class StandardMenuService implements MenuService {
 
     private static MenuSlot navArrow(int slot, String title, String leftFrameId, String rightFrameId) {
         if (leftFrameId == null && rightFrameId == null) {
-            return chromeButton(slot, title, MenuIcon.vanilla("arrow"), Map.of());
+            return simpleButton(slot, title, NamedTextColor.WHITE, MenuIcon.vanilla("arrow"), Map.of());
         }
         Map<MenuClick, MenuInteraction> interactions = new EnumMap<>(MenuClick.class);
         if (leftFrameId != null) {
@@ -541,7 +504,7 @@ public final class StandardMenuService implements MenuService {
                     title.startsWith("Previous") ? "jump to first tabs" : "jump to last tabs",
                     new MenuSlotAction.OpenFrame(rightFrameId)));
         }
-        return chromeButton(slot, title, MenuIcon.vanilla("arrow"), interactions);
+        return simpleButton(slot, title, NamedTextColor.WHITE, MenuIcon.vanilla("arrow"), interactions);
     }
 
     private static MenuSlot filler(int slot) {
@@ -553,9 +516,12 @@ public final class StandardMenuService implements MenuService {
         return new MenuSlot(slot, MenuIcon.vanilla("air"), Component.empty(), List.of(), false, Map.of());
     }
 
-    private static MenuSlot backButton(int slot, sh.harold.creative.library.menu.MenuAction action) {
-        return chromeButton(slot, "Back", MenuIcon.vanilla("arrow"),
-                Map.of(MenuClick.LEFT, new MenuInteraction(ActionVerb.BACK, ActionVerb.BACK.promptLabel(), new MenuSlotAction.Execute(action))));
+    private static MenuSlot simpleButton(int slot, String title, NamedTextColor color, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
+        return new MenuSlot(slot, icon,
+                Component.text(title, color).decoration(TextDecoration.ITALIC, false),
+                List.of(),
+                false,
+                interactions);
     }
 
     private static MenuSlot chromeButton(int slot, String title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
@@ -611,12 +577,11 @@ public final class StandardMenuService implements MenuService {
     private static List<MenuSlot> buildCanvasPage(
             int rows,
             Map<Integer, MenuItem> placed,
-            Map<UtilitySlot, MenuItem> utilities,
-            sh.harold.creative.library.menu.MenuAction backAction
+            Map<UtilitySlot, MenuItem> utilities
     ) {
         Map<Integer, MenuSlot> slots = createFilledSlots(rows);
         int footerStart = HouseMenuCompiler.footerStart(rows);
-        validateUtilitySlots(utilities, footerStart, reservedFooterSlots(footerStart, false, false, backAction != null));
+        validateUtilitySlots(utilities, footerStart, reservedCanvasFooterSlots(footerStart));
         for (UtilitySlot slot : utilities.keySet()) {
             int reserved = slot.resolveSlot(footerStart);
             if (placed.containsKey(reserved)) {
@@ -624,7 +589,7 @@ public final class StandardMenuService implements MenuService {
             }
         }
         for (Map.Entry<Integer, MenuItem> entry : placed.entrySet()) {
-            if (entry.getKey() >= footerStart && (entry.getKey() == footerStart + FOOTER_PREVIOUS_OR_BACK_OFFSET
+            if (entry.getKey() >= footerStart && (entry.getKey() == footerStart + FOOTER_BACK_OFFSET
                     || entry.getKey() == footerStart + FOOTER_CLOSE_OFFSET
                     || entry.getKey() == footerStart + FOOTER_NEXT_OFFSET)) {
                 throw new IllegalArgumentException("Placed items may not overwrite reserved canvas chrome slots");
@@ -632,12 +597,8 @@ public final class StandardMenuService implements MenuService {
             slots.put(entry.getKey(), HouseMenuCompiler.compile(entry.getKey(), entry.getValue()));
         }
         applyUtilities(slots, footerStart, utilities);
-        if (backAction != null) {
-            slots.put(footerStart + FOOTER_PREVIOUS_OR_BACK_OFFSET,
-                    backButton(footerStart + FOOTER_PREVIOUS_OR_BACK_OFFSET, backAction));
-        }
         slots.put(footerStart + FOOTER_CLOSE_OFFSET,
-                chromeButton(footerStart + FOOTER_CLOSE_OFFSET, "Close", MenuIcon.vanilla("barrier"),
+                simpleButton(footerStart + FOOTER_CLOSE_OFFSET, "Close", NamedTextColor.RED, MenuIcon.vanilla("barrier"),
                         Map.of(MenuClick.LEFT, MenuInteraction.of(ActionVerb.CLOSE, new MenuSlotAction.Close()))));
         return orderedSlots(slots, rows);
     }
@@ -774,17 +735,22 @@ public final class StandardMenuService implements MenuService {
         }
     }
 
-    private static Set<Integer> reservedFooterSlots(int footerStart, boolean hasPrevious, boolean hasNext, boolean hasBack) {
+    private static Set<Integer> reservedSharedFooterSlots(int footerStart, boolean hasPrevious, boolean hasNext) {
         Set<Integer> reserved = new HashSet<>();
-        if (hasPrevious || hasBack) {
-            reserved.add(footerStart + FOOTER_PREVIOUS_OR_BACK_OFFSET);
+        if (hasPrevious) {
+            reserved.add(footerStart + FOOTER_PREVIOUS_OFFSET);
         }
-        if (hasPrevious && hasBack) {
-            reserved.add(footerStart + FOOTER_SECONDARY_LEFT_OFFSET);
-        }
+        reserved.add(footerStart + FOOTER_BACK_OFFSET);
         if (hasNext) {
             reserved.add(footerStart + FOOTER_NEXT_OFFSET);
         }
+        reserved.add(footerStart + FOOTER_CLOSE_OFFSET);
+        return reserved;
+    }
+
+    private static Set<Integer> reservedCanvasFooterSlots(int footerStart) {
+        Set<Integer> reserved = new HashSet<>();
+        reserved.add(footerStart + FOOTER_BACK_OFFSET);
         reserved.add(footerStart + FOOTER_CLOSE_OFFSET);
         return reserved;
     }

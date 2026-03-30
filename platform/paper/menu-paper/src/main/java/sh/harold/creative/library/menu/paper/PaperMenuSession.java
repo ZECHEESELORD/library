@@ -79,6 +79,11 @@ final class PaperMenuSession implements InventoryHolder, MenuContext.SessionCont
     }
 
     @Override
+    public void back() {
+        runtime.back(this);
+    }
+
+    @Override
     public void close() {
         runtime.close(this);
     }

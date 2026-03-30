@@ -6,7 +6,8 @@ public interface ListMenuBuilder {
 
     /**
      * House footer policy for v1 list menus:
-     * slot 45 = previous/back,
+     * slot 45 = previous page,
+     * slot 48 = back,
      * slot 49 = close,
      * slot 53 = next,
      * remaining bottom-row slots = utility controls or black-pane filler.
@@ -15,8 +16,6 @@ public interface ListMenuBuilder {
     ListMenuBuilder title(String title);
 
     ListMenuBuilder title(Component title);
-
-    ListMenuBuilder back(MenuAction action);
 
     ListMenuBuilder utility(UtilitySlot slot, MenuItem item);
 

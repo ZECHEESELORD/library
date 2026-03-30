@@ -18,6 +18,10 @@ public final class MenuContext {
             }
 
             @Override
+            public void back() {
+            }
+
+            @Override
             public void close() {
             }
         };
@@ -25,6 +29,8 @@ public final class MenuContext {
         void refresh();
 
         void open(Menu menu);
+
+        void back();
 
         void close();
     }
@@ -63,6 +69,10 @@ public final class MenuContext {
 
     public void open(Menu menu) {
         controls.open(java.util.Objects.requireNonNull(menu, "menu"));
+    }
+
+    public void back() {
+        controls.back();
     }
 
     public void close() {

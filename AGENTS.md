@@ -10,6 +10,7 @@ Current target hosts:
 - Velocity
 
 Current approved feature families:
+- entity layer
 - data API
 - standardized message API
 - state machine API
@@ -27,17 +28,19 @@ Do not casually extract:
 - gameplay specific minigame logic
 - anything whose real shape is “one project’s internals with the nouns sanded off”
 
-If local skills exist for menus, commands, or messaging, treat them as implementation standards.
+If local skills exist for menus, commands, messaging, or the entity layer, treat them as implementation standards.
 In particular:
-- the menu skill is authoritative for menu UX, builder selection, and `MenuButton` versus `MenuDisplayItem`
+- the repo-local `entity-house-layer` skill is authoritative for entity API usage, House service-entity usage, NPC/service patterns, entity examples, entity docs, and entity-layer proposal structure
+- the repo-local `menu-authoring` skill is authoritative for menu UX, geometry selection, flat menu DSL usage, menu card copy, and `MenuButton` versus `MenuDisplayItem`
 - the Paper command skill is authoritative for any Paper command examples or bootstrap commands
-- the player message facade skill is authoritative for player facing messaging patterns in samples and adapters
+- the `player-facing-messages` skill is authoritative for non-menu player-facing messaging patterns in samples, adapters, and player-visible copy
 
 If there is a conflict:
 - this file is the source of truth for architecture, boundaries, and extraction policy
-- the menu skill is the source of truth for menu taxonomy and UX details
+- the `entity-house-layer` skill is the source of truth for entity-layer API usage, House NPC/service authoring, and the required shape of entity-layer proposals
+- the `menu-authoring` skill is the source of truth for menu taxonomy, house-style usage, menu card authoring, and runtime menu UX details
 - the command skill is the source of truth for Paper command registration style
-- the message skill is the source of truth for player facing message usage
+- the `player-facing-messages` skill is the source of truth for non-menu player-facing message usage
 
 ---
 
@@ -203,6 +206,30 @@ Notes:
 - if a menu feature cannot be expressed cleanly on both Paper and Minestom, it does not belong in the common menu API
 - host only extras belong in backend specific extension packages or wait until proven necessary
 
+### Entity Layer
+
+Supported on:
+- Paper
+- Minestom
+
+Not supported on:
+- Velocity as an entity runtime
+
+Shape:
+- one public generic entity API
+- one shared entity core
+- one shared House service-entity layer on top of the generic entity layer
+- native Paper and Minestom backends
+- optional Paper Citizens bridge for player-like humanoid entities only
+
+Notes:
+- generic entity first, NPC second
+- typed capabilities instead of a universal god-interface
+- House style is mandatory anywhere NPCs or interactive service entities are involved
+- do not create a fake Velocity entity runtime module
+- Citizens is a Paper bridge, not the global abstraction
+- any entity-layer API or spec proposal must include caller usage, layer ownership, and resultant behavior
+
 ---
 
 ## Current Module Plan
@@ -211,6 +238,9 @@ The approved first cut is this.
 
 ```text
 common/
+  entity-api/
+  entity-core/
+  house-service-entity/
   data-api/
   data-memory/
   message-api/
@@ -222,12 +252,17 @@ common/
 
 platform/
   paper/
+    entity-paper/
+    entity-paper-citizens/
     message-paper/
     menu-paper/
+    paper-entity-example/
     paper-example/
   minestom/
+    entity-minestom/
     message-minestom/
     menu-minestom/
+    minestom-entity-example/
     minestom-example/
   velocity/
     message-velocity/
@@ -245,6 +280,11 @@ platform/
 - `state-machine-core` provides the definition DSL, serial runtime, and timer machinery
 - `menu-api` defines the platform neutral menu contract
 - `menu-core` owns layout, slot mapping, page math, tab state, and render model
+- `entity-api` defines the host-neutral generic entity surface
+- `entity-core` owns shared validation, lifecycle guards, and capability support
+- `house-service-entity` owns the mandatory structured House presentation for service entities
+- `entity-paper` and `entity-minestom` are native host adapters
+- `entity-paper-citizens` is a narrow Paper bridge for player-like humanoid entities only
 - `message-paper`, `message-minestom`, `message-velocity` are sender adapters only
 - `menu-paper` and `menu-minestom` translate the shared menu model into native inventory behavior
 - example modules prove wiring and keep the integration honest
@@ -253,7 +293,7 @@ platform/
 
 Not in v1:
 - scoreboard modules
-- NPC modules
+- ad hoc NPC frameworks outside the entity layer
 - cooldown runtime services
 - cross plugin runtime authority modules
 - database driver zoo
@@ -325,6 +365,74 @@ Promote later only when reuse proves it.
 
 ## Feature Specific Boundary Rules
 
+## Entity Layer
+
+The entity stack is a first-class library feature in this repo.
+When adding, reviewing, or proposing entity-layer or NPC-related work, use the repo-local `entity-house-layer` skill.
+
+### Entity layer rules
+
+- the base entity surface is generic first; House service entities are a second layer on top
+- use `EntitySpec` plus the platform `spawn(...)` path for generic entities
+- use `HouseServiceSpec` plus `spawnService(...)` for NPCs, guides, vendors, bankers, menu-openers, and other interactive named service entities
+- House style is mandatory anywhere NPCs are involved
+- callers must provide structured House fields such as name and description; do not make raw hologram lines the normal path
+- entity-family-specific behavior belongs behind typed capabilities; unsupported capability behavior must be absent, not faked
+- `entity-api` must stay host-neutral
+- `entity-core` may own shared validation, lifecycle, and owner-thread guards, but not host lifecycle glue
+- `house-service-entity` owns House validation, presentation ordering, and service wrapping
+- `entity-paper` and `entity-minestom` own native runtime mapping and click routing
+- `entity-paper-citizens` only owns Paper player-like humanoid and skin bridging; it must not leak Citizens types into common modules
+- native Paper must reject `creative:player_like_humanoid`; do not hide that behind a soft fallback
+- Minestom entity design must stay native and explicit, not Bukkit-shaped
+- live entity operations use sync owned-thread semantics; do not hide that behind async redesigns or silent scheduling
+- any entity-layer API or spec proposal must explicitly include:
+  - caller usage
+  - layer ownership
+  - resultant behavior
+
+### Entity module boundaries
+
+Belongs in `entity-api`:
+- open keyed entity types and families
+- `EntitySpec`
+- `ManagedEntity`
+- common flags and transforms
+- interaction contracts
+- capability interfaces
+
+Belongs in `entity-core`:
+- shared validation
+- lifecycle guards
+- capability registration helpers
+- owner-thread guard helpers
+
+Belongs in `house-service-entity`:
+- `HouseServiceSpec`
+- `HousePresentation`
+- `HouseValidator`
+- `HouseServiceEntity`
+- the mandatory 3-line House presentation model
+
+Belongs in platform entity adapters:
+- native spawning and despawn
+- host interaction mapping
+- honest capability exposure
+- backend-owned House line renderers
+- native lifecycle cleanup
+
+Belongs in examples and docs:
+- smoke harnesses
+- support matrix documentation
+- manual verification checklists
+
+Not allowed:
+- raw Citizens types in common modules
+- a fake universal entity god-interface
+- raw hologram line lists as the normal NPC/service authoring path
+- backend adapters silently rewriting or reordering House presentation
+- a Velocity entity runtime module
+
 ## Data API
 
 The new data surface should be based on both uploaded codebases, but it should not blindly merge them.
@@ -386,6 +494,11 @@ The new message surface should keep the tiny entrypoint feel from `buh` and the 
 - template resolution belongs in `message-core`
 - sending belongs in platform adapters
 - examples and integrations should use the common facade, not raw host send calls
+- any player-facing communication must go through the message API
+- do not use raw `sendMessage`, raw Adventure components, MiniMessage strings, or legacy color-code strings for player-visible text outside the message library or renderers
+- when adding or changing player-visible text, use the `player-facing-messages` skill
+- if the current messaging surface is missing something, extend the shared message API instead of bypassing it
+- treat legacy raw `Component` menu title or lore surfaces as debt; do not add new player-visible copy there without first extending the shared messaging integration
 
 Belongs in `message-api`:
 - `Message`
@@ -487,11 +600,24 @@ Not one API and two disconnected re implementations.
 
 - the public menu API must describe concepts that exist on both Paper and Minestom
 - the shared core owns layout and state logic
+- the shared core owns mandatory house chrome, breadcrumb back behavior, prompt-last behavior, wrapping, and progress rendering
+- `tabs` uses row `0` for a centered grouped tab strip, row `1` for gray/lime nav chrome under visible tabs, and rows `2+` for tab content
+- `tabs` uses the shared footer grammar by default and only opts out of it explicitly for custom canvas-style tab content
+- the shared footer grammar is: slot `45` previous page, slot `48` back, slot `49` close, slot `53` next, and the remaining footer utility slots stay caller-owned
+- shared back is runtime-owned rather than caller-authored: `context.open(...)` pushes menu/frame history, child menus render `&aGo Back` with the single lore line `&7To <menuname>`, and root opens do not auto-show back
+- close and tab-strip scroll arrows use simple shared chrome with no prompt-lore block; page arrows keep the standard paging chrome
+- tab grouping is explicit; do not infer logical groups from tab names
+- list-style tab content is a bordered `3x7` panel starting at slot `19`; its interior stays open by default, so authors should not try to fill every slot unless they are intentionally demonstrating paging, and overflowed list tabs page through the shared footer arrows in the bottom corners
+- custom canvas-style tab content uses explicit slot placement below the nav rows, keeps black filler on by default, and may explicitly toggle that content-area filler off when the authored layout needs open slots
+- canvas-style tab layouts should bias their primary placements onto row `3` and center them symmetrically: one item at `(4,3)`, two items at `(2,3)` and `(6,3)`, and expand outward from there
 - the backends own inventory opening, click translation, and native item rendering
 - `MenuButton` is for clickable items
 - `MenuDisplayItem` is for read only items
-- builder taxonomy matters: list, tabbed, and custom are separate for a reason
-- titles and lore use Adventure components
+- builder taxonomy matters: `list`, `tabs`, and `canvas` are separate for a reason
+- menu titles use Adventure components; menu card content goes through the flat menu DSL
+- platform-authored menu code should use native Paper or Minestom overloads instead of raw `MenuIcon`
+- menu content is compiled eagerly into frames; dynamic changes should rebuild and reopen menus
+- menu runtime identity must never depend on title text
 - common menu features must stay inside the shared capability envelope
 
 Belongs in `menu-api`:
@@ -615,6 +741,7 @@ Until then:
 ## Review Checklist
 
 Before accepting a new feature or module, confirm:
+- the correct repo-local skill was used when one exists for the touched feature family
 - the boundary is real
 - the public API is smaller than the source inspiration
 - common modules contain no host types
@@ -622,6 +749,8 @@ Before accepting a new feature or module, confirm:
 - the feature matrix is honest
 - examples compile
 - tests prove the shared engines, not only the adapters
+- entity or NPC changes enforce House style through the shared service-entity layer
+- any entity-layer proposal or design note shows caller usage, layer ownership, and resultant behavior
 - nothing drifted into “we might need this later” territory
 
 If a change makes the repository feel more like a platform and less like a library, stop and justify it explicitly.

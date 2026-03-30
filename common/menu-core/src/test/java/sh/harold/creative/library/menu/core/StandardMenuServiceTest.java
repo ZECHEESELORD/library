@@ -1,5 +1,7 @@
 package sh.harold.creative.library.menu.core;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.menu.ActionVerb;
 import sh.harold.creative.library.menu.Menu;
@@ -10,10 +12,10 @@ import sh.harold.creative.library.menu.MenuFrame;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuItem;
+import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.MenuTabGroup;
-import sh.harold.creative.library.menu.UtilitySlot;
 
 import java.util.List;
 import java.util.stream.IntStream;
@@ -31,19 +33,20 @@ class StandardMenuServiceTest {
     void listMenuUsesStableHouseFooterGrammar() {
         Menu menu = menus.list()
                 .title("Profiles")
-                .back(context -> {})
                 .addItems(sampleButtons("Item", 73))
                 .build();
 
         MenuFrame firstPage = menu.frames().get("page:0");
         MenuFrame middlePage = menu.frames().get("page:1");
 
-        assertEquals("Back", titleAt(firstPage, 45));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(firstPage, 48));
         assertEquals("Close", titleAt(firstPage, 49));
+        assertEquals(NamedTextColor.RED, titleColorAt(firstPage, 49));
+        assertEquals(List.of(), loreAt(firstPage, 49));
         assertEquals("Next Page", titleAt(firstPage, 53));
 
         assertEquals("Previous Page", titleAt(middlePage, 45));
-        assertEquals("Back", titleAt(middlePage, 46));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(middlePage, 48));
         assertEquals("Close", titleAt(middlePage, 49));
         assertEquals("Next Page", titleAt(middlePage, 53));
     }
@@ -52,7 +55,6 @@ class StandardMenuServiceTest {
     void tabsCenterGroupsAndRenderHighlightChrome() {
         Menu menu = menus.tabs()
                 .title("Blocks")
-                .back(context -> {})
                 .defaultTab("oak")
                 .addGroup(MenuTabGroup.of("wood", List.of(
                         listTab("oak", "Oak", 1),
@@ -85,12 +87,12 @@ class StandardMenuServiceTest {
         assertEquals("Oak Item 0", titleAt(frame, 19));
         assertEquals("minecraft:air", iconAt(frame, 20));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 18));
-        assertEquals("Back", titleAt(frame, 45));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 48));
         assertEquals("Close", titleAt(frame, 49));
     }
 
     @Test
-    void tabsOverflowUseNavArrowsAndScrollByWindowStart() {
+    void tabsOverflowUseSimpleNavArrowsAndScrollByWindowStart() {
         Menu menu = menus.tabs()
                 .title("Many Tabs")
                 .defaultTab("tab-0")
@@ -104,8 +106,12 @@ class StandardMenuServiceTest {
         MenuFrame end = menu.frames().get("tab:tab-0:nav:3:page:0");
 
         assertEquals("Previous Tabs", titleAt(initial, 0));
+        assertEquals(NamedTextColor.WHITE, titleColorAt(initial, 0));
+        assertEquals(List.of(), loreAt(initial, 0));
         assertTrue(interactionAt(initial, 0, MenuClick.LEFT) == null);
         assertEquals("Next Tabs", titleAt(initial, 8));
+        assertEquals(NamedTextColor.WHITE, titleColorAt(initial, 8));
+        assertEquals(List.of(), loreAt(initial, 8));
         assertTrue(interactionAt(initial, 8, MenuClick.LEFT) != null);
         assertTrue(interactionAt(initial, 8, MenuClick.RIGHT) != null);
         assertEquals("Tab 0", titleAt(initial, 1));
@@ -136,6 +142,7 @@ class StandardMenuServiceTest {
         assertEquals("Alpha Item 21", titleAt(secondPage, 19));
         assertEquals("Alpha Item 28", titleAt(secondPage, 28));
         assertEquals("Previous Page", titleAt(secondPage, 45));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(secondPage, 48));
     }
 
     @Test
@@ -143,7 +150,7 @@ class StandardMenuServiceTest {
         Menu menu = menus.tabs()
                 .title("Canvas Tabs")
                 .defaultTab("alpha")
-                .addTab(new MenuTab("alpha", net.kyori.adventure.text.Component.text("Alpha"), MenuIcon.vanilla("book"),
+                .addTab(new MenuTab("alpha", Component.text("Alpha"), MenuIcon.vanilla("book"),
                         MenuTabContent.canvas(builder -> builder.place(31, MenuDisplayItem.builder(MenuIcon.vanilla("book"))
                                 .name("Centered Card")
                                 .build()))))
@@ -154,6 +161,7 @@ class StandardMenuServiceTest {
 
         assertEquals("Centered Card", titleAt(frame, 31));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 20));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 48));
         assertEquals("Close", titleAt(frame, 49));
     }
 
@@ -162,7 +170,7 @@ class StandardMenuServiceTest {
         Menu menu = menus.tabs()
                 .title("Canvas Tabs")
                 .defaultTab("alpha")
-                .addTab(new MenuTab("alpha", net.kyori.adventure.text.Component.text("Alpha"), MenuIcon.vanilla("book"),
+                .addTab(new MenuTab("alpha", Component.text("Alpha"), MenuIcon.vanilla("book"),
                         MenuTabContent.canvas(builder -> builder
                                 .fillWithBlackPane(false)
                                 .place(19, MenuDisplayItem.builder(MenuIcon.vanilla("book"))
@@ -176,6 +184,56 @@ class StandardMenuServiceTest {
         assertEquals("Canvas Card", titleAt(frame, 19));
         assertEquals("minecraft:air", iconAt(frame, 20));
         assertEquals("Close", titleAt(frame, 49));
+    }
+
+    @Test
+    void sessionStateShowsAutoBackForChildMenus() {
+        Menu root = menus.list()
+                .title("Gallery")
+                .addItems(sampleButtons("Root", 1))
+                .build();
+        Menu child = menus.canvas()
+                .title("Museum Rewards Preview")
+                .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                        .name("Museum Rewards")
+                        .build())
+                .build();
+
+        MenuSessionState state = new MenuSessionState(root);
+        state.openChild(child);
+
+        MenuSlot back = state.currentFrame().slots().get(48);
+        MenuSlot close = state.currentFrame().slots().get(49);
+
+        assertEquals("Go Back", ComponentText.flatten(back.title()));
+        assertEquals(NamedTextColor.GREEN, back.title().color());
+        assertEquals(List.of("To Gallery"), loreAt(back));
+        assertEquals("Close", ComponentText.flatten(close.title()));
+        assertEquals(NamedTextColor.RED, close.title().color());
+        assertEquals(List.of(), loreAt(close));
+    }
+
+    @Test
+    void sessionStateTracksFrameHistoryButBackLoreUsesMenuTitleOnly() {
+        Menu root = menus.list()
+                .title("Gallery")
+                .addItems(sampleButtons("Root", 1))
+                .build();
+        Menu child = menus.list()
+                .title("Profiles")
+                .addItems(sampleButtons("Item", 73))
+                .build();
+
+        MenuSessionState state = new MenuSessionState(root);
+        state.openChild(child);
+        state.openFrame("page:1");
+
+        assertEquals("Go Back", titleAt(state.currentFrame(), 48));
+        assertEquals(List.of("To Profiles"), loreAt(state.currentFrame().slots().get(48)));
+
+        assertTrue(state.back());
+        assertEquals("page:0", state.frameId());
+        assertEquals(List.of("To Gallery"), loreAt(state.currentFrame().slots().get(48)));
     }
 
     @Test
@@ -193,19 +251,6 @@ class StandardMenuServiceTest {
         assertEquals("Row Five Action", titleAt(frame, 45));
         assertEquals(" ", titleAt(frame, 49));
         assertTrue(interactionAt(frame, 49, MenuClick.LEFT) == null);
-    }
-
-    @Test
-    void tabsCustomFooterRejectSharedFooterControls() {
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> menus.tabs()
-                .title("Canvas Tabs")
-                .customFooter()
-                .back(context -> {})
-                .addTab(canvasTab("alpha", "Alpha", 45, "Row Five Action"))
-                .addTab(canvasTab("beta", "Beta", 53, "Bottom Corner"))
-                .build());
-
-        assertEquals("Custom-footer tabs may not use back(...)", exception.getMessage());
     }
 
     @Test
@@ -243,19 +288,15 @@ class StandardMenuServiceTest {
     }
 
     @Test
-    void listRejectsUtilityCollisionsWithReservedChrome() {
-        MenuItem utility = MenuDisplayItem.builder(MenuIcon.vanilla("compass"))
-                .name("Utility")
-                .build();
-
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> menus.list()
-                .title("Profiles")
-                .back(context -> {})
-                .utility(UtilitySlot.LEFT_1, utility)
-                .addItems(sampleButtons("Item", 73))
+    void canvasRejectsPlacedItemsAtReservedBackSlot() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> menus.canvas()
+                .title("Canvas")
+                .place(48, MenuDisplayItem.builder(MenuIcon.vanilla("compass"))
+                        .name("Reserved")
+                        .build())
                 .build());
 
-        assertTrue(exception.getMessage().contains("reserved house chrome"));
+        assertEquals("Placed items may not overwrite reserved canvas chrome slots", exception.getMessage());
     }
 
     @Test
@@ -273,7 +314,7 @@ class StandardMenuServiceTest {
     }
 
     private static MenuTab canvasTab(String id, String name, int slot, String itemName) {
-        return new MenuTab(id, net.kyori.adventure.text.Component.text(name), MenuIcon.vanilla("book"),
+        return new MenuTab(id, Component.text(name), MenuIcon.vanilla("book"),
                 MenuTabContent.canvas(builder -> builder.place(slot, MenuDisplayItem.builder(MenuIcon.vanilla("book"))
                         .name(itemName)
                         .build())));
@@ -292,6 +333,10 @@ class StandardMenuServiceTest {
         return ComponentText.flatten(frame.slots().get(slot).title());
     }
 
+    private static NamedTextColor titleColorAt(MenuFrame frame, int slot) {
+        return (NamedTextColor) frame.slots().get(slot).title().color();
+    }
+
     private static String iconAt(MenuFrame frame, int slot) {
         return frame.slots().get(slot).icon().key();
     }
@@ -302,5 +347,15 @@ class StandardMenuServiceTest {
 
     private static MenuInteraction interactionAt(MenuFrame frame, int slot, MenuClick click) {
         return frame.slots().get(slot).interactions().get(click);
+    }
+
+    private static List<String> loreAt(MenuFrame frame, int slot) {
+        return loreAt(frame.slots().get(slot));
+    }
+
+    private static List<String> loreAt(MenuSlot slot) {
+        return slot.lore().stream()
+                .map(ComponentText::flatten)
+                .toList();
     }
 }

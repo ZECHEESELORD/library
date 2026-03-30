@@ -53,7 +53,6 @@ class PaperMenuRuntimeTest {
         runtime.open(player, menu);
 
         Inventory inventory = access.lastOpenedInventory();
-        assertEquals("Back", slotTitle(access, inventory, 45));
         assertEquals("Close", slotTitle(access, inventory, 49));
         assertEquals("Next Page", slotTitle(access, inventory, 53));
 
@@ -62,7 +61,7 @@ class PaperMenuRuntimeTest {
 
         assertTrue(nextPage.isCancelled());
         assertEquals("Previous Page", slotTitle(access, inventory, 45));
-        assertEquals("Back", slotTitle(access, inventory, 46));
+        assertEquals("Close", slotTitle(access, inventory, 49));
         assertEquals("Next Page", slotTitle(access, inventory, 53));
 
         InventoryClickEvent close = click(player, inventory, 49, ClickType.LEFT);
@@ -136,17 +135,23 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
-    void backAndTabControlsRouteThroughOwnedSession() {
+    void childBackUsesHistoryAndTabSwitchesPushFrameHistory() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
         PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer());
-        AtomicBoolean backed = new AtomicBoolean(false);
 
-        runtime.open(player, galleryMenu(backed));
+        runtime.open(player, launcherMenu());
+        Inventory rootInventory = access.lastOpenedInventory();
+        assertEquals("Open Gallery", slotTitle(access, rootInventory, 9));
+
+        InventoryClickEvent openChild = click(player, rootInventory, 9, ClickType.LEFT);
+        runtime.onInventoryClick(openChild);
+
+        assertTrue(openChild.isCancelled());
         Inventory inventory = access.lastOpenedInventory();
 
-        assertEquals("Back", slotTitle(access, inventory, 45));
+        assertEquals("Go Back", slotTitle(access, inventory, 48));
         assertEquals("Profiles", slotTitle(access, inventory, 3));
         assertEquals("Progress", slotTitle(access, inventory, 4));
         assertEquals("Your SkyBlock Profile", slotTitle(access, inventory, 19));
@@ -159,11 +164,20 @@ class PaperMenuRuntimeTest {
         assertEquals("Progress", slotTitle(access, inventory, 4));
         assertEquals("Farming XLIX", slotTitle(access, inventory, 19));
 
-        InventoryClickEvent back = click(player, inventory, 45, ClickType.LEFT);
-        runtime.onInventoryClick(back);
+        InventoryClickEvent backToPreviousFrame = click(player, inventory, 48, ClickType.LEFT);
+        runtime.onInventoryClick(backToPreviousFrame);
 
-        assertTrue(back.isCancelled());
-        assertTrue(backed.get());
+        assertTrue(backToPreviousFrame.isCancelled());
+        Inventory afterFrameBack = access.lastOpenedInventory();
+        assertEquals("Go Back", slotTitle(access, afterFrameBack, 48));
+        assertEquals("Your SkyBlock Profile", slotTitle(access, afterFrameBack, 19));
+
+        InventoryClickEvent backToRoot = click(player, afterFrameBack, 48, ClickType.LEFT);
+        runtime.onInventoryClick(backToRoot);
+
+        assertTrue(backToRoot.isCancelled());
+        Inventory finalInventory = access.lastOpenedInventory();
+        assertEquals("Open Gallery", slotTitle(access, finalInventory, 9));
     }
 
     @Test
@@ -250,7 +264,6 @@ class PaperMenuRuntimeTest {
     private static Menu pagedMenu() {
         return new StandardMenuService().list()
                 .title("Profiles")
-                .back(context -> { })
                 .addItems(IntStream.range(0, 73).mapToObj(i -> MenuButton.builder(MenuIcon.vanilla("stone"))
                         .name("Item " + i)
                         .action(ActionVerb.VIEW, context -> { })
@@ -271,10 +284,19 @@ class PaperMenuRuntimeTest {
                 .build();
     }
 
-    private static Menu galleryMenu(AtomicBoolean backed) {
+    private static Menu launcherMenu() {
+        return new StandardMenuService().list()
+                .title("Launcher")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("Open Gallery")
+                        .action(ActionVerb.OPEN, context -> context.open(galleryMenu()))
+                        .build())
+                .build();
+    }
+
+    private static Menu galleryMenu() {
         return new StandardMenuService().tabs()
                 .title("Gallery")
-                .back(context -> backed.set(true))
                 .defaultTab("profiles")
                 .addTab(MenuTab.of("profiles", "Profiles", MenuIcon.vanilla("player_head"), List.of(
                         MenuButton.builder(MenuIcon.vanilla("player_head"))

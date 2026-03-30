@@ -10,8 +10,6 @@ public interface CanvasMenuBuilder {
 
     CanvasMenuBuilder rows(int rows);
 
-    CanvasMenuBuilder back(MenuAction action);
-
     CanvasMenuBuilder utility(UtilitySlot slot, MenuItem item);
 
     CanvasMenuBuilder place(int slot, MenuItem item);

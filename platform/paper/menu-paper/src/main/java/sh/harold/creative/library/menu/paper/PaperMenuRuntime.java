@@ -102,7 +102,20 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (sessions.get(session.viewerId()) != session) {
             return;
         }
-        session.state().open(menu);
+        session.state().openChild(menu);
+        Player player = playerLookup.apply(session.viewerId());
+        if (player != null) {
+            session.refresh(player);
+        }
+    }
+
+    void back(PaperMenuSession session) {
+        if (sessions.get(session.viewerId()) != session) {
+            return;
+        }
+        if (!session.state().back()) {
+            return;
+        }
         Player player = playerLookup.apply(session.viewerId());
         if (player != null) {
             session.refresh(player);

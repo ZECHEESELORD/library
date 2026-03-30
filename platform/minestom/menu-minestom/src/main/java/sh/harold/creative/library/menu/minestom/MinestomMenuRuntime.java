@@ -94,7 +94,17 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (sessions.get(session.viewer().getUuid()) != session) {
             return;
         }
-        session.state().open(menu);
+        session.state().openChild(menu);
+        session.renderCurrentFrame();
+    }
+
+    void back(MinestomMenuSession session) {
+        if (sessions.get(session.viewer().getUuid()) != session) {
+            return;
+        }
+        if (!session.state().back()) {
+            return;
+        }
         session.renderCurrentFrame();
     }
 

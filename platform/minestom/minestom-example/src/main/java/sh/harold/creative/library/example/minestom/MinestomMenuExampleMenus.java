@@ -126,7 +126,6 @@ final class MinestomMenuExampleMenus {
     Menu listGallery() {
         return menus.list()
                 .title("House Style List Gallery")
-                .back(context -> context.open(tabsGallery()))
                 .addItem(yourSkyBlockProfileButton())
                 .addItem(farmingXlixButton())
                 .addItem(museumRewardsButton())
@@ -137,7 +136,6 @@ final class MinestomMenuExampleMenus {
     Menu canvasGallery() {
         return menus.canvas()
                 .title("Canvas Gallery")
-                .back(context -> context.open(tabsGallery()))
                 .place(10, yourSkyBlockProfileDisplay())
                 .place(12, farmingXlixDisplay())
                 .place(14, museumRewardsDisplay())
@@ -279,7 +277,6 @@ final class MinestomMenuExampleMenus {
     private Menu preview(String title, MenuDisplayItem item) {
         return menus.canvas()
                 .title(title)
-                .back(context -> context.open(tabsGallery()))
                 .place(13, item)
                 .build();
     }
