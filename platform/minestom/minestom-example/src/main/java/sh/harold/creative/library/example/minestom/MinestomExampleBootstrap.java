@@ -9,6 +9,7 @@ import net.minestom.server.instance.block.Block;
 import sh.harold.creative.library.menu.minestom.MinestomMenuPlatform;
 import sh.harold.creative.library.sound.SoundCueKeys;
 import sh.harold.creative.library.sound.minestom.MinestomSoundCuePlatform;
+import sh.harold.creative.library.overlay.minestom.MinestomScreenOverlayPlatform;
 
 public final class MinestomExampleBootstrap {
 
@@ -30,10 +31,12 @@ public final class MinestomExampleBootstrap {
         instance.loadChunk(0, 0).join();
 
         MinestomSoundCuePlatform sounds = new MinestomSoundCuePlatform();
+        MinestomScreenOverlayPlatform overlays = new MinestomScreenOverlayPlatform(MinecraftServer.getGlobalEventHandler());
         MinestomMenuPlatform menus = new MinestomMenuPlatform(new sh.harold.creative.library.menu.core.StandardMenuService(),
                 MinecraftServer.getGlobalEventHandler(), sounds);
         MinestomMenuExampleMenus examples = new MinestomMenuExampleMenus(menus);
         MinestomDevHarnessMessages feedback = new MinestomDevHarnessMessages();
+        MinestomScreenOverlayExamples overlayExamples = new MinestomScreenOverlayExamples(overlays, feedback);
         MinestomMessageFacadeExamples messageExamples = new MinestomMessageFacadeExamples();
         Pos spawn = new Pos(0.5, 42.0, 0.5);
         MinestomEntityExampleHarness entityExamples = new MinestomEntityExampleHarness(instance, spawn, menus, examples, sounds, feedback);
@@ -42,6 +45,7 @@ public final class MinestomExampleBootstrap {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             entityExamples.close();
+            overlays.close();
             menus.close();
             sounds.close();
         }));
@@ -49,6 +53,7 @@ public final class MinestomExampleBootstrap {
         MinecraftServer.getCommandManager().register(new MinestomMenuExamplesCommand(menus, examples, feedback));
         MinecraftServer.getCommandManager().register(new MinestomMessageFacadeCommand(messageExamples, feedback));
         MinecraftServer.getCommandManager().register(new MinestomSoundCueCommand(new MinestomSoundCueExamples(sounds, feedback), feedback));
+        MinecraftServer.getCommandManager().register(new MinestomScreenOverlayCommand(overlayExamples, feedback));
         MinecraftServer.getCommandManager().register(new MinestomEntityExamplesCommand(entityExamples, feedback));
         MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent.class, event -> {
             event.setSpawningInstance(instance);
@@ -64,7 +69,7 @@ public final class MinestomExampleBootstrap {
         });
 
         log("Unified Minestom dev harness ready on localhost:" + PORT
-                + ". Use /testmenus, /testmessages, /testsoundfx, and /testnpcs.");
+                + ". Use /testmenus, /testmessages, /testsoundfx, /testoverlays, and /testnpcs.");
         minecraftServer.start(HOST, PORT);
     }
 

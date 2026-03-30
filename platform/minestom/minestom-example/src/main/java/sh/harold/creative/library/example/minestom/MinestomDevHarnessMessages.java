@@ -25,10 +25,11 @@ final class MinestomDevHarnessMessages {
     void sendQuickStart(Player player) {
         info(
                 player,
-                "Use {menus}, {messages}, {sounds}, and {npcs} for the Minestom dev harness.",
+                "Use {menus}, {messages}, {sounds}, {overlays}, and {npcs} for the Minestom dev harness.",
                 Message.slot("menus", command("/testmenus")),
                 Message.slot("messages", command("/testmessages")),
                 Message.slot("sounds", command("/testsoundfx")),
+                Message.slot("overlays", command("/testoverlays")),
                 Message.slot("npcs", command("/testnpcs"))
         );
     }
@@ -51,13 +52,17 @@ final class MinestomDevHarnessMessages {
                         Message.slot("command", command("/testsoundfx"))
                 )
                 .bullet(
+                        "{command} demo|clear",
+                        Message.slot("command", command("/testoverlays"))
+                )
+                .bullet(
                         "{command} reset|clear",
                         Message.slot("command", command("/testnpcs"))
                 )
                 .build());
     }
 
-    private static sh.harold.creative.library.message.MessageValue command(String literal) {
+    sh.harold.creative.library.message.MessageValue command(String literal) {
         return Message.value(literal).color(NamedTextColor.YELLOW);
     }
 }

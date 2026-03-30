@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":platform:minestom:entity-minestom"))
     implementation(project(":platform:minestom:message-minestom"))
     implementation(project(":platform:minestom:sound-minestom"))
+    implementation(project(":platform:minestom:screen-overlay-minestom"))
     implementation(project(":platform:minestom:menu-minestom"))
     implementation("net.minestom:minestom:${rootProject.property("minestomVersion")}")
 }

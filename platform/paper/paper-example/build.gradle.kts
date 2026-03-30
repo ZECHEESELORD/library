@@ -5,6 +5,7 @@ dependencies {
     implementation(project(":common:menu-core"))
     implementation(project(":platform:paper:message-paper"))
     implementation(project(":platform:paper:sound-paper"))
+    implementation(project(":platform:paper:screen-overlay-paper"))
     implementation(project(":platform:paper:menu-paper"))
     compileOnly("io.papermc.paper:paper-api:${rootProject.property("paperApiVersion")}")
 }
