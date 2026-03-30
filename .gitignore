@@ -120,4 +120,6 @@ runs/
 
 # Local agent instructions and extraction scratch space
 AGENTS.md
+/.codex/
+/docs/
 internal/
