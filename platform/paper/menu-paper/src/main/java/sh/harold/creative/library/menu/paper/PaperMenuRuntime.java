@@ -2,6 +2,7 @@ package sh.harold.creative.library.menu.paper;
 
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -20,9 +21,11 @@ import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuSlotAction;
 import sh.harold.creative.library.menu.MenuStack;
+import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.core.HouseMenuCompiler;
+import sh.harold.creative.library.menu.core.MenuTrace;
 import sh.harold.creative.library.menu.core.MenuSessionState;
 import sh.harold.creative.library.menu.core.MenuTickScheduler;
 import sh.harold.creative.library.sound.SoundCueService;
@@ -33,9 +36,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 final class PaperMenuRuntime implements AutoCloseable {
+
+    private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
 
     private final Map<UUID, PaperMenuSession> sessions = new ConcurrentHashMap<>();
     private final PaperMenuAccess access;
@@ -43,110 +49,159 @@ final class PaperMenuRuntime implements AutoCloseable {
     private final PaperMenuSlotRenderer renderer;
     private final SoundCueService sounds;
     private final MenuTickScheduler tickScheduler;
+    private final Consumer<Runnable> inventoryTaskScheduler;
+    private final MenuTraceController traceController;
+    private final Consumer<String> traceSink;
+    private int inventoryInteractionDepth;
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer, SoundCueService sounds) {
-        this(access, playerLookup, renderer, sounds, MenuTickScheduler.unsupported());
+        this(access, playerLookup, renderer, sounds, MenuTickScheduler.unsupported(), Runnable::run,
+                new MenuTraceController(), message -> { });
     }
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
                      SoundCueService sounds, MenuTickScheduler tickScheduler) {
+        this(access, playerLookup, renderer, sounds, tickScheduler, Runnable::run,
+                new MenuTraceController(), message -> { });
+    }
+
+    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Consumer<Runnable> inventoryTaskScheduler) {
+        this(access, playerLookup, renderer, sounds, tickScheduler, inventoryTaskScheduler,
+                new MenuTraceController(), message -> { });
+    }
+
+    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Consumer<Runnable> inventoryTaskScheduler,
+                     MenuTraceController traceController, Consumer<String> traceSink) {
         this.access = Objects.requireNonNull(access, "access");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.sounds = Objects.requireNonNull(sounds, "sounds");
         this.tickScheduler = Objects.requireNonNull(tickScheduler, "tickScheduler");
+        this.inventoryTaskScheduler = Objects.requireNonNull(inventoryTaskScheduler, "inventoryTaskScheduler");
+        this.traceController = Objects.requireNonNull(traceController, "traceController");
+        this.traceSink = Objects.requireNonNull(traceSink, "traceSink");
     }
 
     void open(Player player, MenuDefinition menu) {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(menu, "menu");
-        UUID viewerId = player.getUniqueId();
-        PaperMenuSession previous = sessions.remove(viewerId);
-        if (previous != null) {
-            previous.detach();
-        }
-        PaperMenuSession session = new PaperMenuSession(this, viewerId, new MenuSessionState(menu));
-        sessions.put(viewerId, session);
-        show(session, player, true);
+        trace(player, "open", () -> {
+            UUID viewerId = player.getUniqueId();
+            PaperMenuSession previous = sessions.remove(viewerId);
+            if (previous != null) {
+                MenuTrace.time("runtime.detachPrevious", previous::detach);
+            }
+            PaperMenuSession session = MenuTrace.time("runtime.createSession",
+                    () -> new PaperMenuSession(this, viewerId, new MenuSessionState(menu)));
+            MenuTrace.field("path", session.state().reactive() ? "reactive" : "compiled");
+            sessions.put(viewerId, session);
+            MenuTrace.time("runtime.show", () -> show(session, player, true));
+        });
     }
 
     void onInventoryClick(InventoryClickEvent event) {
-        Inventory topInventory = event.getView().getTopInventory();
-        PaperMenuSession session = session(topInventory);
-        if (session == null) {
-            return;
-        }
-
-        HumanEntity whoClicked = event.getWhoClicked();
-        if (!(whoClicked instanceof Player player) || sessions.get(player.getUniqueId()) != session || !session.matches(player, topInventory)) {
-            return;
-        }
-
-        event.setCancelled(true);
-        int rawSlot = event.getRawSlot();
-
-        if (session.state().reactive()) {
-            if (rawSlot < 0) {
-                handleReactiveOutsideClick(session, player, event);
+        inInventoryInteraction(() -> {
+            Inventory topInventory = event.getView().getTopInventory();
+            PaperMenuSession session = session(topInventory);
+            if (session == null) {
                 return;
             }
-            if (rawSlot < topInventory.getSize()) {
-                handleReactiveTopClick(session, player, rawSlot, event);
+
+            HumanEntity whoClicked = event.getWhoClicked();
+            if (!(whoClicked instanceof Player player) || sessions.get(player.getUniqueId()) != session || !session.matches(player, topInventory)) {
                 return;
             }
-            handleReactiveBottomClick(session, player, event);
-            return;
-        }
+            if (session.state().reactive()) {
+                trace(player, "click", () -> {
+                    MenuTrace.field("path", "reactive");
+                    MenuTrace.field("slot", event.getRawSlot());
+                    MenuTrace.title(session.state().currentFrame().title());
 
-        if (rawSlot < 0 || rawSlot >= topInventory.getSize()) {
-            return;
-        }
+                    event.setCancelled(true);
+                    int rawSlot = event.getRawSlot();
 
-        MenuClick click = toMenuClick(event);
-        if (click == null) {
-            return;
-        }
+                    if (rawSlot < 0) {
+                        MenuTrace.time("runtime.handleReactiveOutsideClick", () -> handleReactiveOutsideClick(session, player, event));
+                        return;
+                    }
+                    if (rawSlot < topInventory.getSize()) {
+                        MenuTrace.time("runtime.handleReactiveTopClick", () -> handleReactiveTopClick(session, player, rawSlot, event));
+                        return;
+                    }
+                    MenuTrace.time("runtime.handleReactiveBottomClick", () -> handleReactiveBottomClick(session, player, event));
+                });
+                return;
+            }
 
-        MenuInteraction interaction = session.state().interaction(rawSlot, click).orElse(null);
-        if (interaction == null) {
-            return;
-        }
+            event.setCancelled(true);
+            int rawSlot = event.getRawSlot();
+            if (rawSlot < 0 || rawSlot >= topInventory.getSize()) {
+                return;
+            }
 
-        handleDirectInteraction(session, player, click, interaction);
+            MenuClick click = toMenuClick(event);
+            if (click == null) {
+                return;
+            }
+
+            MenuInteraction interaction = session.state().interaction(rawSlot, click).orElse(null);
+            if (interaction == null) {
+                return;
+            }
+
+            trace(player, "click", () -> {
+                MenuTrace.field("path", "compiled");
+                MenuTrace.field("slot", rawSlot);
+                MenuTrace.field("button", click);
+                MenuTrace.title(session.state().currentFrame().title());
+
+                MenuTrace.time("runtime.handleDirectInteraction", () -> handleDirectInteraction(session, player, click, interaction));
+            });
+        });
     }
 
     void onInventoryDrag(InventoryDragEvent event) {
-        Inventory topInventory = event.getView().getTopInventory();
-        PaperMenuSession session = session(topInventory);
-        if (session == null || !session.state().reactive()) {
-            return;
-        }
-        HumanEntity whoClicked = event.getWhoClicked();
-        if (!(whoClicked instanceof Player player) || sessions.get(player.getUniqueId()) != session || !session.matches(player, topInventory)) {
-            return;
-        }
-
-        List<Integer> slots = new ArrayList<>();
-        for (int rawSlot : event.getRawSlots()) {
-            if (rawSlot >= 0 && rawSlot < topInventory.getSize()) {
-                slots.add(rawSlot);
+        inInventoryInteraction(() -> {
+            Inventory topInventory = event.getView().getTopInventory();
+            PaperMenuSession session = session(topInventory);
+            if (session == null || !session.state().reactive()) {
+                return;
             }
-        }
-        if (slots.isEmpty()) {
-            return;
-        }
+            HumanEntity whoClicked = event.getWhoClicked();
+            if (!(whoClicked instanceof Player player) || sessions.get(player.getUniqueId()) != session || !session.matches(player, topInventory)) {
+                return;
+            }
+            trace(player, "drag", () -> {
+                MenuTrace.field("path", "reactive");
+                MenuTrace.title(session.state().currentFrame().title());
 
-        MenuClick button = switch (event.getType()) {
-            case EVEN -> MenuClick.LEFT;
-            case SINGLE -> MenuClick.RIGHT;
-            default -> null;
-        };
-        if (button == null) {
-            return;
-        }
+                List<Integer> slots = new ArrayList<>();
+                for (int rawSlot : event.getRawSlots()) {
+                    if (rawSlot >= 0 && rawSlot < topInventory.getSize()) {
+                        slots.add(rawSlot);
+                    }
+                }
+                if (slots.isEmpty()) {
+                    return;
+                }
 
-        event.setCancelled(true);
-        handleReactiveInput(session, player, new ReactiveMenuInput.Drag(button, slots, toMenuStack(event.getOldCursor())), null);
+                MenuClick button = switch (event.getType()) {
+                    case EVEN -> MenuClick.LEFT;
+                    case SINGLE -> MenuClick.RIGHT;
+                    default -> null;
+                };
+                if (button == null) {
+                    return;
+                }
+                MenuTrace.field("button", button);
+                MenuTrace.setCount("dragSlots", slots.size());
+
+                event.setCancelled(true);
+                handleReactiveInput(session, player, new ReactiveMenuInput.Drag(button, slots, toMenuStack(event.getOldCursor())), null);
+            });
+        });
     }
 
     void onInventoryClose(InventoryCloseEvent event) {
@@ -160,10 +215,12 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (!(human instanceof Player player) || sessions.get(player.getUniqueId()) != session || !session.matches(player, topInventory)) {
             return;
         }
-
-        if (sessions.remove(player.getUniqueId(), session)) {
-            session.detach();
-        }
+        trace(player, "close", () -> {
+            MenuTrace.title(session.state().currentFrame().title());
+            if (sessions.remove(player.getUniqueId(), session)) {
+                MenuTrace.time("runtime.sessionDetach", session::detach);
+            }
+        });
     }
 
     void onPlayerDisconnect(Player player) {
@@ -181,9 +238,14 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (player == null) {
             return;
         }
-        if (!applyEffects(session, player, session.state().tick())) {
-            session.refresh(player);
-        }
+        trace(player, "tick", () -> {
+            MenuTrace.field("path", session.state().reactive() ? "reactive" : "compiled");
+            MenuTrace.title(session.state().currentFrame().title());
+            List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.stateTick", session.state()::tick);
+            if (!MenuTrace.time("runtime.applyEffects", () -> applyEffects(session, player, effects))) {
+                MenuTrace.time("session.refresh", () -> session.refresh(player));
+            }
+        });
     }
 
     void refresh(PaperMenuSession session) {
@@ -192,7 +254,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         }
         Player player = playerLookup.apply(session.viewerId());
         if (player != null) {
-            session.refresh(player);
+            MenuTrace.time("session.refresh", () -> session.refresh(player));
         }
     }
 
@@ -200,50 +262,83 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (sessions.get(session.viewerId()) != session) {
             return;
         }
-        session.state().openChild(menu);
-        Player player = playerLookup.apply(session.viewerId());
-        if (player != null) {
-            show(session, player, true);
-        }
+        MenuTrace.time("runtime.replace", () -> {
+            session.state().openChild(menu);
+            Player player = playerLookup.apply(session.viewerId());
+            if (player != null) {
+                show(session, player, true);
+            }
+        });
     }
 
     void back(PaperMenuSession session) {
         if (sessions.get(session.viewerId()) != session) {
             return;
         }
-        if (!session.state().back()) {
-            return;
-        }
-        Player player = playerLookup.apply(session.viewerId());
-        if (player != null) {
-            show(session, player, true);
-        }
+        MenuTrace.time("runtime.back", () -> {
+            if (!session.state().back()) {
+                return;
+            }
+            Player player = playerLookup.apply(session.viewerId());
+            if (player != null) {
+                show(session, player, true);
+            }
+        });
     }
 
     void close(PaperMenuSession session) {
         if (!sessions.remove(session.viewerId(), session)) {
             return;
         }
-        session.detach();
+        MenuTrace.time("runtime.close", session::detach);
         Player player = playerLookup.apply(session.viewerId());
         if (player != null) {
-            access.closeInventory(player);
+            if (shouldDeferInventoryTransitions()) {
+                Inventory closingInventory = session.inventory();
+                inventoryTaskScheduler.accept(MenuTrace.propagate(() -> {
+                    if (access.topInventory(player) == closingInventory) {
+                        MenuTrace.time("runtime.inventoryClose", () -> access.closeInventory(player));
+                    }
+                }));
+            } else {
+                MenuTrace.time("runtime.inventoryClose", () -> access.closeInventory(player));
+            }
         }
     }
 
     void render(Inventory inventory, List<MenuSlot> previousSlots, List<MenuSlot> nextSlots) {
+        long started = System.nanoTime();
+        int changedSlots = 0;
         for (int slot = 0; slot < nextSlots.size(); slot++) {
-            if (previousSlots == null || !nextSlots.get(slot).equals(previousSlots.get(slot))) {
-                inventory.setItem(slot, renderer.render(nextSlots.get(slot)));
+            MenuSlot nextSlot = nextSlots.get(slot);
+            if (previousSlots == null || !nextSlot.equals(previousSlots.get(slot))) {
+                changedSlots++;
+                int renderedSlot = slot;
+                long renderStarted = System.nanoTime();
+                ItemStack rendered = renderer.render(nextSlot);
+                long renderElapsed = System.nanoTime() - renderStarted;
+                MenuTrace.addDuration("runtime.slotRender", renderElapsed);
+                MenuTrace.detailIfSlow("slot-render", renderElapsed,
+                        () -> "slot=" + renderedSlot + " title=" + flatten(nextSlot.title()));
+
+                long patchStarted = System.nanoTime();
+                inventory.setItem(renderedSlot, rendered);
+                long patchElapsed = System.nanoTime() - patchStarted;
+                MenuTrace.addDuration("runtime.slotPatch", patchElapsed);
+                MenuTrace.detailIfSlow("slot-patch", patchElapsed,
+                        () -> "slot=" + renderedSlot + " title=" + flatten(nextSlot.title()));
             }
         }
+        MenuTrace.setCount("changedSlots", changedSlots);
+        MenuTrace.addDuration("runtime.inventoryPatch", System.nanoTime() - started);
     }
 
     void syncCursor(Player player, MenuStack previous, MenuStack next) {
         if (Objects.equals(previous, next)) {
             return;
         }
-        player.setItemOnCursor(next == null ? null : renderer.render(HouseMenuCompiler.compile(0, next)));
+        MenuTrace.time("runtime.cursorSync",
+                () -> player.setItemOnCursor(next == null ? null : renderer.render(HouseMenuCompiler.compile(0, next))));
     }
 
     PaperMenuAccess access() {
@@ -265,6 +360,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (click == null) {
             return;
         }
+        MenuTrace.field("button", click);
         handleReactiveInput(session, player, new ReactiveMenuInput.DropCursor(click, toMenuStack(event.getCursor())), null);
     }
 
@@ -273,9 +369,13 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (click == null) {
             return;
         }
+        MenuTrace.field("button", click);
         MenuInteraction interaction = session.state().interaction(rawSlot, click).orElse(null);
         if (interaction != null && !(interaction.action() instanceof MenuSlotAction.Dispatch)) {
             handleDirectInteraction(session, player, click, interaction);
+            return;
+        }
+        if (interaction == null && !session.state().acceptsReactiveClick(rawSlot)) {
             return;
         }
         Object message = interaction != null ? ((MenuSlotAction.Dispatch) interaction.action()).message() : null;
@@ -294,6 +394,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (click == null) {
             return;
         }
+        MenuTrace.field("button", click);
         int slot = event.getSlot();
         if (slot < 0) {
             return;
@@ -310,8 +411,9 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (interaction != null && interaction.action() instanceof MenuSlotAction.Dispatch) {
             playInteractionSound(player, interaction);
         }
-        if (!applyEffects(session, player, session.state().dispatchReactive(input))) {
-            session.refresh(player);
+        List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.reactiveDispatch", () -> session.state().dispatchReactive(input));
+        if (!MenuTrace.time("runtime.applyEffects", () -> applyEffects(session, player, effects))) {
+            MenuTrace.time("session.refresh", () -> session.refresh(player));
         }
     }
 
@@ -320,7 +422,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         switch (interaction.action()) {
             case MenuSlotAction.OpenFrame openFrame -> {
                 session.state().openFrame(openFrame.frameId());
-                session.refresh(player);
+                MenuTrace.time("session.refresh", () -> session.refresh(player));
             }
             case MenuSlotAction.Close ignored -> close(session);
             case MenuSlotAction.Execute execute -> {
@@ -328,7 +430,7 @@ final class PaperMenuRuntime implements AutoCloseable {
                 MenuContext context = new MenuContext(click, session.state().frameId(), session.state().values(), session);
                 execute.action().execute(context);
                 if (sessions.get(session.viewerId()) == session && session.actionVersion() == before) {
-                    session.refresh(player);
+                    MenuTrace.time("session.refresh", () -> session.refresh(player));
                 }
             }
             case MenuSlotAction.Dispatch ignored -> {
@@ -363,10 +465,29 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     private void show(PaperMenuSession session, Player player, boolean activate) {
-        if (activate && applyEffects(session, player, session.state().opened())) {
+        if (activate) {
+            List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.stateOpened", session.state()::opened);
+            if (MenuTrace.time("runtime.applyEffects", () -> applyEffects(session, player, effects))) {
+                return;
+            }
+        }
+        MenuTrace.time("session.refresh", () -> session.refresh(player));
+    }
+
+    boolean shouldDeferInventoryTransitions() {
+        return inventoryInteractionDepth > 0;
+    }
+
+    void openInventory(PaperMenuSession session, Player player, Inventory inventory) {
+        if (!shouldDeferInventoryTransitions()) {
+            MenuTrace.time("runtime.inventoryOpen", () -> access.openInventory(player, inventory));
             return;
         }
-        session.refresh(player);
+        inventoryTaskScheduler.accept(MenuTrace.propagate(() -> {
+            if (sessions.get(session.viewerId()) == session && session.inventory() == inventory) {
+                MenuTrace.time("runtime.inventoryOpen", () -> access.openInventory(player, inventory));
+            }
+        }));
     }
 
     private PaperMenuSession session(Inventory inventory) {
@@ -425,5 +546,22 @@ final class PaperMenuRuntime implements AutoCloseable {
             }
         }
         return builder.toString();
+    }
+
+    private void trace(Player player, String cause, Runnable action) {
+        MenuTrace.withTrace(traceController, traceSink, "paper", player.getUniqueId(), cause, action);
+    }
+
+    private static String flatten(Component component) {
+        return PLAIN_TEXT.serialize(component);
+    }
+
+    private void inInventoryInteraction(Runnable action) {
+        inventoryInteractionDepth++;
+        try {
+            action.run();
+        } finally {
+            inventoryInteractionDepth--;
+        }
     }
 }

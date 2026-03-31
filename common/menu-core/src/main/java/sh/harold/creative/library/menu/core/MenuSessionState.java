@@ -24,10 +24,13 @@ import sh.harold.creative.library.menu.ReactiveMenuView;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -37,6 +40,7 @@ public final class MenuSessionState {
 
     private final Map<String, Object> values = new ConcurrentHashMap<>();
     private final Deque<HistoryEntry> history = new ArrayDeque<>();
+    private final Map<ReactivePlacementKey, MenuSlot> reactivePlacementCache = new HashMap<>();
     private final AtomicLong revision = new AtomicLong();
     private volatile SessionEntry current;
     private volatile boolean autoBackEligible;
@@ -74,7 +78,7 @@ public final class MenuSessionState {
     }
 
     public MenuFrame currentFrame() {
-        return currentView().frame();
+        return MenuTrace.time("state.currentFrame", () -> currentView().frame());
     }
 
     MenuSessionView currentView() {
@@ -82,7 +86,7 @@ public final class MenuSessionState {
         if (view != null) {
             return view;
         }
-        view = buildCurrentView();
+        view = MenuTrace.time("state.currentView", this::buildCurrentView);
         cachedView = view;
         return view;
     }
@@ -93,6 +97,10 @@ public final class MenuSessionState {
 
     public Optional<MenuInteraction> interaction(int slot, MenuClick click) {
         return slot(slot).map(menuSlot -> menuSlot.interactions().get(click));
+    }
+
+    public boolean acceptsReactiveClick(int slot) {
+        return currentView().acceptsReactiveClick(slot);
     }
 
     public MenuStack cursor() {
@@ -139,18 +147,20 @@ public final class MenuSessionState {
     }
 
     public List<ReactiveMenuEffect> opened() {
-        return dispatchLifecycle(new ReactiveMenuInput.Opened());
+        return MenuTrace.time("state.opened", () -> dispatchLifecycle(new ReactiveMenuInput.Opened()));
     }
 
     public void closed() {
-        dispatchLifecycle(new ReactiveMenuInput.Closed());
+        MenuTrace.time("state.closed", () -> {
+            dispatchLifecycle(new ReactiveMenuInput.Closed());
+        });
     }
 
     public List<ReactiveMenuEffect> tick() {
         if (!(current instanceof ReactiveEntry reactive)) {
             return List.of();
         }
-        return dispatchLifecycle(new ReactiveMenuInput.Tick(reactive.tick() + 1L));
+        return MenuTrace.time("state.tick", () -> dispatchLifecycle(new ReactiveMenuInput.Tick(reactive.tick() + 1L)));
     }
 
     public List<ReactiveMenuEffect> dispatchReactive(ReactiveMenuInput input) {
@@ -158,7 +168,7 @@ public final class MenuSessionState {
         if (!(current instanceof ReactiveEntry)) {
             return List.of();
         }
-        return dispatchLifecycle(input);
+        return MenuTrace.time("state.dispatchReactive", () -> dispatchLifecycle(input));
     }
 
     private List<ReactiveMenuEffect> dispatchLifecycle(ReactiveMenuInput input) {
@@ -194,6 +204,7 @@ public final class MenuSessionState {
         MenuSessionView view;
         if (current instanceof CompiledEntry compiled) {
             MenuFrame frame = compiled.menu().frame(compiled.frameId());
+            MenuTrace.title(frame.title());
             view = new MenuSessionView(frame.title(), frame.slots(), null);
         } else if (current instanceof ReactiveEntry reactive) {
             view = buildReactiveView(reactive.menu(), reactive.state());
@@ -203,26 +214,52 @@ public final class MenuSessionState {
         if (!autoBackEligible || history.isEmpty()) {
             return view;
         }
-        return overlayBack(view, history.peekFirst().titleSnapshot());
+        return MenuTrace.time("state.overlayBack", () -> overlayBack(view, history.peekFirst().titleSnapshot()));
     }
 
     private MenuSessionView buildReactiveView(ReactiveMenuDefinition menu, Object state) {
-        ReactiveMenuView rendered = menu.render(state);
+        ReactiveMenuView rendered = MenuTrace.time("state.reactive.render", () -> menu.render(state));
+        MenuTrace.title(rendered.title());
+        MenuTrace.setCount("placementCount", rendered.placements().size());
         boolean fillWithBlackPane = rendered.fillWithBlackPane() != null ? rendered.fillWithBlackPane() : menu.fillWithBlackPane();
-        List<MenuSlot> baseSlots = menu.baseSlots(fillWithBlackPane);
+        List<MenuSlot> baseSlots = MenuTrace.time("state.reactive.baseSlots", () -> menu.baseSlots(fillWithBlackPane));
         int size = baseSlots.size();
+        int placementCompileHits = 0;
+        int placementCompileMisses = 0;
         if (rendered.placements().isEmpty()) {
+            MenuTrace.setCount("placementCompileHits", placementCompileHits);
+            MenuTrace.setCount("placementCompileMisses", placementCompileMisses);
             return new MenuSessionView(rendered.title(), baseSlots, rendered.cursor());
         }
         List<MenuSlot> slots = new ArrayList<>(baseSlots);
+        Set<Integer> reactiveClickTargets = new HashSet<>();
         for (Map.Entry<Integer, MenuItem> entry : rendered.placements().entrySet()) {
             int slot = entry.getKey();
+            MenuItem item = entry.getValue();
             if (slot < 0 || slot >= size) {
                 throw new IllegalArgumentException("Reactive view slot " + slot + " is outside a " + menu.rows() + "-row menu");
             }
-            slots.set(slot, HouseMenuCompiler.compile(slot, entry.getValue()));
+            ReactivePlacementKey cacheKey = new ReactivePlacementKey(slot, item);
+            MenuSlot compiled = reactivePlacementCache.get(cacheKey);
+            if (compiled != null) {
+                placementCompileHits++;
+            } else {
+                placementCompileMisses++;
+                long started = System.nanoTime();
+                compiled = HouseMenuCompiler.compile(slot, item);
+                long elapsed = System.nanoTime() - started;
+                reactivePlacementCache.put(cacheKey, compiled);
+                MenuTrace.addDuration("state.reactive.compilePlacements", elapsed);
+                MenuSlot compiledSlot = compiled;
+                MenuTrace.detailIfSlow("placement-compile", elapsed,
+                        () -> "slot=" + slot + " title=" + ComponentText.flatten(compiledSlot.title()));
+            }
+            slots.set(slot, compiled);
+            reactiveClickTargets.add(slot);
         }
-        return new MenuSessionView(rendered.title(), List.copyOf(slots), rendered.cursor());
+        MenuTrace.setCount("placementCompileHits", placementCompileHits);
+        MenuTrace.setCount("placementCompileMisses", placementCompileMisses);
+        return new MenuSessionView(rendered.title(), List.copyOf(slots), rendered.cursor(), reactiveClickTargets);
     }
 
     private void invalidate() {
@@ -237,7 +274,7 @@ public final class MenuSessionState {
         }
         List<MenuSlot> slots = new ArrayList<>(view.slots());
         slots.set(backSlot, backButton(backSlot, previousTitle));
-        return new MenuSessionView(view.title(), slots, view.cursor());
+        return new MenuSessionView(view.title(), slots, view.cursor(), view.reactiveClickTargets());
     }
 
     private static MenuSlot backButton(int slot, Component previousMenuTitle) {
@@ -277,5 +314,32 @@ public final class MenuSessionState {
     }
 
     private record HistoryEntry(SessionEntry entry, boolean autoBackEligible, Component titleSnapshot) {
+    }
+
+    private static final class ReactivePlacementKey {
+
+        private final int slot;
+        private final MenuItem item;
+
+        private ReactivePlacementKey(int slot, MenuItem item) {
+            this.slot = slot;
+            this.item = Objects.requireNonNull(item, "item");
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof ReactivePlacementKey key)) {
+                return false;
+            }
+            return slot == key.slot && item == key.item;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * slot + System.identityHashCode(item);
+        }
     }
 }

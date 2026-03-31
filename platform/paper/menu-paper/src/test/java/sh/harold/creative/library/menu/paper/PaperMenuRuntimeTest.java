@@ -28,6 +28,7 @@ import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
+import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
@@ -42,6 +43,8 @@ import sh.harold.creative.library.sound.SoundCueService;
 import sh.harold.creative.library.sound.core.StandardSoundCueRegistry;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -376,6 +379,151 @@ class PaperMenuRuntimeTest {
         assertEquals("Cursor Item", slotTitle(access, inventory, 31));
     }
 
+    @Test
+    void reactiveMenusIgnoreInertBaseChromeClicks() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveClickRoutingMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        assertEquals("Placed Clicks: 0", slotTitle(access, inventory, 22));
+
+        runtime.onInventoryClick(click(player, inventory, 0, ClickType.LEFT));
+        assertEquals("Placed Clicks: 0", slotTitle(access, inventory, 22));
+
+        runtime.onInventoryClick(click(player, inventory, 22, ClickType.LEFT));
+        assertEquals("Placed Clicks: 1", slotTitle(access, inventory, 22));
+    }
+
+    @Test
+    void inventoryTransitionsFromClickAreDeferredUntilScheduled() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), scheduled::addLast);
+
+        runtime.open(player, launcherMenu());
+        Inventory rootInventory = access.lastOpenedInventory();
+
+        InventoryClickEvent openChild = click(player, rootInventory, 10, ClickType.LEFT);
+        runtime.onInventoryClick(openChild);
+
+        assertTrue(openChild.isCancelled());
+        assertEquals(1, access.openedInventories.size());
+        assertEquals(1, scheduled.size());
+
+        scheduled.removeFirst().run();
+
+        assertEquals(2, access.openedInventories.size());
+        assertEquals("Gallery", inventoryTitle(access, access.lastOpenedInventory()));
+    }
+
+    @Test
+    void inventoryCloseFromClickIsDeferredUntilScheduled() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), scheduled::addLast);
+
+        runtime.open(player, pagedMenu());
+        Inventory inventory = access.lastOpenedInventory();
+
+        InventoryClickEvent close = click(player, inventory, 49, ClickType.LEFT);
+        runtime.onInventoryClick(close);
+
+        assertTrue(close.isCancelled());
+        assertTrue(access.closedPlayers.isEmpty());
+        assertEquals(1, scheduled.size());
+
+        scheduled.removeFirst().run();
+
+        assertEquals(List.of(viewerId), access.closedPlayers);
+    }
+
+    @Test
+    void traceLogsReactiveOpenAndClickSummariesWhenEnabled() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        MenuTraceController trace = new MenuTraceController();
+        trace.traceAll();
+        List<String> logs = new ArrayList<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                Runnable::run, trace, logs::add);
+
+        runtime.open(player, reactiveClickRoutingMenu());
+
+        String openSummary = summaryLine(logs, "open");
+        assertTrue(openSummary.contains("host=\"paper\""));
+        assertTrue(openSummary.contains("menu=\"Reactive Routing\""));
+        assertTrue(openSummary.contains("placementCount=\"1\""));
+        assertTrue(openSummary.contains("runtime.inventoryPatch="));
+
+        logs.clear();
+        Inventory inventory = access.lastOpenedInventory();
+        runtime.onInventoryClick(click(player, inventory, 22, ClickType.LEFT));
+
+        String clickSummary = summaryLine(logs, "click");
+        assertTrue(clickSummary.contains("menu=\"Reactive Routing\""));
+        assertTrue(clickSummary.contains("button=\"LEFT\""));
+        assertTrue(clickSummary.contains("runtime.reactiveDispatch="));
+    }
+
+    @Test
+    void traceFiltersByMenuTitle() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        MenuTraceController trace = new MenuTraceController();
+        trace.traceMenuTitles(List.of("Reactive Routing"));
+        List<String> logs = new ArrayList<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                Runnable::run, trace, logs::add);
+
+        runtime.open(player, pagedMenu());
+        assertTrue(logs.isEmpty());
+
+        runtime.open(player, reactiveClickRoutingMenu());
+        assertTrue(logs.stream().anyMatch(line -> line.startsWith("summary ") && line.contains("menu=\"Reactive Routing\"")));
+    }
+
+    @Test
+    void inertCompiledChromeClicksDoNotEmitTraceSummaries() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        MenuTraceController trace = new MenuTraceController();
+        trace.traceAll();
+        List<String> logs = new ArrayList<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                Runnable::run, trace, logs::add);
+
+        runtime.open(player, overflowGalleryMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        runtime.onInventoryClick(click(player, inventory, 8, ClickType.RIGHT));
+
+        assertEquals("Tab 3", slotTitle(access, inventory, 1));
+        assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
+
+        logs.clear();
+        InventoryClickEvent inert = click(player, inventory, 8, ClickType.LEFT);
+        runtime.onInventoryClick(inert);
+
+        assertTrue(inert.isCancelled());
+        assertTrue(logs.isEmpty());
+        assertEquals("Tab 3", slotTitle(access, inventory, 1));
+        assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
+    }
+
     private static Menu pagedMenu() {
         return new StandardMenuService().list()
                 .title("Profiles")
@@ -548,6 +696,29 @@ class PaperMenuRuntimeTest {
                 .build();
     }
 
+    private static ReactiveMenu reactiveClickRoutingMenu() {
+        return new StandardMenuService().reactive()
+                .state(new StoredState(null))
+                .render(state -> ReactiveMenuView.builder("Reactive Routing")
+                        .place(22, MenuDisplayItem.builder(MenuIcon.vanilla("stone"))
+                                .name("Placed Clicks: " + (state.stored() == null ? 0 : state.stored().amount()))
+                                .description("Only the authored slot should reach the reducer.")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click click && click.slot() == 22) {
+                        int nextCount = state.stored() == null ? 1 : state.stored().amount() + 1;
+                        MenuStack counter = MenuStack.builder(MenuIcon.vanilla("stone"))
+                                .name("Count " + nextCount)
+                                .amount(nextCount)
+                                .build();
+                        return ReactiveMenuResult.stay(new StoredState(counter));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+    }
+
     private static Player player(UUID uuid) {
         Player player = mock(Player.class);
         when(player.getUniqueId()).thenReturn(uuid);
@@ -624,9 +795,18 @@ class PaperMenuRuntimeTest {
         }
     }
 
+    private static String summaryLine(List<String> logs, String cause) {
+        return logs.stream()
+                .filter(line -> line.startsWith("summary "))
+                .filter(line -> line.contains("cause=\"" + cause + "\""))
+                .findFirst()
+                .orElseThrow();
+    }
+
     private static final class TestPaperMenuAccess implements PaperMenuAccess {
 
         private final Map<Inventory, InventoryModel> models = new IdentityHashMap<>();
+        private final Map<Player, Inventory> topInventories = new IdentityHashMap<>();
         private final List<Inventory> openedInventories = new ArrayList<>();
         private final List<UUID> closedPlayers = new ArrayList<>();
 
@@ -647,12 +827,19 @@ class PaperMenuRuntimeTest {
 
         @Override
         public void openInventory(Player player, Inventory inventory) {
+            topInventories.put(player, inventory);
             openedInventories.add(inventory);
         }
 
         @Override
         public void closeInventory(Player player) {
+            topInventories.remove(player);
             closedPlayers.add(player.getUniqueId());
+        }
+
+        @Override
+        public Inventory topInventory(Player player) {
+            return topInventories.get(player);
         }
 
         Inventory lastOpenedInventory() {

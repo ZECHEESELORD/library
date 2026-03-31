@@ -2,6 +2,7 @@ package sh.harold.creative.library.example.minestom;
 
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.minestom.server.entity.Player;
+import sh.harold.creative.library.menu.MenuTraceSnapshot;
 import sh.harold.creative.library.message.Message;
 import sh.harold.creative.library.message.SlotBinding;
 import sh.harold.creative.library.message.minestom.MinestomMessageSender;
@@ -46,6 +47,10 @@ final class MinestomDevHarnessMessages {
                         Message.slot("command", command("/testmenus"))
                 )
                 .bullet(
+                        "{command} trace off|all|lockdrag|lockclick|status",
+                        Message.slot("command", command("/testmenus"))
+                )
+                .bullet(
                         "{command} all|notices|topics|clicks|block",
                         Message.slot("command", command("/testmessages"))
                 )
@@ -72,7 +77,40 @@ final class MinestomDevHarnessMessages {
                 .build());
     }
 
+    void sendMenuTraceUpdated(Player player, String status) {
+        success(
+                player,
+                "Menu tracing is now {status}. Logs print to the server console.",
+                Message.slot("status", Message.value(status).color(NamedTextColor.YELLOW))
+        );
+    }
+
+    void sendMenuTraceStatus(Player player, MenuTraceSnapshot snapshot) {
+        info(
+                player,
+                "Menu tracing is {status}. Use {command} trace off|all|lockdrag|lockclick.",
+                Message.slot("status", Message.value(traceStatus(snapshot)).color(NamedTextColor.YELLOW)),
+                Message.slot("command", command("/testmenus"))
+        );
+    }
+
     sh.harold.creative.library.message.MessageValue command(String literal) {
         return Message.value(literal).color(NamedTextColor.YELLOW);
+    }
+
+    private static String traceStatus(MenuTraceSnapshot snapshot) {
+        if (!snapshot.enabled()) {
+            return "off";
+        }
+        if (snapshot.allMenus()) {
+            return "all";
+        }
+        if (snapshot.menuTitles().stream().anyMatch(title -> title.equalsIgnoreCase(MinestomMenuExampleMenus.LOCK_DRAG_TITLE))) {
+            return "lockdrag";
+        }
+        if (snapshot.menuTitles().stream().anyMatch(title -> title.equalsIgnoreCase(MinestomMenuExampleMenus.LOCK_CLICK_TITLE))) {
+            return "lockclick";
+        }
+        return String.join(",", snapshot.menuTitles());
     }
 }

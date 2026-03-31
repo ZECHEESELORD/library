@@ -24,6 +24,8 @@ public final class MinestomMenuExamplesCommand extends Command {
 
         var variant = ArgumentType.Word("variant")
                 .from("tabs", "list", "reactive", "snake", "lockdrag", "lockclick", "profile", "farming", "museum", "slot5", "canvas", "help");
+        var traceAction = ArgumentType.Word("traceAction").from("trace");
+        var traceMode = ArgumentType.Word("traceMode").from("off", "all", "lockdrag", "lockclick", "status");
         addSyntax((sender, context) -> {
             Player player = MinestomCommandPlayers.requirePlayer(sender);
             if (player == null) {
@@ -46,5 +48,33 @@ public final class MinestomMenuExamplesCommand extends Command {
                 default -> throw new IllegalStateException("Unhandled menu variant");
             }
         }, variant);
+
+        addSyntax((sender, context) -> {
+            Player player = MinestomCommandPlayers.requirePlayer(sender);
+            if (player == null) {
+                return;
+            }
+
+            switch (context.get(traceMode)) {
+                case "off" -> {
+                    menus.trace().disable();
+                    feedback.sendMenuTraceUpdated(player, "off");
+                }
+                case "all" -> {
+                    menus.trace().traceAll();
+                    feedback.sendMenuTraceUpdated(player, "all");
+                }
+                case "lockdrag" -> {
+                    menus.trace().traceMenuTitles(java.util.List.of(MinestomMenuExampleMenus.LOCK_DRAG_TITLE));
+                    feedback.sendMenuTraceUpdated(player, "lockdrag");
+                }
+                case "lockclick" -> {
+                    menus.trace().traceMenuTitles(java.util.List.of(MinestomMenuExampleMenus.LOCK_CLICK_TITLE));
+                    feedback.sendMenuTraceUpdated(player, "lockclick");
+                }
+                case "status" -> feedback.sendMenuTraceStatus(player, menus.trace().snapshot());
+                default -> throw new IllegalStateException("Unhandled trace mode");
+            }
+        }, traceAction, traceMode);
     }
 }

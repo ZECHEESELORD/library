@@ -12,4 +12,6 @@ interface PaperMenuAccess {
     void openInventory(Player player, Inventory inventory);
 
     void closeInventory(Player player);
+
+    Inventory topInventory(Player player);
 }

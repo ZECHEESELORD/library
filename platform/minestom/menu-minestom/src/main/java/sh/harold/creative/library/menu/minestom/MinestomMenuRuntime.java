@@ -2,6 +2,7 @@ package sh.harold.creative.library.menu.minestom;
 
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.minestom.server.component.DataComponents;
 import net.minestom.server.entity.Player;
 import net.minestom.server.event.Event;
@@ -23,9 +24,11 @@ import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuSlotAction;
 import sh.harold.creative.library.menu.MenuStack;
+import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.core.HouseMenuCompiler;
+import sh.harold.creative.library.menu.core.MenuTrace;
 import sh.harold.creative.library.menu.core.MenuSessionState;
 import sh.harold.creative.library.menu.core.MenuTickScheduler;
 import sh.harold.creative.library.sound.SoundCueService;
@@ -35,22 +38,34 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 final class MinestomMenuRuntime implements AutoCloseable {
+
+    private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
 
     private final Map<UUID, MinestomMenuSession> sessions = new ConcurrentHashMap<>();
     private final MinestomMenuRenderer renderer;
     private final SoundCueService sounds;
     private final MenuTickScheduler tickScheduler;
+    private final MenuTraceController traceController;
+    private final Consumer<String> traceSink;
 
     MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds) {
-        this(renderer, sounds, MenuTickScheduler.unsupported());
+        this(renderer, sounds, MenuTickScheduler.unsupported(), new MenuTraceController(), message -> { });
     }
 
     MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds, MenuTickScheduler tickScheduler) {
+        this(renderer, sounds, tickScheduler, new MenuTraceController(), message -> { });
+    }
+
+    MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds, MenuTickScheduler tickScheduler,
+                        MenuTraceController traceController, Consumer<String> traceSink) {
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.sounds = Objects.requireNonNull(sounds, "sounds");
         this.tickScheduler = Objects.requireNonNull(tickScheduler, "tickScheduler");
+        this.traceController = Objects.requireNonNull(traceController, "traceController");
+        this.traceSink = Objects.requireNonNull(traceSink, "traceSink");
     }
 
     EventNode<Event> createEventNode(String name) {
@@ -64,13 +79,17 @@ final class MinestomMenuRuntime implements AutoCloseable {
     void open(Player player, MenuDefinition menu) {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(menu, "menu");
-        MinestomMenuSession previous = sessions.remove(player.getUuid());
-        if (previous != null) {
-            previous.detach();
-        }
-        MinestomMenuSession session = new MinestomMenuSession(this, player, new MenuSessionState(menu));
-        sessions.put(player.getUuid(), session);
-        show(session, true);
+        trace(player, "open", () -> {
+            MinestomMenuSession previous = sessions.remove(player.getUuid());
+            if (previous != null) {
+                MenuTrace.time("runtime.detachPrevious", previous::detach);
+            }
+            MinestomMenuSession session = MenuTrace.time("runtime.createSession",
+                    () -> new MinestomMenuSession(this, player, new MenuSessionState(menu)));
+            MenuTrace.field("path", session.state().reactive() ? "reactive" : "compiled");
+            sessions.put(player.getUuid(), session);
+            MenuTrace.time("runtime.show", () -> show(session, true));
+        });
     }
 
     void onInventoryPreClick(InventoryPreClickEvent event) {
@@ -80,13 +99,19 @@ final class MinestomMenuRuntime implements AutoCloseable {
             return;
         }
         Inventory inventory = session.inventory();
-
-        event.setCancelled(true);
         if (session.state().reactive()) {
-            handleReactiveClick(session, event, inventory);
+            trace(player, cause(event.getClick()), () -> {
+                MenuTrace.field("path", "reactive");
+                MenuTrace.field("slot", event.getSlot());
+                MenuTrace.title(session.state().currentFrame().title());
+
+                event.setCancelled(true);
+                MenuTrace.time("runtime.handleReactiveClick", () -> handleReactiveClick(session, event, inventory));
+            });
             return;
         }
 
+        event.setCancelled(true);
         if (event.getInventory() != inventory) {
             return;
         }
@@ -102,7 +127,14 @@ final class MinestomMenuRuntime implements AutoCloseable {
             return;
         }
 
-        handleDirectInteraction(session, click, interaction);
+        trace(player, cause(event.getClick()), () -> {
+            MenuTrace.field("path", "compiled");
+            MenuTrace.field("slot", slot);
+            MenuTrace.field("button", click);
+            MenuTrace.title(session.state().currentFrame().title());
+
+            MenuTrace.time("runtime.handleDirectInteraction", () -> handleDirectInteraction(session, click, interaction));
+        });
     }
 
     void onInventoryClose(InventoryCloseEvent event) {
@@ -113,9 +145,12 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (session == null) {
             return;
         }
-        if (sessions.remove(event.getPlayer().getUuid(), session)) {
-            session.detach();
-        }
+        trace(event.getPlayer(), "close", () -> {
+            MenuTrace.title(session.state().currentFrame().title());
+            if (sessions.remove(event.getPlayer().getUuid(), session)) {
+                MenuTrace.time("runtime.sessionDetach", session::detach);
+            }
+        });
     }
 
     void onPlayerDisconnect(PlayerDisconnectEvent event) {
@@ -129,57 +164,90 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (sessions.get(session.viewer().getUuid()) != session) {
             return;
         }
-        if (!applyEffects(session, session.state().tick())) {
-            session.renderCurrentView();
-        }
+        trace(session.viewer(), "tick", () -> {
+            MenuTrace.field("path", session.state().reactive() ? "reactive" : "compiled");
+            MenuTrace.title(session.state().currentFrame().title());
+            List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.stateTick", session.state()::tick);
+            if (!MenuTrace.time("runtime.applyEffects", () -> applyEffects(session, effects))) {
+                MenuTrace.time("session.renderCurrentView", session::renderCurrentView);
+            }
+        });
     }
 
     void refresh(MinestomMenuSession session) {
         if (sessions.get(session.viewer().getUuid()) != session) {
             return;
         }
-        session.renderCurrentView();
+        MenuTrace.time("session.renderCurrentView", session::renderCurrentView);
     }
 
     void replace(MinestomMenuSession session, MenuDefinition menu) {
         if (sessions.get(session.viewer().getUuid()) != session) {
             return;
         }
-        session.state().openChild(menu);
-        show(session, true);
+        MenuTrace.time("runtime.replace", () -> {
+            session.state().openChild(menu);
+            show(session, true);
+        });
     }
 
     void back(MinestomMenuSession session) {
         if (sessions.get(session.viewer().getUuid()) != session) {
             return;
         }
-        if (!session.state().back()) {
-            return;
-        }
-        show(session, true);
+        MenuTrace.time("runtime.back", () -> {
+            if (!session.state().back()) {
+                return;
+            }
+            show(session, true);
+        });
     }
 
     void close(MinestomMenuSession session) {
         if (!sessions.remove(session.viewer().getUuid(), session)) {
             return;
         }
-        session.detach();
-        session.viewer().closeInventory();
+        MenuTrace.time("runtime.close", () -> {
+            session.detach();
+            MenuTrace.time("runtime.inventoryClose", () -> {
+                session.viewer().closeInventory();
+            });
+        });
     }
 
     void render(Inventory inventory, List<MenuSlot> previousSlots, List<MenuSlot> nextSlots) {
+        long started = System.nanoTime();
+        int changedSlots = 0;
         for (int slot = 0; slot < nextSlots.size(); slot++) {
-            if (previousSlots == null || !nextSlots.get(slot).equals(previousSlots.get(slot))) {
-                inventory.setItemStack(slot, renderer.render(nextSlots.get(slot)));
+            MenuSlot nextSlot = nextSlots.get(slot);
+            if (previousSlots == null || !nextSlot.equals(previousSlots.get(slot))) {
+                changedSlots++;
+                int renderedSlot = slot;
+                long renderStarted = System.nanoTime();
+                ItemStack rendered = renderer.render(nextSlot);
+                long renderElapsed = System.nanoTime() - renderStarted;
+                MenuTrace.addDuration("runtime.slotRender", renderElapsed);
+                MenuTrace.detailIfSlow("slot-render", renderElapsed,
+                        () -> "slot=" + renderedSlot + " title=" + flatten(nextSlot.title()));
+
+                long patchStarted = System.nanoTime();
+                inventory.setItemStack(renderedSlot, rendered);
+                long patchElapsed = System.nanoTime() - patchStarted;
+                MenuTrace.addDuration("runtime.slotPatch", patchElapsed);
+                MenuTrace.detailIfSlow("slot-patch", patchElapsed,
+                        () -> "slot=" + renderedSlot + " title=" + flatten(nextSlot.title()));
             }
         }
+        MenuTrace.setCount("changedSlots", changedSlots);
+        MenuTrace.addDuration("runtime.inventoryPatch", System.nanoTime() - started);
     }
 
     void syncCursor(Player player, MenuStack previous, MenuStack next) {
         if (Objects.equals(previous, next)) {
             return;
         }
-        player.getInventory().setCursorItem(next == null ? ItemStack.AIR : renderer.render(HouseMenuCompiler.compile(0, next)));
+        MenuTrace.time("runtime.cursorSync", () ->
+                player.getInventory().setCursorItem(next == null ? ItemStack.AIR : renderer.render(HouseMenuCompiler.compile(0, next))));
     }
 
     MenuTickScheduler tickScheduler() {
@@ -195,20 +263,24 @@ final class MinestomMenuRuntime implements AutoCloseable {
     private void handleReactiveClick(MinestomMenuSession session, InventoryPreClickEvent event, Inventory inventory) {
         Click click = event.getClick();
         if (click instanceof Click.LeftDrag leftDrag) {
+            MenuTrace.field("button", MenuClick.LEFT);
             handleReactiveDrag(session, MenuClick.LEFT, leftDrag.slots(), inventory);
             return;
         }
         if (click instanceof Click.RightDrag rightDrag) {
+            MenuTrace.field("button", MenuClick.RIGHT);
             handleReactiveDrag(session, MenuClick.RIGHT, rightDrag.slots(), inventory);
             return;
         }
         if (click instanceof Click.LeftDropCursor) {
+            MenuTrace.field("button", MenuClick.LEFT);
             handleReactiveInput(session, new ReactiveMenuInput.DropCursor(
                     MenuClick.LEFT,
                     toMenuStack(session.viewer().getInventory().getCursorItem())), null);
             return;
         }
         if (click instanceof Click.RightDropCursor) {
+            MenuTrace.field("button", MenuClick.RIGHT);
             handleReactiveInput(session, new ReactiveMenuInput.DropCursor(
                     MenuClick.RIGHT,
                     toMenuStack(session.viewer().getInventory().getCursorItem())), null);
@@ -219,6 +291,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (button == null) {
             return;
         }
+        MenuTrace.field("button", button);
 
         AbstractInventory clickedInventory = event.getInventory();
         int slot = event.getSlot();
@@ -226,6 +299,9 @@ final class MinestomMenuRuntime implements AutoCloseable {
             MenuInteraction interaction = session.state().interaction(slot, button).orElse(null);
             if (interaction != null && !(interaction.action() instanceof MenuSlotAction.Dispatch)) {
                 handleDirectInteraction(session, button, interaction);
+                return;
+            }
+            if (interaction == null && !session.state().acceptsReactiveClick(slot)) {
                 return;
             }
             Object message = interaction != null ? ((MenuSlotAction.Dispatch) interaction.action()).message() : null;
@@ -277,8 +353,9 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (interaction != null && interaction.action() instanceof MenuSlotAction.Dispatch) {
             playInteractionSound(session.viewer(), interaction);
         }
-        if (!applyEffects(session, session.state().dispatchReactive(input))) {
-            session.renderCurrentView();
+        List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.reactiveDispatch", () -> session.state().dispatchReactive(input));
+        if (!MenuTrace.time("runtime.applyEffects", () -> applyEffects(session, effects))) {
+            MenuTrace.time("session.renderCurrentView", session::renderCurrentView);
         }
     }
 
@@ -330,10 +407,13 @@ final class MinestomMenuRuntime implements AutoCloseable {
     }
 
     private void show(MinestomMenuSession session, boolean activate) {
-        if (activate && applyEffects(session, session.state().opened())) {
-            return;
+        if (activate) {
+            List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.stateOpened", session.state()::opened);
+            if (MenuTrace.time("runtime.applyEffects", () -> applyEffects(session, effects))) {
+                return;
+            }
         }
-        session.renderCurrentView();
+        MenuTrace.time("session.renderCurrentView", session::renderCurrentView);
     }
 
     private MinestomMenuSession session(Player player, Inventory inventory) {
@@ -393,5 +473,23 @@ final class MinestomMenuRuntime implements AutoCloseable {
             }
         }
         return builder.toString();
+    }
+
+    private void trace(Player player, String cause, Runnable action) {
+        MenuTrace.withTrace(traceController, traceSink, "minestom", player.getUuid(), cause, action);
+    }
+
+    private static String cause(Click click) {
+        if (click instanceof Click.LeftDrag || click instanceof Click.RightDrag) {
+            return "drag";
+        }
+        if (click instanceof Click.LeftDropCursor || click instanceof Click.RightDropCursor) {
+            return "drop-cursor";
+        }
+        return "click";
+    }
+
+    private static String flatten(Component component) {
+        return PLAIN_TEXT.serialize(component);
     }
 }

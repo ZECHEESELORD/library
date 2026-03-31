@@ -26,6 +26,7 @@ import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
+import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
@@ -330,6 +331,92 @@ class MinestomMenuRuntimeTest {
         assertEquals("Cursor Item", slotTitle(inventory, 31));
     }
 
+    @Test
+    void reactiveMenusIgnoreInertBaseChromeClicks() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveClickRoutingMenu());
+        Inventory inventory = player.lastOpenedInventory();
+        assertEquals("Placed Clicks: 0", slotTitle(inventory, 22));
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(0)));
+        assertEquals("Placed Clicks: 0", slotTitle(inventory, 22));
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(22)));
+        assertEquals("Placed Clicks: 1", slotTitle(inventory, 22));
+    }
+
+    @Test
+    void traceLogsReactiveOpenAndClickSummariesWhenEnabled() {
+        TestPlayer player = player();
+        MenuTraceController trace = new MenuTraceController();
+        trace.traceAll();
+        List<String> logs = new ArrayList<>();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService(),
+                sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), trace, logs::add);
+
+        runtime.open(player, reactiveClickRoutingMenu());
+
+        String openSummary = summaryLine(logs, "open");
+        assertTrue(openSummary.contains("host=\"minestom\""));
+        assertTrue(openSummary.contains("menu=\"Reactive Routing\""));
+        assertTrue(openSummary.contains("placementCount=\"1\""));
+        assertTrue(openSummary.contains("changedSlots="));
+        assertTrue(openSummary.contains("runtime.inventoryPatch="));
+
+        logs.clear();
+        Inventory inventory = player.lastOpenedInventory();
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(22)));
+
+        String clickSummary = summaryLine(logs, "click");
+        assertTrue(clickSummary.contains("menu=\"Reactive Routing\""));
+        assertTrue(clickSummary.contains("button=\"LEFT\""));
+        assertTrue(clickSummary.contains("runtime.reactiveDispatch="));
+    }
+
+    @Test
+    void traceFiltersByMenuTitle() {
+        TestPlayer player = player();
+        MenuTraceController trace = new MenuTraceController();
+        trace.traceMenuTitles(List.of("Reactive Routing"));
+        List<String> logs = new ArrayList<>();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService(),
+                sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), trace, logs::add);
+
+        runtime.open(player, pagedMenu());
+        assertTrue(logs.isEmpty());
+
+        runtime.open(player, reactiveClickRoutingMenu());
+        assertTrue(logs.stream().anyMatch(line -> line.startsWith("summary ") && line.contains("menu=\"Reactive Routing\"")));
+    }
+
+    @Test
+    void inertCompiledChromeClicksDoNotEmitTraceSummaries() {
+        TestPlayer player = player();
+        MenuTraceController trace = new MenuTraceController();
+        trace.traceAll();
+        List<String> logs = new ArrayList<>();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService(),
+                sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), trace, logs::add);
+
+        runtime.open(player, overflowGalleryMenu());
+        Inventory inventory = player.lastOpenedInventory();
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Right(8)));
+
+        assertEquals("Tab 3", slotTitle(inventory, 1));
+        assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
+
+        logs.clear();
+        InventoryPreClickEvent inert = new InventoryPreClickEvent(inventory, player, new Click.Left(8));
+        runtime.onInventoryPreClick(inert);
+
+        assertTrue(inert.isCancelled());
+        assertTrue(logs.isEmpty());
+        assertEquals("Tab 3", slotTitle(inventory, 1));
+        assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
+    }
+
     private static Menu pagedMenu() {
         return new StandardMenuService().list()
                 .title("Profiles")
@@ -502,6 +589,29 @@ class MinestomMenuRuntimeTest {
                 .build();
     }
 
+    private static ReactiveMenu reactiveClickRoutingMenu() {
+        return new StandardMenuService().reactive()
+                .state(new StoredState(null))
+                .render(state -> ReactiveMenuView.builder("Reactive Routing")
+                        .place(22, MenuDisplayItem.builder(MenuIcon.vanilla("stone"))
+                                .name("Placed Clicks: " + (state.stored() == null ? 0 : state.stored().amount()))
+                                .description("Only the authored slot should reach the reducer.")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click click && click.slot() == 22) {
+                        int nextCount = state.stored() == null ? 1 : state.stored().amount() + 1;
+                        MenuStack counter = MenuStack.builder(MenuIcon.vanilla("stone"))
+                                .name("Count " + nextCount)
+                                .amount(nextCount)
+                                .build();
+                        return ReactiveMenuResult.stay(new StoredState(counter));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+    }
+
     private static TestPlayer player() {
         return new TestPlayer(UUID.randomUUID());
     }
@@ -537,6 +647,14 @@ class MinestomMenuRuntimeTest {
         for (Component child : component.children()) {
             append(builder, child);
         }
+    }
+
+    private static String summaryLine(List<String> logs, String cause) {
+        return logs.stream()
+                .filter(line -> line.startsWith("summary "))
+                .filter(line -> line.contains("cause=\"" + cause + "\""))
+                .findFirst()
+                .orElseThrow();
     }
 
     private static final class TestPlayer extends Player {

@@ -18,14 +18,17 @@ import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.MenuTabGroup;
+import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
 import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.sound.SoundCueKeys;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -383,6 +386,45 @@ class StandardMenuServiceTest {
     }
 
     @Test
+    void reactiveSessionsCacheCompiledPlacementsByItemIdentityAcrossRerenders() {
+        MenuDisplayItem staticCard = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Shift Or Drag")
+                .description("Shift-click a stack from the bottom inventory, or click one to load the reactive cursor and place it in the center slot.")
+                .build();
+
+        ReactiveMenu menu = menus.reactive()
+                .stateFactory(() -> new ToggleState(false))
+                .render(state -> ReactiveMenuView.builder("Reactive Cache")
+                        .place(20, staticCard)
+                        .place(24, MenuDisplayItem.builder(MenuIcon.vanilla("lever"))
+                                .name(state.enabled() ? "Enabled" : "Disabled")
+                                .build())
+                        .build())
+                .reduce((state, input) -> input instanceof ReactiveMenuInput.Tick
+                        ? ReactiveMenuResult.stay(new ToggleState(!state.enabled()))
+                        : ReactiveMenuResult.stay(state))
+                .build();
+
+        MenuSessionState state = new MenuSessionState(menu);
+        MenuTraceController trace = new MenuTraceController();
+        trace.traceAll();
+
+        List<String> firstLogs = new ArrayList<>();
+        MenuTrace.withTrace(trace, firstLogs::add, "test", UUID.randomUUID(), "refresh", () -> state.currentFrame());
+        String firstSummary = summaryLine(firstLogs, "refresh");
+        assertTrue(firstSummary.contains("placementCompileHits=\"0\""));
+        assertTrue(firstSummary.contains("placementCompileMisses=\"2\""));
+
+        state.dispatchReactive(new ReactiveMenuInput.Tick(1L));
+
+        List<String> secondLogs = new ArrayList<>();
+        MenuTrace.withTrace(trace, secondLogs::add, "test", UUID.randomUUID(), "refresh", () -> state.currentFrame());
+        String secondSummary = summaryLine(secondLogs, "refresh");
+        assertTrue(secondSummary.contains("placementCompileHits=\"1\""));
+        assertTrue(secondSummary.contains("placementCompileMisses=\"1\""));
+    }
+
+    @Test
     void tabsCustomFooterAllowCanvasContentInRowFive() {
         Menu menu = menus.tabs()
                 .title("Canvas Tabs")
@@ -510,6 +552,14 @@ class StandardMenuServiceTest {
         return slot.lore().stream()
                 .map(ComponentText::flatten)
                 .toList();
+    }
+
+    private static String summaryLine(List<String> logs, String cause) {
+        return logs.stream()
+                .filter(line -> line.startsWith("summary "))
+                .filter(line -> line.contains("cause=\"" + cause + "\""))
+                .findFirst()
+                .orElseThrow();
     }
 
     private record ToggleState(boolean enabled) {

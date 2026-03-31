@@ -22,4 +22,9 @@ final class BukkitPaperMenuAccess implements PaperMenuAccess {
     public void closeInventory(Player player) {
         player.closeInventory();
     }
+
+    @Override
+    public Inventory topInventory(Player player) {
+        return player.getOpenInventory().getTopInventory();
+    }
 }

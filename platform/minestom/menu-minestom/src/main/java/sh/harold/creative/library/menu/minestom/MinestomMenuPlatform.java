@@ -19,6 +19,7 @@ import sh.harold.creative.library.menu.MenuService;
 import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
+import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenuBuilder;
 import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.core.MenuTickScheduler;
@@ -38,6 +39,7 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     private final EventNode<Event> runtimeNode;
     private final SoundCueService sounds;
     private final boolean closeSounds;
+    private final MenuTraceController traceController;
 
     public MinestomMenuPlatform() {
         this(new StandardMenuService(), MinecraftServer.getGlobalEventHandler(), defaultSounds(), true);
@@ -60,7 +62,9 @@ public final class MinestomMenuPlatform implements AutoCloseable {
         this.parentNode = Objects.requireNonNull(parentNode, "parentNode");
         this.sounds = Objects.requireNonNull(sounds, "sounds");
         this.closeSounds = closeSounds;
-        this.runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), sounds, scheduleTicks());
+        this.traceController = new MenuTraceController();
+        this.runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), sounds, scheduleTicks(),
+                traceController, MinestomMenuPlatform::logTrace);
         this.runtimeNode = runtime.createEventNode("menu-runtime-" + UUID.randomUUID());
         this.parentNode.addChild(runtimeNode);
     }
@@ -129,6 +133,10 @@ public final class MinestomMenuPlatform implements AutoCloseable {
         runtime.open(Objects.requireNonNull(player, "player"), Objects.requireNonNull(menu, "menu"));
     }
 
+    public MenuTraceController trace() {
+        return traceController;
+    }
+
     @Override
     public void close() {
         runtime.close();
@@ -171,5 +179,9 @@ public final class MinestomMenuPlatform implements AutoCloseable {
                     TaskSchedule.tick(Math.toIntExact(intervalTicks)));
             return task::cancel;
         };
+    }
+
+    private static void logTrace(String message) {
+        System.out.println("[minestom-menu-trace] " + message);
     }
 }

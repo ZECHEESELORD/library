@@ -9,6 +9,7 @@ import sh.harold.creative.library.menu.MenuDefinition;
 import sh.harold.creative.library.menu.MenuFrame;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuStack;
+import sh.harold.creative.library.menu.core.MenuTrace;
 import sh.harold.creative.library.menu.core.MenuSessionState;
 import sh.harold.creative.library.menu.core.MenuTickHandle;
 
@@ -65,14 +66,14 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
         MenuStack nextCursor = state.cursor();
 
         if (current == null || current.getInventoryType() != nextType || !Objects.equals(title, nextTitle)) {
-            Inventory nextInventory = new Inventory(nextType, nextTitle);
+            Inventory nextInventory = MenuTrace.time("runtime.inventoryCreate", () -> new Inventory(nextType, nextTitle));
             runtime.render(nextInventory, null, nextSlots);
             inventory = nextInventory;
             title = nextTitle;
             renderedSlots = nextSlots;
             runtime.syncCursor(viewer, renderedCursor, nextCursor);
             renderedCursor = nextCursor;
-            viewer.openInventory(nextInventory);
+            MenuTrace.time("runtime.inventoryOpen", () -> viewer.openInventory(nextInventory));
             updateTicking();
             return;
         }
@@ -112,6 +113,7 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
 
     private void updateTicking() {
         long nextInterval = state.tickIntervalTicks();
+        MenuTrace.field("tickInterval", nextInterval);
         if (nextInterval <= 0L) {
             stopTicking();
             return;
@@ -120,12 +122,13 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
             return;
         }
         stopTicking();
-        tickHandle = runtime.tickScheduler().schedule(nextInterval, () -> runtime.onTick(this));
+        tickHandle = MenuTrace.time("runtime.tickSchedule",
+                () -> runtime.tickScheduler().schedule(nextInterval, () -> runtime.onTick(this)));
         tickIntervalTicks = nextInterval;
     }
 
     private void stopTicking() {
-        tickHandle.cancel();
+        MenuTrace.time("runtime.tickCancel", tickHandle::cancel);
         tickHandle = MenuTickHandle.noop();
         tickIntervalTicks = 0L;
     }

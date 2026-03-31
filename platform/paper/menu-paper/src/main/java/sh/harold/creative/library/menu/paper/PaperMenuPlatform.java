@@ -17,6 +17,7 @@ import sh.harold.creative.library.menu.MenuService;
 import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
+import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenuBuilder;
 import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.core.MenuTickScheduler;
@@ -34,6 +35,7 @@ public final class PaperMenuPlatform implements AutoCloseable {
     private final PaperMenuListener listener;
     private final SoundCueService sounds;
     private final boolean closeSounds;
+    private final MenuTraceController traceController;
 
     public PaperMenuPlatform(JavaPlugin plugin) {
         this(plugin, new StandardMenuService(), defaultSounds(plugin), true);
@@ -52,8 +54,10 @@ public final class PaperMenuPlatform implements AutoCloseable {
         this.menus = Objects.requireNonNull(menus, "menus");
         this.sounds = Objects.requireNonNull(sounds, "sounds");
         this.closeSounds = closeSounds;
+        this.traceController = new MenuTraceController();
         this.runtime = new PaperMenuRuntime(new BukkitPaperMenuAccess(), org.bukkit.Bukkit::getPlayer, new PaperMenuRenderer(), sounds,
-                scheduleTicks(plugin));
+                scheduleTicks(plugin), action -> plugin.getServer().getScheduler().runTask(plugin, action),
+                traceController, message -> plugin.getLogger().info("[paper-menu-trace] " + message));
         this.listener = new PaperMenuListener(runtime);
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
     }
@@ -120,6 +124,10 @@ public final class PaperMenuPlatform implements AutoCloseable {
 
     public void open(Player player, MenuDefinition menu) {
         runtime.open(Objects.requireNonNull(player, "player"), Objects.requireNonNull(menu, "menu"));
+    }
+
+    public MenuTraceController trace() {
+        return traceController;
     }
 
     @Override

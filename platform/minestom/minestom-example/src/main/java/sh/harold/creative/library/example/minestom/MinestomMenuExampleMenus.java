@@ -29,6 +29,9 @@ import java.util.stream.IntStream;
 
 final class MinestomMenuExampleMenus {
 
+    static final String LOCK_DRAG_TITLE = "Reactive Lock Demo";
+    static final String LOCK_CLICK_TITLE = "Reactive Click Demo";
+
     private static final String TOGGLE_LOCK = "toggle-lock";
     private static final int TAB_CANVAS_LEFT_SLOT = 29;
     private static final int TAB_CANVAS_CENTER_SLOT = 31;
@@ -342,7 +345,7 @@ final class MinestomMenuExampleMenus {
         return menus.reactive()
                 .utility(UtilitySlot.LEFT_1, lockToggleUtilityButton)
                 .state(new DragLockState(null, null, false, "Shift-click an inventory stack or load the reactive cursor first."))
-                .render(state -> ReactiveMenuView.builder("Reactive Lock Demo")
+                .render(state -> ReactiveMenuView.builder(LOCK_DRAG_TITLE)
                         .cursor(state.cursor())
                         .place(TRUE_CANVAS_LEFT_SLOT, dragLockInfoDisplay)
                         .place(TRUE_CANVAS_CENTER_SLOT, dragLockTarget(state))
@@ -356,7 +359,7 @@ final class MinestomMenuExampleMenus {
         return menus.reactive()
                 .utility(UtilitySlot.LEFT_1, lockToggleUtilityButton)
                 .state(new ClickLockState(null, false, "Click a bottom-inventory stack to mirror it straight into the slot."))
-                .render(state -> ReactiveMenuView.builder("Reactive Click Demo")
+                .render(state -> ReactiveMenuView.builder(LOCK_CLICK_TITLE)
                         .place(TRUE_CANVAS_LEFT_SLOT, clickLockInfoDisplay)
                         .place(TRUE_CANVAS_CENTER_SLOT, clickLockTarget(state))
                         .place(TRUE_CANVAS_RIGHT_SLOT, clickLockStatus(state))

@@ -16,6 +16,8 @@ import sh.harold.creative.library.ui.value.UiValue;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,8 +25,15 @@ public final class HouseMenuCompiler {
 
     private static final WrapProfile DEFAULT_WRAP_PROFILE = new WrapProfile(20, 30);
     private static final WrapProfile BULLET_WRAP_PROFILE = new WrapProfile(30, 50);
+    private static final int WRAP_CACHE_LIMIT = 1_024;
     private static final int PROGRESS_BAR_WIDTH = 20;
-    private static final double SCORE_EPSILON = 0.000001d;
+    private static final Map<WrapCacheKey, List<String>> WRAP_CACHE =
+            new LinkedHashMap<>(WRAP_CACHE_LIMIT, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<WrapCacheKey, List<String>> eldest) {
+                    return size() > WRAP_CACHE_LIMIT;
+                }
+            };
 
     private static final TextColor STRONG_NEUTRAL = NamedTextColor.WHITE;
     private static final TextColor BODY_NEUTRAL = NamedTextColor.GRAY;
@@ -270,54 +279,69 @@ public final class HouseMenuCompiler {
 
     private static List<String> wrapText(String text, int firstIndentChars, int continuationIndentChars, WrapProfile profile) {
         String normalized = normalize(text);
+        WrapCacheKey cacheKey = new WrapCacheKey(normalized, firstIndentChars, continuationIndentChars, profile);
+        synchronized (WRAP_CACHE) {
+            List<String> cached = WRAP_CACHE.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+        }
+        List<String> wrapped = computeWrappedText(normalized, firstIndentChars, continuationIndentChars, profile);
+        synchronized (WRAP_CACHE) {
+            List<String> cached = WRAP_CACHE.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+            WRAP_CACHE.put(cacheKey, wrapped);
+        }
+        return wrapped;
+    }
+
+    private static List<String> computeWrappedText(String normalized, int firstIndentChars, int continuationIndentChars, WrapProfile profile) {
         if (normalized.length() + firstIndentChars <= profile.hardWrapLimit()) {
             return List.of(normalized);
         }
         String[] words = normalized.split(" ");
-        WrappedLayout best = new WrappedLayout(List.of(), List.of(), List.of(), profile.softWrapStart());
-        List<WrappedLayout> candidates = new ArrayList<>();
-        collectLayouts(words, 0, firstIndentChars, continuationIndentChars, false,
-                new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), candidates, profile);
-        for (WrappedLayout candidate : candidates) {
-            if (best.lines().isEmpty() || compareLayouts(candidate, best) < 0) {
-                best = candidate;
-            }
-        }
-        return best.lines().isEmpty() ? List.of(normalized) : best.lines();
+        WrappedLayout best = bestLayout(words, 0, firstIndentChars, continuationIndentChars, false, profile, new HashMap<>());
+        return best == null || best.lines().isEmpty() ? List.of(normalized) : best.lines();
     }
 
     private static String normalize(String text) {
         return text.trim().replaceAll("\\s+", " ");
     }
 
-    private static void collectLayouts(
+    private static WrappedLayout bestLayout(
             String[] words,
             int start,
             int firstIndentChars,
             int continuationIndentChars,
             boolean continuation,
-            List<String> lines,
-            List<Integer> visibleLengths,
-            List<Integer> breaks,
-            List<WrappedLayout> candidates,
-            WrapProfile profile
+            WrapProfile profile,
+            Map<WrapState, WrappedLayout> memo
     ) {
+        WrapState state = new WrapState(start, continuation);
+        WrappedLayout cached = memo.get(state);
+        if (cached != null) {
+            return cached;
+        }
         int indentChars = continuation ? continuationIndentChars : firstIndentChars;
+        WrappedLayout best = null;
         for (int end : candidateEnds(words, start, indentChars, profile)) {
             String line = joinWords(words, start, end);
-            lines.add(line);
-            visibleLengths.add(indentChars + line.length());
-            breaks.add(end);
+            int visibleLength = indentChars + line.length();
+            WrappedLayout suffix;
             if (end == words.length - 1) {
-                candidates.add(new WrappedLayout(List.copyOf(lines), List.copyOf(visibleLengths), List.copyOf(breaks), profile.softWrapStart()));
+                suffix = WrappedLayout.empty();
             } else {
-                collectLayouts(words, end + 1, firstIndentChars, continuationIndentChars, true,
-                        lines, visibleLengths, breaks, candidates, profile);
+                suffix = bestLayout(words, end + 1, firstIndentChars, continuationIndentChars, true, profile, memo);
             }
-            lines.remove(lines.size() - 1);
-            visibleLengths.remove(visibleLengths.size() - 1);
-            breaks.remove(breaks.size() - 1);
+            WrappedLayout candidate = suffix.prepend(line, end, visibleLength, profile.softWrapStart());
+            if (best == null || compareLayouts(candidate, best) < 0) {
+                best = candidate;
+            }
         }
+        memo.put(state, best);
+        return best;
     }
 
     private static List<Integer> candidateEnds(String[] words, int start, int indentChars, WrapProfile profile) {
@@ -351,16 +375,16 @@ public final class HouseMenuCompiler {
     }
 
     private static int compareLayouts(WrappedLayout left, WrappedLayout right) {
-        int lineCountComparison = Integer.compare(left.lines().size(), right.lines().size());
+        int lineCountComparison = Integer.compare(left.lineCount(), right.lineCount());
         if (lineCountComparison != 0) {
             return lineCountComparison;
         }
-        int scoreComparison = Double.compare(left.imbalanceScore(), right.imbalanceScore());
-        if (scoreComparison != 0 && Math.abs(left.imbalanceScore() - right.imbalanceScore()) > SCORE_EPSILON) {
+        int scoreComparison = Long.compare(left.sumSquares(), right.sumSquares());
+        if (scoreComparison != 0) {
             return scoreComparison;
         }
-        int softTargetComparison = Double.compare(left.softTargetScore(), right.softTargetScore());
-        if (softTargetComparison != 0 && Math.abs(left.softTargetScore() - right.softTargetScore()) > SCORE_EPSILON) {
+        int softTargetComparison = Long.compare(left.softTargetScore(), right.softTargetScore());
+        if (softTargetComparison != 0) {
             return softTargetComparison;
         }
         for (int i = 0; i < left.breaks().size(); i++) {
@@ -375,28 +399,32 @@ public final class HouseMenuCompiler {
     private record WrapProfile(int softWrapStart, int hardWrapLimit) {
     }
 
-    private record WrappedLayout(List<String> lines, List<Integer> visibleLengths, List<Integer> breaks, int softWrapStart) {
+    private record WrapCacheKey(String text, int firstIndentChars, int continuationIndentChars, WrapProfile profile) {
+    }
 
-        private double imbalanceScore() {
-            double average = visibleLengths.stream()
-                    .mapToInt(Integer::intValue)
-                    .average()
-                    .orElse(0.0d);
-            double score = 0.0d;
-            for (int length : visibleLengths) {
-                double delta = length - average;
-                score += delta * delta;
-            }
-            return score;
+    private record WrapState(int start, boolean continuation) {
+    }
+
+    private record WrappedLayout(List<String> lines, List<Integer> breaks, int lineCount, long sumSquares, long softTargetScore) {
+
+        private static WrappedLayout empty() {
+            return new WrappedLayout(List.of(), List.of(), 0, 0L, 0L);
         }
 
-        private double softTargetScore() {
-            double score = 0.0d;
-            for (int length : visibleLengths) {
-                double overflow = Math.max(0, length - softWrapStart);
-                score += overflow * overflow;
-            }
-            return score;
+        private WrappedLayout prepend(String line, int end, int visibleLength, int softWrapStart) {
+            List<String> nextLines = new ArrayList<>(lines.size() + 1);
+            nextLines.add(line);
+            nextLines.addAll(lines);
+
+            List<Integer> nextBreaks = new ArrayList<>(breaks.size() + 1);
+            nextBreaks.add(end);
+            nextBreaks.addAll(breaks);
+
+            long overflow = Math.max(0, visibleLength - softWrapStart);
+            long nextSumSquares = sumSquares + (long) visibleLength * visibleLength;
+            long nextSoftTargetScore = softTargetScore + overflow * overflow;
+            return new WrappedLayout(List.copyOf(nextLines), List.copyOf(nextBreaks),
+                    lineCount + 1, nextSumSquares, nextSoftTargetScore);
         }
     }
 }
