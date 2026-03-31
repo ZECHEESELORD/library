@@ -30,9 +30,12 @@ import java.util.stream.IntStream;
 final class MinestomMenuExampleMenus {
 
     private static final String TOGGLE_LOCK = "toggle-lock";
-    private static final int DEMO_LEFT_SLOT = 29;
-    private static final int DEMO_CENTER_SLOT = 31;
-    private static final int DEMO_RIGHT_SLOT = 33;
+    private static final int TAB_CANVAS_LEFT_SLOT = 29;
+    private static final int TAB_CANVAS_CENTER_SLOT = 31;
+    private static final int TAB_CANVAS_RIGHT_SLOT = 33;
+    private static final int TRUE_CANVAS_LEFT_SLOT = 20;
+    private static final int TRUE_CANVAS_CENTER_SLOT = 22;
+    private static final int TRUE_CANVAS_RIGHT_SLOT = 24;
     private static final List<Integer> SNAKE_PATH = List.of(
             0, 1, 2, 3, 4, 5, 6, 7, 8,
             17, 26, 35, 44,
@@ -44,6 +47,13 @@ final class MinestomMenuExampleMenus {
     private final Menu farmingPreviewMenu;
     private final Menu museumPreviewMenu;
     private final Menu slotFivePreviewMenu;
+    private final MenuDisplayItem snakeInfoDisplay;
+    private final MenuDisplayItem snakeHeadDisplay;
+    private final MenuDisplayItem dragLockInfoDisplay;
+    private final MenuDisplayItem dragLockEmptyDisplay;
+    private final MenuDisplayItem clickLockInfoDisplay;
+    private final MenuDisplayItem clickLockEmptyDisplay;
+    private final MenuButton lockToggleUtilityButton;
     private final ReactiveMenu snakeDemoMenu;
     private final ReactiveMenu lockDragDemoMenu;
     private final ReactiveMenu lockClickDemoMenu;
@@ -58,6 +68,39 @@ final class MinestomMenuExampleMenus {
         this.farmingPreviewMenu = preview("Farming XLIX Preview", farmingXlixDisplay());
         this.museumPreviewMenu = preview("Museum Rewards Preview", museumRewardsDisplay());
         this.slotFivePreviewMenu = preview("Profile Slot #5 Preview", profileSlotFiveDisplay());
+        this.snakeInfoDisplay = infoDisplay(Material.COMPASS, FakeSkyBlockMenuTitles.special("Reactive Snake"),
+                "This one-slot snake walks the perimeter on a fixed tick so the runtime can patch only the changed slots.",
+                "Only the old and new head slots should repaint.",
+                "The menu stays open while the session state ticks.");
+        this.snakeHeadDisplay = menus.display(Material.SLIME_BALL)
+                .name(FakeSkyBlockMenuTitles.special("Snake Head"))
+                .description("A one-slot live actor moving through the compiled chrome.")
+                .build();
+        this.dragLockInfoDisplay = infoDisplay(Material.HOPPER, FakeSkyBlockMenuTitles.perk("Shift Or Drag"),
+                "Shift-click a stack from the bottom inventory, or click one to load the reactive cursor and place it in the center slot.",
+                "Shift-click inserts directly when unlocked.",
+                "Regular inventory clicks load the reactive cursor.",
+                "Click the center stack to pick it back up when unlocked.");
+        this.dragLockEmptyDisplay = menus.display(Material.BARREL)
+                .name(FakeSkyBlockMenuTitles.normal("Center Slot"))
+                .description("Shift-click a stack in, or place the reactive cursor here when the slot is unlocked.")
+                .bullets(
+                        "Unlocked slots accept one stored stack.",
+                        "Locked slots reject inserts and removals.")
+                .build();
+        this.clickLockInfoDisplay = infoDisplay(Material.CHEST, FakeSkyBlockMenuTitles.normal("Inventory Click Mirror"),
+                "Click any stack in the bottom inventory and the reducer mirrors it directly into the center slot.",
+                "No reactive cursor is involved here.",
+                "The lock still blocks replacements and clears.",
+                "Click the center slot to clear it when unlocked.");
+        this.clickLockEmptyDisplay = menus.display(Material.CHEST)
+                .name(FakeSkyBlockMenuTitles.normal("Center Slot"))
+                .description("Click an inventory stack and the reducer mirrors it directly into this slot when unlocked.")
+                .bullets(
+                        "Bottom-inventory clicks patch the center slot immediately.",
+                        "Click the center slot to clear it when unlocked.")
+                .build();
+        this.lockToggleUtilityButton = lockToggleButton();
         this.snakeDemoMenu = buildSnakeDemo();
         this.lockDragDemoMenu = buildLockDragDemo();
         this.lockClickDemoMenu = buildLockClickDemo();
@@ -206,7 +249,7 @@ final class MinestomMenuExampleMenus {
                         List.of(
                                 canvasTab("overview", FakeSkyBlockMenuTitles.perk("Layout Overview"), Material.COMPASS,
                                         "Review the tab layout rules, centered row-three placements, and when negative space helps a custom canvas breathe.",
-                                        builder -> builder.place(31, infoDisplay(Material.COMPASS, FakeSkyBlockMenuTitles.perk("Centered Canvas"),
+                                        builder -> builder.place(TAB_CANVAS_CENTER_SLOT, infoDisplay(Material.COMPASS, FakeSkyBlockMenuTitles.perk("Centered Canvas"),
                                                 "Canvas tabs should bias primary content to row 3, centered first.",
                                                 "One item: (4,3)",
                                                 "Two items: (2,3) and (6,3)",
@@ -217,25 +260,25 @@ final class MinestomMenuExampleMenus {
                                 canvasTab("showcase", FakeSkyBlockMenuTitles.special("Featured Cards"), Material.ITEM_FRAME,
                                         "Preview a couple of fully authored cards side by side so title tone, spacing, and grouped blocks read together.",
                                         builder -> {
-                                            builder.place(29, yourSkyBlockProfileDisplay());
-                                            builder.place(33, farmingXlixDisplay());
+                                            builder.place(TAB_CANVAS_LEFT_SLOT, yourSkyBlockProfileDisplay());
+                                            builder.place(TAB_CANVAS_RIGHT_SLOT, farmingXlixDisplay());
                                         },
                                         "Colored titles by feel",
                                         "Grouped stat and progress blocks",
                                         "Prompt-last house copy"),
                                 canvasTab("routes", FakeSkyBlockMenuTitles.normal("Demo Routes"), Material.BOOKSHELF,
-                                        "Jump between the compiled list gallery, the reactive demo gallery, and the fixed-slot canvas gallery from one route tab.",
+                                        "Jump between the compiled list gallery, the reactive demo gallery, and the true fixed-slot canvas gallery from one route tab.",
                                         builder -> {
-                                            builder.place(29, openMenuButton(Material.CHEST, FakeSkyBlockMenuTitles.normal("Open List Gallery"),
+                                            builder.place(TAB_CANVAS_LEFT_SLOT, openMenuButton(Material.CHEST, FakeSkyBlockMenuTitles.normal("Open List Gallery"),
                                                     "Jump into the plain paged list example.", ActionVerb.OPEN, listGalleryMenu));
-                                            builder.place(31, openMenuButton(Material.SLIME_BALL, FakeSkyBlockMenuTitles.special("Open Reactive Gallery"),
+                                            builder.place(TAB_CANVAS_CENTER_SLOT, openMenuButton(Material.SLIME_BALL, FakeSkyBlockMenuTitles.special("Open Reactive Gallery"),
                                                     "Open the routed reactive demos for ticking, drag, and inventory-click testing.", ActionVerb.OPEN, reactiveGalleryMenu));
-                                            builder.place(33, openMenuButton(Material.ITEM_FRAME, FakeSkyBlockMenuTitles.normal("Open Canvas Gallery"),
-                                                    "Jump into the fixed-slot canvas example.", ActionVerb.OPEN, canvasGalleryMenu));
+                                            builder.place(TAB_CANVAS_RIGHT_SLOT, openMenuButton(Material.ITEM_FRAME, FakeSkyBlockMenuTitles.normal("Open True Canvas Gallery"),
+                                                    "Jump into the true fixed-slot canvas example centered on row 2.", ActionVerb.OPEN, canvasGalleryMenu));
                                         },
                                         "Open paged list gallery",
                                         "Open reactive demo gallery",
-                                        "Open fixed-slot canvas gallery")
+                                        "Open true fixed-slot canvas gallery")
                         )))
                 .build();
     }
@@ -249,11 +292,10 @@ final class MinestomMenuExampleMenus {
 
     private Menu buildCanvasGallery() {
         return menus.canvas()
-                .title("Canvas Gallery")
-                .place(10, yourSkyBlockProfileDisplay())
-                .place(12, farmingXlixDisplay())
-                .place(14, museumRewardsDisplay())
-                .place(16, profileSlotFiveDisplay())
+                .title("True Canvas Gallery")
+                .place(TRUE_CANVAS_LEFT_SLOT, yourSkyBlockProfileDisplay())
+                .place(TRUE_CANVAS_CENTER_SLOT, farmingXlixDisplay())
+                .place(TRUE_CANVAS_RIGHT_SLOT, museumRewardsDisplay())
                 .build();
     }
 
@@ -287,14 +329,8 @@ final class MinestomMenuExampleMenus {
                 .state(new SnakeState(0, 0x51A7E5L))
                 .tickEvery(4L)
                 .render(state -> ReactiveMenuView.builder("Reactive Snake")
-                        .place(22, infoDisplay(Material.COMPASS, FakeSkyBlockMenuTitles.special("Reactive Snake"),
-                                "This one-slot snake walks the perimeter on a fixed tick so the runtime can patch only the changed slots.",
-                                "Only the old and new head slots should repaint.",
-                                "The menu stays open while the session state ticks."))
-                        .place(SNAKE_PATH.get(state.pathIndex()), menus.display(Material.SLIME_BALL)
-                                .name(FakeSkyBlockMenuTitles.special("Snake Head"))
-                                .description("A one-slot live actor moving through the compiled chrome.")
-                                .build())
+                        .place(TRUE_CANVAS_CENTER_SLOT, snakeInfoDisplay)
+                        .place(SNAKE_PATH.get(state.pathIndex()), snakeHeadDisplay)
                         .build())
                 .reduce((state, input) -> input instanceof ReactiveMenuInput.Tick
                         ? ReactiveMenuResult.stay(nextSnakeState(state))
@@ -304,17 +340,13 @@ final class MinestomMenuExampleMenus {
 
     private ReactiveMenu buildLockDragDemo() {
         return menus.reactive()
-                .utility(UtilitySlot.LEFT_1, lockToggleButton())
+                .utility(UtilitySlot.LEFT_1, lockToggleUtilityButton)
                 .state(new DragLockState(null, null, false, "Shift-click an inventory stack or load the reactive cursor first."))
                 .render(state -> ReactiveMenuView.builder("Reactive Lock Demo")
                         .cursor(state.cursor())
-                        .place(DEMO_LEFT_SLOT, infoDisplay(Material.HOPPER, FakeSkyBlockMenuTitles.perk("Shift Or Drag"),
-                                "Shift-click a stack from the bottom inventory, or click one to load the reactive cursor and place it in the center slot.",
-                                "Shift-click inserts directly when unlocked.",
-                                "Regular inventory clicks load the reactive cursor.",
-                                "Click the center stack to pick it back up when unlocked."))
-                        .place(DEMO_CENTER_SLOT, dragLockTarget(state))
-                        .place(DEMO_RIGHT_SLOT, dragLockStatus(state))
+                        .place(TRUE_CANVAS_LEFT_SLOT, dragLockInfoDisplay)
+                        .place(TRUE_CANVAS_CENTER_SLOT, dragLockTarget(state))
+                        .place(TRUE_CANVAS_RIGHT_SLOT, dragLockStatus(state))
                         .build())
                 .reduce((state, input) -> ReactiveMenuResult.stay(reduceDragLockState(state, input)))
                 .build();
@@ -322,16 +354,12 @@ final class MinestomMenuExampleMenus {
 
     private ReactiveMenu buildLockClickDemo() {
         return menus.reactive()
-                .utility(UtilitySlot.LEFT_1, lockToggleButton())
+                .utility(UtilitySlot.LEFT_1, lockToggleUtilityButton)
                 .state(new ClickLockState(null, false, "Click a bottom-inventory stack to mirror it straight into the slot."))
                 .render(state -> ReactiveMenuView.builder("Reactive Click Demo")
-                        .place(DEMO_LEFT_SLOT, infoDisplay(Material.CHEST, FakeSkyBlockMenuTitles.normal("Inventory Click Mirror"),
-                                "Click any stack in the bottom inventory and the reducer mirrors it directly into the center slot.",
-                                "No reactive cursor is involved here.",
-                                "The lock still blocks replacements and clears.",
-                                "Click the center slot to clear it when unlocked."))
-                        .place(DEMO_CENTER_SLOT, clickLockTarget(state))
-                        .place(DEMO_RIGHT_SLOT, clickLockStatus(state))
+                        .place(TRUE_CANVAS_LEFT_SLOT, clickLockInfoDisplay)
+                        .place(TRUE_CANVAS_CENTER_SLOT, clickLockTarget(state))
+                        .place(TRUE_CANVAS_RIGHT_SLOT, clickLockStatus(state))
                         .build())
                 .reduce((state, input) -> ReactiveMenuResult.stay(reduceClickLockState(state, input)))
                 .build();
@@ -359,10 +387,10 @@ final class MinestomMenuExampleMenus {
         }
         if (input instanceof ReactiveMenuInput.Drag drag
                 && drag.cursor() != null
-                && drag.slots().contains(DEMO_CENTER_SLOT)) {
+                && drag.slots().contains(TRUE_CANVAS_CENTER_SLOT)) {
             return insertFromCursor(state, drag.cursor(), "Dragged the reactive cursor onto the center slot.");
         }
-        if (input instanceof ReactiveMenuInput.Click click && click.slot() == DEMO_CENTER_SLOT) {
+        if (input instanceof ReactiveMenuInput.Click click && click.slot() == TRUE_CANVAS_CENTER_SLOT) {
             MenuStack cursor = effectiveCursor(state.cursor(), click.cursor());
             if (cursor != null) {
                 return insertFromCursor(state, cursor, "Placed the reactive cursor into the center slot.");
@@ -401,7 +429,7 @@ final class MinestomMenuExampleMenus {
             return new ClickLockState(click.item(), false,
                     "Mirrored the clicked inventory stack into the center slot.");
         }
-        if (input instanceof ReactiveMenuInput.Click click && click.slot() == DEMO_CENTER_SLOT) {
+        if (input instanceof ReactiveMenuInput.Click click && click.slot() == TRUE_CANVAS_CENTER_SLOT) {
             if (state.stored() == null) {
                 return new ClickLockState(null, state.locked(), "The center slot is empty.");
             }
@@ -456,13 +484,7 @@ final class MinestomMenuExampleMenus {
         if (state.stored() != null) {
             return state.stored();
         }
-        return menus.display(Material.BARREL)
-                .name(FakeSkyBlockMenuTitles.normal("Center Slot"))
-                .description("Shift-click a stack in, or place the reactive cursor here when the slot is unlocked.")
-                .bullets(
-                        "Unlocked slots accept one stored stack.",
-                        "Locked slots reject inserts and removals.")
-                .build();
+        return dragLockEmptyDisplay;
     }
 
     private MenuDisplayItem dragLockStatus(DragLockState state) {
@@ -485,13 +507,7 @@ final class MinestomMenuExampleMenus {
         if (state.stored() != null) {
             return state.stored();
         }
-        return menus.display(Material.CHEST)
-                .name(FakeSkyBlockMenuTitles.normal("Center Slot"))
-                .description("Click an inventory stack and the reducer mirrors it directly into this slot when unlocked.")
-                .bullets(
-                        "Bottom-inventory clicks patch the center slot immediately.",
-                        "Click the center slot to clear it when unlocked.")
-                .build();
+        return clickLockEmptyDisplay;
     }
 
     private MenuDisplayItem clickLockStatus(ClickLockState state) {
@@ -797,7 +813,7 @@ final class MinestomMenuExampleMenus {
     private Menu preview(String title, MenuDisplayItem item) {
         return menus.canvas()
                 .title(title)
-                .place(13, item)
+                .place(TRUE_CANVAS_CENTER_SLOT, item)
                 .build();
     }
 
