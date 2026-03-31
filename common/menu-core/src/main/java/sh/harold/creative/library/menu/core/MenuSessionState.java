@@ -20,12 +20,10 @@ import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
 import sh.harold.creative.library.menu.ReactiveMenuView;
-import sh.harold.creative.library.menu.UtilitySlot;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,7 +34,6 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class MenuSessionState {
 
     private static final int FOOTER_BACK_OFFSET = 3;
-    private static final int FOOTER_CLOSE_OFFSET = 4;
 
     private final Map<String, Object> values = new ConcurrentHashMap<>();
     private final Deque<HistoryEntry> history = new ArrayDeque<>();
@@ -211,27 +208,21 @@ public final class MenuSessionState {
 
     private MenuSessionView buildReactiveView(ReactiveMenuDefinition menu, Object state) {
         ReactiveMenuView rendered = menu.render(state);
-        int rows = menu.rows();
-        int size = rows * 9;
         boolean fillWithBlackPane = rendered.fillWithBlackPane() != null ? rendered.fillWithBlackPane() : menu.fillWithBlackPane();
-        Map<Integer, MenuSlot> slots = new LinkedHashMap<>();
-        for (int slot = 0; slot < size; slot++) {
-            slots.put(slot, fillWithBlackPane ? filler(slot) : empty(slot));
+        List<MenuSlot> baseSlots = menu.baseSlots(fillWithBlackPane);
+        int size = baseSlots.size();
+        if (rendered.placements().isEmpty()) {
+            return new MenuSessionView(rendered.title(), baseSlots, rendered.cursor());
         }
+        List<MenuSlot> slots = new ArrayList<>(baseSlots);
         for (Map.Entry<Integer, MenuItem> entry : rendered.placements().entrySet()) {
             int slot = entry.getKey();
             if (slot < 0 || slot >= size) {
-                throw new IllegalArgumentException("Reactive view slot " + slot + " is outside a " + rows + "-row menu");
+                throw new IllegalArgumentException("Reactive view slot " + slot + " is outside a " + menu.rows() + "-row menu");
             }
-            slots.put(slot, HouseMenuCompiler.compile(slot, entry.getValue()));
+            slots.set(slot, HouseMenuCompiler.compile(slot, entry.getValue()));
         }
-        int footerStart = HouseMenuCompiler.footerStart(rows);
-        applyUtilities(slots, footerStart, menu.utilities(), size);
-        int closeSlot = footerStart + FOOTER_CLOSE_OFFSET;
-        if (closeSlot < size) {
-            slots.put(closeSlot, closeButton(closeSlot));
-        }
-        return new MenuSessionView(rendered.title(), orderedSlots(slots, size), rendered.cursor());
+        return new MenuSessionView(rendered.title(), List.copyOf(slots), rendered.cursor());
     }
 
     private void invalidate() {
@@ -247,41 +238,6 @@ public final class MenuSessionState {
         List<MenuSlot> slots = new ArrayList<>(view.slots());
         slots.set(backSlot, backButton(backSlot, previousTitle));
         return new MenuSessionView(view.title(), slots, view.cursor());
-    }
-
-    private static void applyUtilities(Map<Integer, MenuSlot> slots, int footerStart, Map<UtilitySlot, MenuItem> utilities, int size) {
-        for (Map.Entry<UtilitySlot, MenuItem> entry : utilities.entrySet()) {
-            int slot = entry.getKey().resolveSlot(footerStart);
-            if (slot < 0 || slot >= size) {
-                throw new IllegalArgumentException("Reactive utility slot " + entry.getKey() + " resolves outside the menu");
-            }
-            slots.put(slot, HouseMenuCompiler.compile(slot, entry.getValue()));
-        }
-    }
-
-    private static List<MenuSlot> orderedSlots(Map<Integer, MenuSlot> slots, int size) {
-        List<MenuSlot> ordered = new ArrayList<>(size);
-        for (int slot = 0; slot < size; slot++) {
-            ordered.add(slots.get(slot));
-        }
-        return List.copyOf(ordered);
-    }
-
-    private static MenuSlot filler(int slot) {
-        return new MenuSlot(slot, MenuIcon.vanilla("black_stained_glass_pane"), Component.text(" "), List.of(), false, Map.of());
-    }
-
-    private static MenuSlot empty(int slot) {
-        return new MenuSlot(slot, MenuIcon.vanilla("air"), Component.empty(), List.of(), false, Map.of());
-    }
-
-    private static MenuSlot closeButton(int slot) {
-        return new MenuSlot(slot,
-                MenuIcon.vanilla("barrier"),
-                Component.text("Close", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false),
-                List.of(),
-                false,
-                Map.of(MenuClick.LEFT, MenuInteraction.of(ActionVerb.CLOSE, new MenuSlotAction.Close())));
     }
 
     private static MenuSlot backButton(int slot, Component previousMenuTitle) {
