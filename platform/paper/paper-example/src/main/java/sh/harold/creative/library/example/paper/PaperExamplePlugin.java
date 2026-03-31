@@ -7,14 +7,25 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerKickEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import sh.harold.creative.library.camera.paper.PaperCameraMotionPlatform;
 import sh.harold.creative.library.menu.paper.PaperMenuPlatform;
 import sh.harold.creative.library.sound.SoundCueKeys;
 import sh.harold.creative.library.sound.paper.PaperSoundCuePlatform;
 import sh.harold.creative.library.overlay.paper.PaperScreenOverlayPlatform;
 import sh.harold.creative.library.message.Message;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public final class PaperExamplePlugin extends JavaPlugin implements Listener {
 
@@ -23,6 +34,8 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
     private PaperSoundCuePlatform sounds;
     private PaperScreenOverlayPlatform overlays;
     private PaperScreenOverlayExamples overlayExamples;
+    private PaperCameraMotionPlatform camera;
+    private PaperPrimitiveExamples primitiveExamples;
     private PaperExampleMessages feedback;
 
     @Override
@@ -30,16 +43,24 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
         feedback = new PaperExampleMessages();
         sounds = new PaperSoundCuePlatform(this);
         overlays = new PaperScreenOverlayPlatform(this);
+        camera = new PaperCameraMotionPlatform(this);
         menus = new PaperMenuPlatform(this, new sh.harold.creative.library.menu.core.StandardMenuService(), sounds);
         examples = new PaperMenuExampleMenus(menus);
         overlayExamples = new PaperScreenOverlayExamples(this, overlays, feedback);
+        primitiveExamples = new PaperPrimitiveExamples(this, sounds, overlays, camera, feedback);
         registerCommands();
         getServer().getPluginManager().registerEvents(this, this);
-        getLogger().info("Paper example ready. Joining players open the house-style gallery, and /testmenus plus /testoverlays expose the dev harness.");
+        getLogger().info("Paper example ready. Joining players open the house-style gallery, and /testmenus, /testoverlays, plus /testprimitives expose the dev harness.");
     }
 
     @Override
     public void onDisable() {
+        if (primitiveExamples != null) {
+            primitiveExamples.close();
+        }
+        if (camera != null) {
+            camera.close();
+        }
         if (overlays != null) {
             overlays.close();
         }
@@ -57,10 +78,36 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
         Bukkit.getScheduler().runTask(this, () -> menus.open(event.getPlayer(), examples.gallery()));
         feedback.info(
                 event.getPlayer(),
-                "Use {menus} to reopen the menu gallery and {overlays} to preview the screen overlay subsystem.",
+                "Use {menus} to reopen the menu gallery, {overlays} to preview the screen overlay subsystem, and {primitives} for the primitive harness commands.",
                 Message.slot("menus", feedback.command("/testmenus")),
-                Message.slot("overlays", feedback.command("/testoverlays"))
+                Message.slot("overlays", feedback.command("/testoverlays")),
+                Message.slot("primitives", feedback.command("/testprimitives help"))
         );
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        discardPrimitiveState(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onKick(PlayerKickEvent event) {
+        discardPrimitiveState(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onDeath(PlayerDeathEvent event) {
+        discardPrimitiveState(event.getEntity());
+    }
+
+    @EventHandler
+    public void onRespawn(PlayerRespawnEvent event) {
+        discardPrimitiveState(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onChangedWorld(PlayerChangedWorldEvent event) {
+        discardPrimitiveState(event.getPlayer());
     }
 
     private void registerCommands() {
@@ -140,6 +187,111 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
                                 }
                             }
                     );
+                    event.registrar().register(
+                            "testtweens",
+                            "Run the tween primitive harness.",
+                            List.of("testtween"),
+                            playerVariantCommand(
+                                    primitiveExamples.tweenUsage(),
+                                    player -> primitiveExamples.playTween(player, "all"),
+                                    primitiveExamples::playTween
+                            )
+                    );
+                    event.registrar().register(
+                            "testcurves",
+                            "Run the curve primitive harness.",
+                            List.of("testcurve"),
+                            playerVariantCommand(
+                                    primitiveExamples.curveUsage(),
+                                    player -> primitiveExamples.playCurve(player, "all"),
+                                    primitiveExamples::playCurve
+                            )
+                    );
+                    event.registrar().register(
+                            "testtelegraphs",
+                            "Run the telegraph primitive harness.",
+                            List.of("testtelegraph"),
+                            playerVariantCommand(
+                                    primitiveExamples.telegraphUsage(),
+                                    player -> primitiveExamples.playTelegraph(player, "all"),
+                                    primitiveExamples::playTelegraph
+                            )
+                    );
+                    event.registrar().register(
+                            "testtrajectories",
+                            "Run the trajectory preview primitive harness.",
+                            List.of("testtrajectory"),
+                            playerVariantCommand(
+                                    primitiveExamples.trajectoryUsage(),
+                                    player -> primitiveExamples.playTrajectory(player, "all"),
+                                    primitiveExamples::playTrajectory
+                            )
+                    );
+                    event.registrar().register(
+                            "testimpulses",
+                            "Run the impulse primitive harness.",
+                            List.of("testimpulse"),
+                            playerVariantCommand(
+                                    primitiveExamples.impulseUsage(),
+                                    player -> primitiveExamples.playImpulse(player, "all"),
+                                    primitiveExamples::playImpulse
+                            )
+                    );
+                    event.registrar().register(
+                            "testambient",
+                            "Run the ambient zone primitive harness.",
+                            List.of("testambientzone"),
+                            playerVariantCommand(
+                                    primitiveExamples.ambientUsage(),
+                                    player -> primitiveExamples.playAmbient(player, "all"),
+                                    primitiveExamples::playAmbient
+                            )
+                    );
+                    event.registrar().register(
+                            "testprimitives",
+                            "Run the cross-primitive composition harness.",
+                            List.of("testprimitive"),
+                            playerVariantCommand(
+                                    primitiveExamples.primitivesUsage(),
+                                    player -> primitiveExamples.playPrimitives(player, "all"),
+                                    primitiveExamples::playPrimitives
+                            )
+                    );
                 });
+    }
+
+    private BasicCommand playerVariantCommand(
+            String usage,
+            Consumer<Player> defaultAction,
+            BiConsumer<Player, String> action
+    ) {
+        return new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack stack, String[] args) {
+                CommandSender sender = stack.getSender();
+                if (!(sender instanceof Player player)) {
+                    feedback.error(sender, "This command can only be used by a player.");
+                    return;
+                }
+
+                if (args.length == 0) {
+                    defaultAction.accept(player);
+                    return;
+                }
+
+                String variant = args[0].toLowerCase(Locale.ROOT);
+                if ("help".equals(variant)) {
+                    feedback.info(player, usage);
+                    return;
+                }
+                action.accept(player, variant);
+            }
+        };
+    }
+
+    private void discardPrimitiveState(Player player) {
+        if (primitiveExamples != null) {
+            primitiveExamples.discard(player.getUniqueId());
+        }
     }
 }
