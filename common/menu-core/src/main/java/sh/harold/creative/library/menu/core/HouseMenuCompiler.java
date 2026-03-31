@@ -22,8 +22,8 @@ import java.util.Map;
 
 final class HouseMenuCompiler {
 
-    private static final int SOFT_WRAP_START = 20;
-    private static final int HARD_WRAP_LIMIT = 30;
+    private static final WrapProfile DEFAULT_WRAP_PROFILE = new WrapProfile(20, 30);
+    private static final WrapProfile BULLET_WRAP_PROFILE = new WrapProfile(30, 50);
     private static final int PROGRESS_BAR_WIDTH = 20;
     private static final double SCORE_EPSILON = 0.000001d;
 
@@ -182,7 +182,7 @@ final class HouseMenuCompiler {
     private static List<Component> renderBullets(List<String> bullets) {
         List<Component> rendered = new ArrayList<>();
         for (String bullet : bullets) {
-            List<String> wrapped = softWrap(bullet, 2, 2);
+            List<String> wrapped = wrapText(bullet, 2, 2, BULLET_WRAP_PROFILE);
             for (int i = 0; i < wrapped.size(); i++) {
                 if (i == 0) {
                     rendered.add(Component.text()
@@ -271,19 +271,23 @@ final class HouseMenuCompiler {
     }
 
     private static List<String> softWrap(String text, int firstIndentChars, int continuationIndentChars) {
-        return wrapText(text, firstIndentChars, continuationIndentChars);
+        return wrapText(text, firstIndentChars, continuationIndentChars, DEFAULT_WRAP_PROFILE);
     }
 
     private static List<String> wrapText(String text, int firstIndentChars, int continuationIndentChars) {
+        return wrapText(text, firstIndentChars, continuationIndentChars, DEFAULT_WRAP_PROFILE);
+    }
+
+    private static List<String> wrapText(String text, int firstIndentChars, int continuationIndentChars, WrapProfile profile) {
         String normalized = normalize(text);
-        if (normalized.length() + firstIndentChars <= HARD_WRAP_LIMIT) {
+        if (normalized.length() + firstIndentChars <= profile.hardWrapLimit()) {
             return List.of(normalized);
         }
         String[] words = normalized.split(" ");
-        WrappedLayout best = new WrappedLayout(List.of(), List.of(), List.of());
+        WrappedLayout best = new WrappedLayout(List.of(), List.of(), List.of(), profile.softWrapStart());
         List<WrappedLayout> candidates = new ArrayList<>();
         collectLayouts(words, 0, firstIndentChars, continuationIndentChars, false,
-                new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), candidates);
+                new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), candidates, profile);
         for (WrappedLayout candidate : candidates) {
             if (best.lines().isEmpty() || compareLayouts(candidate, best) < 0) {
                 best = candidate;
@@ -305,19 +309,20 @@ final class HouseMenuCompiler {
             List<String> lines,
             List<Integer> visibleLengths,
             List<Integer> breaks,
-            List<WrappedLayout> candidates
+            List<WrappedLayout> candidates,
+            WrapProfile profile
     ) {
         int indentChars = continuation ? continuationIndentChars : firstIndentChars;
-        for (int end : candidateEnds(words, start, indentChars)) {
+        for (int end : candidateEnds(words, start, indentChars, profile)) {
             String line = joinWords(words, start, end);
             lines.add(line);
             visibleLengths.add(indentChars + line.length());
             breaks.add(end);
             if (end == words.length - 1) {
-                candidates.add(new WrappedLayout(List.copyOf(lines), List.copyOf(visibleLengths), List.copyOf(breaks)));
+                candidates.add(new WrappedLayout(List.copyOf(lines), List.copyOf(visibleLengths), List.copyOf(breaks), profile.softWrapStart()));
             } else {
                 collectLayouts(words, end + 1, firstIndentChars, continuationIndentChars, true,
-                        lines, visibleLengths, breaks, candidates);
+                        lines, visibleLengths, breaks, candidates, profile);
             }
             lines.remove(lines.size() - 1);
             visibleLengths.remove(visibleLengths.size() - 1);
@@ -325,9 +330,9 @@ final class HouseMenuCompiler {
         }
     }
 
-    private static List<Integer> candidateEnds(String[] words, int start, int indentChars) {
+    private static List<Integer> candidateEnds(String[] words, int start, int indentChars, WrapProfile profile) {
         List<Integer> ends = new ArrayList<>();
-        int budget = Math.max(1, HARD_WRAP_LIMIT - indentChars);
+        int budget = Math.max(1, profile.hardWrapLimit() - indentChars);
         int currentLength = 0;
         for (int end = start; end < words.length; end++) {
             int spacer = end == start ? 0 : 1;
@@ -377,7 +382,10 @@ final class HouseMenuCompiler {
         return 0;
     }
 
-    private record WrappedLayout(List<String> lines, List<Integer> visibleLengths, List<Integer> breaks) {
+    private record WrapProfile(int softWrapStart, int hardWrapLimit) {
+    }
+
+    private record WrappedLayout(List<String> lines, List<Integer> visibleLengths, List<Integer> breaks, int softWrapStart) {
 
         private double imbalanceScore() {
             double average = visibleLengths.stream()
@@ -395,7 +403,7 @@ final class HouseMenuCompiler {
         private double softTargetScore() {
             double score = 0.0d;
             for (int length : visibleLengths) {
-                double overflow = Math.max(0, length - SOFT_WRAP_START);
+                double overflow = Math.max(0, length - softWrapStart);
                 score += overflow * overflow;
             }
             return score;

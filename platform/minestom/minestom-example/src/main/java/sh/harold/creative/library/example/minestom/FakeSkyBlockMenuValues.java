@@ -85,7 +85,7 @@ final class FakeSkyBlockMenuValues {
     }
 
     static MenuPair detail(String key, Object value) {
-        return MenuPair.of(key, UiValues.literal(value));
+        return MenuPair.of(key, value);
     }
 
     private static UiValue ratio(int current, int max, int color) {

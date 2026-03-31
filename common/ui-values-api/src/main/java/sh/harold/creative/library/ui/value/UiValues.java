@@ -18,7 +18,7 @@ public final class UiValues {
     }
 
     public static UiValue literal(Object value) {
-        return UiValue.of(stringify(value, "value"));
+        return UiValue.of(Objects.requireNonNull(value, "value"));
     }
 
     public static UiValue literal(Object value, TextColor color) {
@@ -66,12 +66,4 @@ public final class UiValues {
         return new BigDecimal(String.valueOf(value));
     }
 
-    private static String stringify(Object value, String label) {
-        Objects.requireNonNull(value, label);
-        String text = String.valueOf(value);
-        if (text.isBlank()) {
-            throw new IllegalArgumentException(label + " cannot be blank");
-        }
-        return text;
-    }
 }

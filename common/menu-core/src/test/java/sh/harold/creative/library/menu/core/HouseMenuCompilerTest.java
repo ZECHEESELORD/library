@@ -10,6 +10,7 @@ import sh.harold.creative.library.menu.ActionVerb;
 import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
+import sh.harold.creative.library.menu.MenuPair;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.ui.value.UiValues;
 
@@ -85,7 +86,7 @@ class HouseMenuCompilerTest {
     }
 
     @Test
-    void bulletsKeepHangingIndentWhileBalancingLines() {
+    void bulletsStayOnOneLineUntilTheyReachTheBulletHardLimit() {
         MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("golden_hoe"))
                 .name("Farming XLIX")
                 .bullet("Grants +196 to +200 Farming Fortune")
@@ -93,9 +94,21 @@ class HouseMenuCompilerTest {
 
         MenuSlot slot = HouseMenuCompiler.compile(13, item);
 
+        assertEquals(List.of("• Grants +196 to +200 Farming Fortune"), lore(slot));
+    }
+
+    @Test
+    void bulletsKeepHangingIndentOnceTheyExceedTheBulletHardLimit() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("golden_hoe"))
+                .name("Farming XLIX")
+                .bullet("Review every centered layout guideline before placing showcase cards across the wider canvas.")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
         assertEquals(List.of(
-                "• Grants +196 to +200",
-                "  Farming Fortune"), lore(slot));
+                "• Review every centered layout guideline before",
+                "  placing showcase cards across the wider canvas."), lore(slot));
     }
 
     @Test
@@ -166,6 +179,22 @@ class HouseMenuCompilerTest {
 
         MenuSlot slot = HouseMenuCompiler.compile(13, item);
 
+        Component line = slot.lore().getFirst();
+        assertEquals(NamedTextColor.GRAY, line.children().get(0).color());
+        assertEquals(TextColor.color(0x55FF55), line.children().get(1).color());
+    }
+
+    @Test
+    void menuPairFactoryPreservesUiValueWhenValueIsTypedAsObject() {
+        Object xpToNext = UiValues.prettyNumber(4_800, 0x55FF55);
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Card")
+                .pairs(MenuPair.of("XP to Next", xpToNext))
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of("XP to Next: 4,800"), lore(slot));
         Component line = slot.lore().getFirst();
         assertEquals(NamedTextColor.GRAY, line.children().get(0).color());
         assertEquals(TextColor.color(0x55FF55), line.children().get(1).color());

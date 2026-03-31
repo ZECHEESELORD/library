@@ -70,8 +70,7 @@ class MenuGoldenFixtureTest {
                 -------------------- 3,432,908.3/4,000,000
                 
                 • Farmhand L
-                • Grants +196 to +200
-                  Farming Fortune
+                • Grants +196 to +200 Farming Fortune
                 • +5 Health
                 • +1,000,000 Coins
                 • +20 SkyBlock XP

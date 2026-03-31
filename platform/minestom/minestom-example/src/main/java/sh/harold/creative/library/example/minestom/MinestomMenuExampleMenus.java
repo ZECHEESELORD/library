@@ -16,17 +16,23 @@ import sh.harold.creative.library.menu.minestom.MinestomMenuPlatform;
 import sh.harold.creative.library.sound.SoundCueKeys;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 final class MinestomMenuExampleMenus {
 
+    private static final TabGalleryVariant DEFAULT_TABS_GALLERY = new TabGalleryVariant(true, "profiles");
+
     private final MinestomMenuPlatform menus;
+    private final Map<TabGalleryVariant, Menu> tabGalleryCache = new HashMap<>();
 
     MinestomMenuExampleMenus(MinestomMenuPlatform menus) {
         this.menus = menus;
+        tabGalleryCache.put(DEFAULT_TABS_GALLERY, buildTabsGallery(true, "profiles"));
     }
 
     Menu gallery() {
@@ -34,10 +40,15 @@ final class MinestomMenuExampleMenus {
     }
 
     Menu tabsGallery() {
-        return tabsGallery(true, "profiles");
+        return tabsGallery(DEFAULT_TABS_GALLERY.canvasFillerEnabled(), DEFAULT_TABS_GALLERY.defaultTabId());
     }
 
     private Menu tabsGallery(boolean canvasFillerEnabled, String defaultTabId) {
+        return tabGalleryCache.computeIfAbsent(new TabGalleryVariant(canvasFillerEnabled, defaultTabId),
+                variant -> buildTabsGallery(variant.canvasFillerEnabled(), variant.defaultTabId()));
+    }
+
+    private Menu buildTabsGallery(boolean canvasFillerEnabled, String defaultTabId) {
         return menus.tabs()
                 .title("House Style Gallery")
                 .defaultTab(defaultTabId)
@@ -552,5 +563,8 @@ final class MinestomMenuExampleMenus {
                 .pair("You have", FakeSkyBlockMenuValues.gems(360))
                 .line("Cannot afford this!")
                 .build();
+    }
+
+    private record TabGalleryVariant(boolean canvasFillerEnabled, String defaultTabId) {
     }
 }

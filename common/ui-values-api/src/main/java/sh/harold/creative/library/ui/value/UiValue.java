@@ -19,6 +19,9 @@ public record UiValue(String text, TextColor colorOverride) {
 
     public static UiValue of(Object value) {
         Objects.requireNonNull(value, "value");
+        if (value instanceof UiValue uiValue) {
+            return uiValue;
+        }
         return of(String.valueOf(value));
     }
 
