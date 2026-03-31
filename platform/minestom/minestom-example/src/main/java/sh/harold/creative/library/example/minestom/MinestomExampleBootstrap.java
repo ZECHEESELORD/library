@@ -2,21 +2,48 @@ package sh.harold.creative.library.example.minestom;
 
 import net.minestom.server.MinecraftServer;
 import net.minestom.server.coordinate.Pos;
+import net.minestom.server.entity.Player;
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent;
 import net.minestom.server.event.player.PlayerDisconnectEvent;
 import net.minestom.server.event.player.PlayerSpawnEvent;
 import net.minestom.server.instance.InstanceContainer;
 import net.minestom.server.instance.block.Block;
+import net.minestom.server.item.ItemStack;
+import net.minestom.server.item.Material;
 import sh.harold.creative.library.camera.minestom.MinestomCameraMotionPlatform;
 import sh.harold.creative.library.menu.minestom.MinestomMenuPlatform;
 import sh.harold.creative.library.sound.SoundCueKeys;
 import sh.harold.creative.library.sound.minestom.MinestomSoundCuePlatform;
 import sh.harold.creative.library.overlay.minestom.MinestomScreenOverlayPlatform;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public final class MinestomExampleBootstrap {
 
     private static final String HOST = "0.0.0.0";
     private static final int PORT = 25565;
+    private static final List<Material> TEST_HOTBAR_POOL = List.of(
+            Material.COMPASS,
+            Material.SLIME_BALL,
+            Material.HOPPER,
+            Material.CHEST,
+            Material.GOLDEN_HOE,
+            Material.BOOK,
+            Material.FISHING_ROD,
+            Material.ENDER_PEARL,
+            Material.COOKIE,
+            Material.CLOCK,
+            Material.MAP,
+            Material.SHIELD,
+            Material.EMERALD,
+            Material.WHEAT,
+            Material.DIAMOND_SWORD,
+            Material.BLAZE_POWDER,
+            Material.NETHER_STAR,
+            Material.SPYGLASS
+    );
 
     private MinestomExampleBootstrap() {
     }
@@ -140,6 +167,7 @@ public final class MinestomExampleBootstrap {
             if (!event.isFirstSpawn()) {
                 primitiveExamples.discard(event.getPlayer().getUuid());
             }
+            populateTestingHotbar(event.getPlayer());
             if (event.isFirstSpawn()) {
                 entityExamples.ensureSpawned();
                 sounds.play(event.getPlayer(), SoundCueKeys.REWARD_DISCOVERY);
@@ -157,5 +185,14 @@ public final class MinestomExampleBootstrap {
 
     private static void log(String message) {
         System.out.println("[minestom-example] " + message);
+    }
+
+    private static void populateTestingHotbar(Player player) {
+        List<Material> materials = new ArrayList<>(TEST_HOTBAR_POOL);
+        Collections.shuffle(materials);
+        for (int slot = 0; slot < 9; slot++) {
+            player.getInventory().setItemStack(slot, ItemStack.of(materials.get(slot)));
+        }
+        player.setHeldItemSlot((byte) 0);
     }
 }

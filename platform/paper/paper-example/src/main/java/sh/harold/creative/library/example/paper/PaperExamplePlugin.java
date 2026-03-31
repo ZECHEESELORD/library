@@ -4,6 +4,7 @@ import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -14,6 +15,7 @@ import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.creative.library.camera.paper.PaperCameraMotionPlatform;
 import sh.harold.creative.library.menu.paper.PaperMenuPlatform;
@@ -22,12 +24,35 @@ import sh.harold.creative.library.sound.paper.PaperSoundCuePlatform;
 import sh.harold.creative.library.overlay.paper.PaperScreenOverlayPlatform;
 import sh.harold.creative.library.message.Message;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public final class PaperExamplePlugin extends JavaPlugin implements Listener {
+
+    private static final List<Material> TEST_HOTBAR_POOL = List.of(
+            Material.COMPASS,
+            Material.SLIME_BALL,
+            Material.HOPPER,
+            Material.CHEST,
+            Material.GOLDEN_HOE,
+            Material.BOOK,
+            Material.FISHING_ROD,
+            Material.ENDER_PEARL,
+            Material.COOKIE,
+            Material.CLOCK,
+            Material.MAP,
+            Material.SHIELD,
+            Material.EMERALD,
+            Material.WHEAT,
+            Material.DIAMOND_SWORD,
+            Material.BLAZE_POWDER,
+            Material.NETHER_STAR,
+            Material.SPYGLASS
+    );
 
     private PaperMenuPlatform menus;
     private PaperMenuExampleMenus examples;
@@ -74,6 +99,7 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
+        populateTestingHotbar(event.getPlayer());
         sounds.play(event.getPlayer(), SoundCueKeys.REWARD_DISCOVERY);
         Bukkit.getScheduler().runTask(this, () -> menus.open(event.getPlayer(), examples.gallery()));
         feedback.info(
@@ -103,6 +129,7 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
         discardPrimitiveState(event.getPlayer());
+        Bukkit.getScheduler().runTask(this, () -> populateTestingHotbar(event.getPlayer()));
     }
 
     @EventHandler
@@ -293,5 +320,14 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
         if (primitiveExamples != null) {
             primitiveExamples.discard(player.getUniqueId());
         }
+    }
+
+    private void populateTestingHotbar(Player player) {
+        List<Material> materials = new ArrayList<>(TEST_HOTBAR_POOL);
+        Collections.shuffle(materials);
+        for (int slot = 0; slot < 9; slot++) {
+            player.getInventory().setItem(slot, new ItemStack(materials.get(slot)));
+        }
+        player.getInventory().setHeldItemSlot(0);
     }
 }
