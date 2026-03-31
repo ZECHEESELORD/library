@@ -383,6 +383,9 @@ final class MinestomMenuRuntime implements AutoCloseable {
     private boolean applyEffects(MinestomMenuSession session, List<ReactiveMenuEffect> effects) {
         for (ReactiveMenuEffect effect : effects) {
             switch (effect) {
+                case ReactiveMenuEffect.SetViewerInventorySlot setSlot ->
+                        MenuTrace.time("runtime.viewerInventorySetSlot",
+                                () -> applyViewerInventorySlot(session.viewer(), setSlot.slot(), setSlot.stack()));
                 case ReactiveMenuEffect.Open open -> {
                     replace(session, open.menu());
                     return true;
@@ -394,6 +397,10 @@ final class MinestomMenuRuntime implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    private void applyViewerInventorySlot(Player player, int slot, MenuStack stack) {
+        player.getInventory().setItemStack(slot, renderStack(stack));
     }
 
     private void playInteractionSound(Player player, MenuInteraction interaction) {
@@ -455,6 +462,10 @@ final class MinestomMenuRuntime implements AutoCloseable {
             builder.name(fallbackName(material));
         }
         return builder.build();
+    }
+
+    private ItemStack renderStack(MenuStack stack) {
+        return stack == null ? ItemStack.AIR : renderer.render(HouseMenuCompiler.compile(0, stack));
     }
 
     private static String fallbackName(Material material) {

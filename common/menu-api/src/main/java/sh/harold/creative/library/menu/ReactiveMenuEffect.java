@@ -2,7 +2,8 @@ package sh.harold.creative.library.menu;
 
 import java.util.Objects;
 
-public sealed interface ReactiveMenuEffect permits ReactiveMenuEffect.Close, ReactiveMenuEffect.Open {
+public sealed interface ReactiveMenuEffect permits ReactiveMenuEffect.Close, ReactiveMenuEffect.Open,
+        ReactiveMenuEffect.SetViewerInventorySlot {
 
     record Open(MenuDefinition menu) implements ReactiveMenuEffect {
 
@@ -12,5 +13,14 @@ public sealed interface ReactiveMenuEffect permits ReactiveMenuEffect.Close, Rea
     }
 
     record Close() implements ReactiveMenuEffect {
+    }
+
+    record SetViewerInventorySlot(int slot, MenuStack stack) implements ReactiveMenuEffect {
+
+        public SetViewerInventorySlot {
+            if (slot < 0) {
+                throw new IllegalArgumentException("slot cannot be negative");
+            }
+        }
     }
 }

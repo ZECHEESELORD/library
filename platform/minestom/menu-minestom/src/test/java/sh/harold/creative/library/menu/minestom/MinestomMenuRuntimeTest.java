@@ -13,6 +13,7 @@ import net.minestom.server.network.packet.server.SendablePacket;
 import net.minestom.server.network.player.GameProfile;
 import net.minestom.server.network.player.PlayerConnection;
 import net.minestom.server.entity.Player;
+import net.minestom.server.inventory.AbstractInventory;
 import net.minestom.server.inventory.Inventory;
 import net.minestom.server.inventory.click.Click;
 import net.minestom.server.item.ItemStack;
@@ -28,6 +29,7 @@ import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenu;
+import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
 import sh.harold.creative.library.menu.ReactiveMenuView;
@@ -298,11 +300,11 @@ class MinestomMenuRuntimeTest {
     }
 
     @Test
-    void reactiveMenusCanMirrorBottomInventoryClicks() {
+    void reactiveMenusCanMoveInventoryStacksWithoutDuplicatingThem() {
         TestPlayer player = player();
         MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
 
-        runtime.open(player, reactiveInventoryMirrorMenu());
+        runtime.open(player, reactiveClickInsertMenu(false));
         Inventory inventory = player.lastOpenedInventory();
         player.getInventory().setItemStack(0, namedMinestomItem(Material.STONE, "Bottom Item", 3));
 
@@ -311,24 +313,93 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(click);
 
         assertTrue(click.isCancelled());
+        assertEquals(Material.AIR, player.getInventory().getItemStack(0).material());
         assertEquals("Bottom Item", slotTitle(inventory, 31));
+
+        InventoryPreClickEvent returnClick = new InventoryPreClickEvent(inventory, player, new Click.Left(31));
+        runtime.onInventoryPreClick(returnClick);
+
+        assertTrue(returnClick.isCancelled());
+        assertEquals("Bottom Item", slotTitle(player.getInventory(), 0));
+        assertEquals("Click An Inventory Stack", slotTitle(inventory, 31));
     }
 
     @Test
-    void reactiveMenusCanMirrorDraggedCursorStacks() {
+    void reactiveMenusCanMoveDraggedStacksWithoutDuplicatingThem() {
         TestPlayer player = player();
         MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
 
-        runtime.open(player, reactiveDragMirrorMenu());
+        runtime.open(player, reactiveDragInsertMenu(false));
         Inventory inventory = player.lastOpenedInventory();
-        player.getInventory().setCursorItem(namedMinestomItem(Material.EMERALD, "Cursor Item", 2));
+        player.getInventory().setItemStack(4, namedMinestomItem(Material.EMERALD, "Dragged Item", 2));
+
+        InventoryPreClickEvent pickup = new InventoryPreClickEvent(player.getInventory(), player, new Click.Left(4));
+        runtime.onInventoryPreClick(pickup);
+
+        assertTrue(pickup.isCancelled());
+        assertEquals(Material.AIR, player.getInventory().getItemStack(4).material());
+        assertEquals("Dragged Item", itemTitle(player.getInventory().getCursorItem()));
+        assertEquals(Material.AIR, inventory.getItemStack(31).material());
 
         InventoryPreClickEvent drag = new InventoryPreClickEvent(inventory, player, new Click.LeftDrag(List.of(31)));
 
         runtime.onInventoryPreClick(drag);
 
         assertTrue(drag.isCancelled());
-        assertEquals("Cursor Item", slotTitle(inventory, 31));
+        assertEquals(Material.AIR, player.getInventory().getCursorItem().material());
+        assertEquals("Dragged Item", slotTitle(inventory, 31));
+
+        InventoryPreClickEvent returnClick = new InventoryPreClickEvent(inventory, player, new Click.LeftShift(31));
+        runtime.onInventoryPreClick(returnClick);
+
+        assertTrue(returnClick.isCancelled());
+        assertEquals("Dragged Item", slotTitle(player.getInventory(), 4));
+        assertEquals(Material.AIR, inventory.getItemStack(31).material());
+    }
+
+    @Test
+    void reactiveMenusCanPlacePickedUpCenterStacksIntoEmptyInventorySlots() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveDragInsertMenu(false));
+        Inventory inventory = player.lastOpenedInventory();
+        player.getInventory().setItemStack(4, namedMinestomItem(Material.EMERALD, "Dragged Item", 2));
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(player.getInventory(), player, new Click.Left(4)));
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.LeftDrag(List.of(31))));
+
+        InventoryPreClickEvent pickupFromCenter = new InventoryPreClickEvent(inventory, player, new Click.Left(31));
+        runtime.onInventoryPreClick(pickupFromCenter);
+
+        assertTrue(pickupFromCenter.isCancelled());
+        assertEquals("Dragged Item", itemTitle(player.getInventory().getCursorItem()));
+        assertEquals(Material.AIR, inventory.getItemStack(31).material());
+
+        InventoryPreClickEvent placeIntoInventory = new InventoryPreClickEvent(player.getInventory(), player, new Click.Left(8));
+        runtime.onInventoryPreClick(placeIntoInventory);
+
+        assertTrue(placeIntoInventory.isCancelled());
+        assertEquals("Dragged Item", slotTitle(player.getInventory(), 8));
+        assertEquals(Material.AIR, player.getInventory().getCursorItem().material());
+        assertEquals(Material.AIR, inventory.getItemStack(31).material());
+    }
+
+    @Test
+    void reactiveMenusDoNotMutateLockedInsertTargets() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveClickInsertMenu(true));
+        Inventory inventory = player.lastOpenedInventory();
+        player.getInventory().setItemStack(2, namedMinestomItem(Material.DIAMOND, "Locked Item", 1));
+
+        InventoryPreClickEvent click = new InventoryPreClickEvent(player.getInventory(), player, new Click.Left(2));
+        runtime.onInventoryPreClick(click);
+
+        assertTrue(click.isCancelled());
+        assertEquals("Locked Item", slotTitle(player.getInventory(), 2));
+        assertEquals("Click An Inventory Stack", slotTitle(inventory, 31));
     }
 
     @Test
@@ -543,46 +614,119 @@ class MinestomMenuRuntimeTest {
                 .build();
     }
 
-    private static ReactiveMenu reactiveInventoryMirrorMenu() {
+    private static ReactiveMenu reactiveClickInsertMenu(boolean locked) {
         return new StandardMenuService().reactive()
-                .state(new StoredState(null))
-                .render(state -> ReactiveMenuView.builder("Reactive Mirror")
+                .state(new ClickInsertState(null, -1, locked))
+                .render(state -> ReactiveMenuView.builder("Reactive Click")
                         .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("hopper"))
-                                .name("Inventory Click Demo")
-                                .description("Bottom-inventory clicks should patch the center slot.")
+                                .name("Click Insert")
+                                .description("Click a bottom inventory stack to load it into the center slot, then click the loaded slot to return it to the same source slot.")
                                 .build())
                         .place(31, state.stored() != null
                                 ? state.stored()
-                                : MenuDisplayItem.builder(MenuIcon.vanilla("barrel"))
-                                        .name("Input Slot")
-                                        .description("Click an item in the bottom inventory to mirror it here.")
+                                : MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
+                                        .name("Click An Inventory Stack")
+                                        .description("The source slot clears when the stack loads.")
                                         .build())
                         .build())
                 .reduce((state, input) -> {
                     if (input instanceof ReactiveMenuInput.InventoryClick click && click.item() != null) {
-                        return ReactiveMenuResult.stay(new StoredState(click.item()));
+                        if (state.locked() || state.stored() != null) {
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        return ReactiveMenuResult.of(
+                                new ClickInsertState(click.item(), click.slot(), false),
+                                new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
+                    }
+                    if (input instanceof ReactiveMenuInput.Click click && click.slot() == 31) {
+                        if (state.locked() || state.stored() == null) {
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        return ReactiveMenuResult.of(
+                                new ClickInsertState(null, -1, false),
+                                new ReactiveMenuEffect.SetViewerInventorySlot(state.storedSourceSlot(), state.stored()));
                     }
                     return ReactiveMenuResult.stay(state);
                 })
                 .build();
     }
 
-    private static ReactiveMenu reactiveDragMirrorMenu() {
+    private static ReactiveMenu reactiveDragInsertMenu(boolean locked) {
         return new StandardMenuService().reactive()
-                .state(new StoredState(null))
-                .render(state -> ReactiveMenuView.builder("Reactive Drag")
-                        .place(31, state.stored() != null
-                                ? state.stored()
-                                : MenuDisplayItem.builder(MenuIcon.vanilla("barrel"))
-                                        .name("Drop Target")
-                                        .description("Dragging a cursor stack across slot 31 should mirror it here.")
-                                        .build())
-                        .build())
+                .fillWithBlackPane(false)
+                .state(new DragInsertState(null, -1, null, -1, locked))
+                .render(state -> {
+                    ReactiveMenuView.Builder builder = ReactiveMenuView.builder("Reactive Drag")
+                            .cursor(state.cursor())
+                            .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("hopper"))
+                                    .name("Shift Or Drag")
+                                    .description("Shift-click or click a bottom inventory stack to claim it by source slot, then drag or click it into the center slot.")
+                                    .build());
+                    if (state.stored() != null) {
+                        builder.place(31, state.stored());
+                    }
+                    return builder.build();
+                })
                 .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.InventoryClick click) {
+                        if (state.cursor() != null) {
+                            if (click.item() == null) {
+                                return ReactiveMenuResult.of(
+                                        new DragInsertState(state.stored(), state.storedSourceSlot(), null, -1, state.locked()),
+                                        new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), state.cursor()));
+                            }
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        if (click.item() == null) {
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        if (state.locked()) {
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        if (click.shift()) {
+                            if (state.stored() != null) {
+                                return ReactiveMenuResult.stay(state);
+                            }
+                            return ReactiveMenuResult.of(
+                                    new DragInsertState(click.item(), click.slot(), state.cursor(), state.cursorSourceSlot(), false),
+                                    new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
+                        }
+                        return ReactiveMenuResult.of(
+                                new DragInsertState(state.stored(), state.storedSourceSlot(), click.item(), click.slot(), false),
+                                new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
+                    }
                     if (input instanceof ReactiveMenuInput.Drag drag
                             && drag.cursor() != null
                             && drag.slots().contains(31)) {
-                        return ReactiveMenuResult.stay(new StoredState(drag.cursor()));
+                        if (state.locked() || state.cursor() == null || state.stored() != null) {
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        return ReactiveMenuResult.stay(new DragInsertState(state.cursor(), state.cursorSourceSlot(), null, -1, false));
+                    }
+                    if (input instanceof ReactiveMenuInput.Click click && click.slot() == 31) {
+                        if (state.locked()) {
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        if (state.cursor() != null) {
+                            return ReactiveMenuResult.stay(new DragInsertState(state.cursor(), state.cursorSourceSlot(), null, -1, false));
+                        }
+                        if (state.stored() == null) {
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        if (click.shift()) {
+                            return ReactiveMenuResult.of(
+                                    new DragInsertState(null, -1, null, -1, false),
+                                    new ReactiveMenuEffect.SetViewerInventorySlot(state.storedSourceSlot(), state.stored()));
+                        }
+                        return ReactiveMenuResult.stay(new DragInsertState(null, -1, state.stored(), state.storedSourceSlot(), false));
+                    }
+                    if (input instanceof ReactiveMenuInput.DropCursor) {
+                        if (state.cursor() == null) {
+                            return ReactiveMenuResult.stay(state);
+                        }
+                        return ReactiveMenuResult.of(
+                                new DragInsertState(state.stored(), state.storedSourceSlot(), null, -1, state.locked()),
+                                new ReactiveMenuEffect.SetViewerInventorySlot(state.cursorSourceSlot(), state.cursor()));
                     }
                     return ReactiveMenuResult.stay(state);
                 })
@@ -622,8 +766,12 @@ class MinestomMenuRuntimeTest {
                 .withoutExtraTooltip();
     }
 
-    private static String slotTitle(Inventory inventory, int slot) {
+    private static String slotTitle(AbstractInventory inventory, int slot) {
         return flatten(inventory.getItemStack(slot).get(DataComponents.CUSTOM_NAME));
+    }
+
+    private static String itemTitle(ItemStack itemStack) {
+        return flatten(itemStack.get(DataComponents.CUSTOM_NAME));
     }
 
     private static List<String> slotLore(Inventory inventory, int slot) {
@@ -699,6 +847,18 @@ class MinestomMenuRuntimeTest {
     }
 
     private record StoredState(MenuStack stored) {
+    }
+
+    private record ClickInsertState(MenuStack stored, int storedSourceSlot, boolean locked) {
+    }
+
+    private record DragInsertState(
+            MenuStack stored,
+            int storedSourceSlot,
+            MenuStack cursor,
+            int cursorSourceSlot,
+            boolean locked
+    ) {
     }
 
     private static final class RecordingSoundCueService implements SoundCueService {

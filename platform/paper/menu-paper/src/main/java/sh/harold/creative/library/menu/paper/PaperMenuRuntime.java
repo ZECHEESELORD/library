@@ -441,6 +441,9 @@ final class PaperMenuRuntime implements AutoCloseable {
     private boolean applyEffects(PaperMenuSession session, Player player, List<ReactiveMenuEffect> effects) {
         for (ReactiveMenuEffect effect : effects) {
             switch (effect) {
+                case ReactiveMenuEffect.SetViewerInventorySlot setSlot ->
+                        MenuTrace.time("runtime.viewerInventorySetSlot",
+                                () -> applyViewerInventorySlot(player, setSlot.slot(), setSlot.stack()));
                 case ReactiveMenuEffect.Open open -> {
                     replace(session, open.menu());
                     return true;
@@ -452,6 +455,10 @@ final class PaperMenuRuntime implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    private void applyViewerInventorySlot(Player player, int slot, MenuStack stack) {
+        player.getInventory().setItem(slot, renderStack(stack));
     }
 
     private void playInteractionSound(Player player, MenuInteraction interaction) {
@@ -528,6 +535,10 @@ final class PaperMenuRuntime implements AutoCloseable {
             builder.name(fallbackName(type));
         }
         return builder.build();
+    }
+
+    private ItemStack renderStack(MenuStack stack) {
+        return stack == null ? null : renderer.render(HouseMenuCompiler.compile(0, stack));
     }
 
     private static String fallbackName(Material material) {
