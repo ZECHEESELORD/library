@@ -23,7 +23,7 @@ public final class MinestomMenuExamplesCommand extends Command {
         });
 
         var variant = ArgumentType.Word("variant")
-                .from("tabs", "list", "profile", "farming", "museum", "slot5", "canvas", "help");
+                .from("tabs", "list", "reactive", "snake", "lockdrag", "lockclick", "profile", "farming", "museum", "slot5", "canvas", "help");
         addSyntax((sender, context) -> {
             Player player = MinestomCommandPlayers.requirePlayer(sender);
             if (player == null) {
@@ -33,6 +33,10 @@ public final class MinestomMenuExamplesCommand extends Command {
             switch (context.get(variant)) {
                 case "tabs" -> menus.open(player, examples.tabsGallery());
                 case "list" -> menus.open(player, examples.listGallery());
+                case "reactive" -> menus.open(player, examples.reactiveGallery());
+                case "snake" -> menus.open(player, examples.snakeDemo());
+                case "lockdrag" -> menus.open(player, examples.lockDragDemo());
+                case "lockclick" -> menus.open(player, examples.lockClickDemo());
                 case "profile" -> menus.open(player, examples.profilePreview());
                 case "farming" -> menus.open(player, examples.farmingPreview());
                 case "museum" -> menus.open(player, examples.museumPreview());

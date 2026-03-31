@@ -41,7 +41,7 @@ final class MinestomDevHarnessMessages {
                 .line("Use these commands to preview library surfaces.")
                 .blank()
                 .bullet(
-                        "{command} tabs|list|profile|farming|museum|slot5|canvas",
+                        "{command} tabs|list|reactive|snake|lockdrag|lockclick|profile|farming|museum|slot5|canvas",
                         Message.slot("command", command("/testmenus"))
                 )
                 .bullet(

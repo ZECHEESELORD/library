@@ -35,7 +35,7 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
         overlayExamples = new PaperScreenOverlayExamples(this, overlays, feedback);
         registerCommands();
         getServer().getPluginManager().registerEvents(this, this);
-        getLogger().info("Paper example ready. Joining players open the house-style gallery, and /testoverlays previews the screen shell.");
+        getLogger().info("Paper example ready. Joining players open the house-style gallery, and /testmenus plus /testoverlays expose the dev harness.");
     }
 
     @Override
@@ -57,43 +57,89 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
         Bukkit.getScheduler().runTask(this, () -> menus.open(event.getPlayer(), examples.gallery()));
         feedback.info(
                 event.getPlayer(),
-                "Use {command} to preview the screen overlay subsystem.",
-                Message.slot("command", feedback.command("/testoverlays"))
+                "Use {menus} to reopen the menu gallery and {overlays} to preview the screen overlay subsystem.",
+                Message.slot("menus", feedback.command("/testmenus")),
+                Message.slot("overlays", feedback.command("/testoverlays"))
         );
     }
 
     private void registerCommands() {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
-                event.registrar().register(
-                        "testoverlays",
-                        "Preview the screen overlay demo sequence.",
-                        java.util.List.of("testoverlay"),
-                        new BasicCommand() {
-                            @Override
-                            public void execute(CommandSourceStack stack, String[] args) {
-                                CommandSender sender = stack.getSender();
-                                if (!(sender instanceof Player player)) {
-                                    feedback.error(sender, "This command can only be used by a player.");
-                                    return;
-                                }
+                {
+                    event.registrar().register(
+                            "testmenus",
+                            "Open the menu demo harness.",
+                            java.util.List.of("testmenu"),
+                            new BasicCommand() {
+                                @Override
+                                public void execute(CommandSourceStack stack, String[] args) {
+                                    CommandSender sender = stack.getSender();
+                                    if (!(sender instanceof Player player)) {
+                                        feedback.error(sender, "This command can only be used by a player.");
+                                        return;
+                                    }
 
-                                if (args.length == 0 || "demo".equalsIgnoreCase(args[0])) {
-                                    overlayExamples.runDemo(player);
-                                    return;
-                                }
-                                if ("clear".equalsIgnoreCase(args[0])) {
-                                    overlayExamples.clear(player);
-                                    feedback.success(player, "Cleared active screen overlays.");
-                                    return;
-                                }
+                                    if (args.length == 0 || "tabs".equalsIgnoreCase(args[0])) {
+                                        menus.open(player, examples.tabsGallery());
+                                        return;
+                                    }
 
-                                feedback.info(
-                                        player,
-                                        "Use {command} demo|clear.",
-                                        Message.slot("command", feedback.command("/testoverlays"))
-                                );
+                                    switch (args[0].toLowerCase(java.util.Locale.ROOT)) {
+                                        case "list" -> menus.open(player, examples.listGallery());
+                                        case "reactive" -> menus.open(player, examples.reactiveGallery());
+                                        case "snake" -> menus.open(player, examples.snakeDemo());
+                                        case "lockdrag" -> menus.open(player, examples.lockDragDemo());
+                                        case "lockclick" -> menus.open(player, examples.lockClickDemo());
+                                        case "profile" -> menus.open(player, examples.profilePreview());
+                                        case "farming" -> menus.open(player, examples.farmingPreview());
+                                        case "museum" -> menus.open(player, examples.museumPreview());
+                                        case "slot5" -> menus.open(player, examples.slotFivePreview());
+                                        case "canvas" -> menus.open(player, examples.canvasGallery());
+                                        case "help" -> feedback.info(
+                                                player,
+                                                "Use {command} tabs|list|reactive|snake|lockdrag|lockclick|profile|farming|museum|slot5|canvas.",
+                                                Message.slot("command", feedback.command("/testmenus"))
+                                        );
+                                        default -> feedback.info(
+                                                player,
+                                                "Use {command} tabs|list|reactive|snake|lockdrag|lockclick|profile|farming|museum|slot5|canvas.",
+                                                Message.slot("command", feedback.command("/testmenus"))
+                                        );
+                                    }
+                                }
                             }
-                        }
-                ));
+                    );
+                    event.registrar().register(
+                            "testoverlays",
+                            "Preview the screen overlay demo sequence.",
+                            java.util.List.of("testoverlay"),
+                            new BasicCommand() {
+                                @Override
+                                public void execute(CommandSourceStack stack, String[] args) {
+                                    CommandSender sender = stack.getSender();
+                                    if (!(sender instanceof Player player)) {
+                                        feedback.error(sender, "This command can only be used by a player.");
+                                        return;
+                                    }
+
+                                    if (args.length == 0 || "demo".equalsIgnoreCase(args[0])) {
+                                        overlayExamples.runDemo(player);
+                                        return;
+                                    }
+                                    if ("clear".equalsIgnoreCase(args[0])) {
+                                        overlayExamples.clear(player);
+                                        feedback.success(player, "Cleared active screen overlays.");
+                                        return;
+                                    }
+
+                                    feedback.info(
+                                            player,
+                                            "Use {command} demo|clear.",
+                                            Message.slot("command", feedback.command("/testoverlays"))
+                                    );
+                                }
+                            }
+                    );
+                });
     }
 }
