@@ -1,6 +1,9 @@
 rootProject.name = "library"
 
 include(
+    ":common:tick-lifecycle-api",
+    ":common:spatial-api",
+    ":common:spatial-core",
     ":common:camera-motion-api",
     ":common:camera-motion-core",
     ":common:data-api",
