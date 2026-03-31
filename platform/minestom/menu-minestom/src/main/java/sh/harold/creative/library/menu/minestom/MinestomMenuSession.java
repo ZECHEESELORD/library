@@ -4,19 +4,30 @@ import net.kyori.adventure.text.Component;
 import net.minestom.server.entity.Player;
 import net.minestom.server.inventory.Inventory;
 import net.minestom.server.inventory.InventoryType;
-import sh.harold.creative.library.menu.Menu;
 import sh.harold.creative.library.menu.MenuContext;
+import sh.harold.creative.library.menu.MenuDefinition;
+import sh.harold.creative.library.menu.MenuFrame;
+import sh.harold.creative.library.menu.MenuSlot;
+import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.core.MenuSessionState;
+import sh.harold.creative.library.menu.core.MenuTickHandle;
 
+import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 final class MinestomMenuSession implements MenuContext.SessionControls {
 
     private final MinestomMenuRuntime runtime;
     private final Player viewer;
     private final MenuSessionState state;
+    private final AtomicLong actionVersion = new AtomicLong();
     private volatile Inventory inventory;
     private volatile Component title;
+    private volatile List<MenuSlot> renderedSlots = List.of();
+    private volatile MenuStack renderedCursor;
+    private volatile MenuTickHandle tickHandle = MenuTickHandle.noop();
+    private volatile long tickIntervalTicks;
 
     MinestomMenuSession(MinestomMenuRuntime runtime, Player viewer, MenuSessionState state) {
         this.runtime = Objects.requireNonNull(runtime, "runtime");
@@ -36,25 +47,47 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
         return inventory;
     }
 
-    void open() {
-        renderCurrentFrame();
+    long actionVersion() {
+        return actionVersion.get();
     }
 
-    void renderCurrentFrame() {
+    void open() {
+        renderCurrentView();
+    }
+
+    void renderCurrentView() {
+        actionVersion.incrementAndGet();
+        MenuFrame frame = state.currentFrame();
         Inventory current = inventory;
-        Component nextTitle = state.currentFrame().title();
+        Component nextTitle = frame.title();
         InventoryType nextType = inventoryType(state.menu().rows());
+        List<MenuSlot> nextSlots = frame.slots();
+        MenuStack nextCursor = state.cursor();
 
         if (current == null || current.getInventoryType() != nextType || !Objects.equals(title, nextTitle)) {
             Inventory nextInventory = new Inventory(nextType, nextTitle);
+            runtime.render(nextInventory, null, nextSlots);
             inventory = nextInventory;
             title = nextTitle;
-            runtime.render(this, nextInventory);
+            renderedSlots = nextSlots;
+            runtime.syncCursor(viewer, renderedCursor, nextCursor);
+            renderedCursor = nextCursor;
             viewer.openInventory(nextInventory);
+            updateTicking();
             return;
         }
 
-        runtime.render(this, current);
+        runtime.render(current, renderedSlots, nextSlots);
+        title = nextTitle;
+        renderedSlots = nextSlots;
+        runtime.syncCursor(viewer, renderedCursor, nextCursor);
+        renderedCursor = nextCursor;
+        updateTicking();
+    }
+
+    void detach() {
+        state.closed();
+        stopTicking();
     }
 
     @Override
@@ -63,7 +96,7 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
     }
 
     @Override
-    public void open(Menu menu) {
+    public void open(MenuDefinition menu) {
         runtime.replace(this, menu);
     }
 
@@ -75,6 +108,26 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
     @Override
     public void close() {
         runtime.close(this);
+    }
+
+    private void updateTicking() {
+        long nextInterval = state.tickIntervalTicks();
+        if (nextInterval <= 0L) {
+            stopTicking();
+            return;
+        }
+        if (tickIntervalTicks == nextInterval) {
+            return;
+        }
+        stopTicking();
+        tickHandle = runtime.tickScheduler().schedule(nextInterval, () -> runtime.onTick(this));
+        tickIntervalTicks = nextInterval;
+    }
+
+    private void stopTicking() {
+        tickHandle.cancel();
+        tickHandle = MenuTickHandle.noop();
+        tickIntervalTicks = 0L;
     }
 
     private static InventoryType inventoryType(int rows) {

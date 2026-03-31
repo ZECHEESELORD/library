@@ -61,10 +61,12 @@ public final class MenuButton implements MenuItem {
         return glow;
     }
 
+    @Override
     public Map<MenuClick, MenuInteraction> interactions() {
         return interactions;
     }
 
+    @Override
     public boolean promptSuppressed() {
         return promptSuppressed;
     }
@@ -101,6 +103,24 @@ public final class MenuButton implements MenuItem {
 
         public Builder onRightClick(ActionVerb verb, String promptLabel, MenuAction action) {
             interactions.put(MenuClick.RIGHT, MenuInteraction.of(verb, promptLabel, new MenuSlotAction.Execute(action)));
+            return this;
+        }
+
+        public Builder emit(ActionVerb verb, Object message) {
+            return emit(verb, verb.promptLabel(), message);
+        }
+
+        public Builder emit(ActionVerb verb, String promptLabel, Object message) {
+            interactions.put(MenuClick.LEFT, MenuInteraction.of(verb, promptLabel, new MenuSlotAction.Dispatch(message)));
+            return this;
+        }
+
+        public Builder onRightEmit(ActionVerb verb, Object message) {
+            return onRightEmit(verb, verb.promptLabel(), message);
+        }
+
+        public Builder onRightEmit(ActionVerb verb, String promptLabel, Object message) {
+            interactions.put(MenuClick.RIGHT, MenuInteraction.of(verb, promptLabel, new MenuSlotAction.Dispatch(message)));
             return this;
         }
 

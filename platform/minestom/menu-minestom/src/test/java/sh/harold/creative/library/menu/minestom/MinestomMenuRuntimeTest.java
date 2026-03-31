@@ -15,13 +15,21 @@ import net.minestom.server.network.player.PlayerConnection;
 import net.minestom.server.entity.Player;
 import net.minestom.server.inventory.Inventory;
 import net.minestom.server.inventory.click.Click;
+import net.minestom.server.item.ItemStack;
+import net.minestom.server.item.Material;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.menu.ActionVerb;
 import sh.harold.creative.library.menu.Menu;
 import sh.harold.creative.library.menu.MenuButton;
+import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
+import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
+import sh.harold.creative.library.menu.ReactiveMenu;
+import sh.harold.creative.library.menu.ReactiveMenuInput;
+import sh.harold.creative.library.menu.ReactiveMenuResult;
+import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.menu.core.StandardMenuService;
 import sh.harold.creative.library.sound.CuePlayback;
 import sh.harold.creative.library.sound.SoundCue;
@@ -116,7 +124,8 @@ class MinestomMenuRuntimeTest {
         Inventory spoofedInventory = new Inventory(inventory.getInventoryType(), Component.text("Profiles"));
         InventoryPreClickEvent spoofedClick = new InventoryPreClickEvent(spoofedInventory, player, new Click.Left(53));
         runtime.onInventoryPreClick(spoofedClick);
-        assertFalse(spoofedClick.isCancelled());
+        assertTrue(spoofedClick.isCancelled());
+        assertEquals(1, player.openCount());
 
         runtime.onInventoryClose(new InventoryCloseEvent(inventory, player, true));
 
@@ -287,6 +296,40 @@ class MinestomMenuRuntimeTest {
         ), sounds.playedKeys());
     }
 
+    @Test
+    void reactiveMenusCanMirrorBottomInventoryClicks() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveInventoryMirrorMenu());
+        Inventory inventory = player.lastOpenedInventory();
+        player.getInventory().setItemStack(0, namedMinestomItem(Material.STONE, "Bottom Item", 3));
+
+        InventoryPreClickEvent click = new InventoryPreClickEvent(player.getInventory(), player, new Click.Left(0));
+
+        runtime.onInventoryPreClick(click);
+
+        assertTrue(click.isCancelled());
+        assertEquals("Bottom Item", slotTitle(inventory, 31));
+    }
+
+    @Test
+    void reactiveMenusCanMirrorDraggedCursorStacks() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveDragMirrorMenu());
+        Inventory inventory = player.lastOpenedInventory();
+        player.getInventory().setCursorItem(namedMinestomItem(Material.EMERALD, "Cursor Item", 2));
+
+        InventoryPreClickEvent drag = new InventoryPreClickEvent(inventory, player, new Click.LeftDrag(List.of(31)));
+
+        runtime.onInventoryPreClick(drag);
+
+        assertTrue(drag.isCancelled());
+        assertEquals("Cursor Item", slotTitle(inventory, 31));
+    }
+
     private static Menu pagedMenu() {
         return new StandardMenuService().list()
                 .title("Profiles")
@@ -413,8 +456,60 @@ class MinestomMenuRuntimeTest {
                 .build();
     }
 
+    private static ReactiveMenu reactiveInventoryMirrorMenu() {
+        return new StandardMenuService().reactive()
+                .state(new StoredState(null))
+                .render(state -> ReactiveMenuView.builder("Reactive Mirror")
+                        .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("hopper"))
+                                .name("Inventory Click Demo")
+                                .description("Bottom-inventory clicks should patch the center slot.")
+                                .build())
+                        .place(31, state.stored() != null
+                                ? state.stored()
+                                : MenuDisplayItem.builder(MenuIcon.vanilla("barrel"))
+                                        .name("Input Slot")
+                                        .description("Click an item in the bottom inventory to mirror it here.")
+                                        .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.InventoryClick click && click.item() != null) {
+                        return ReactiveMenuResult.stay(new StoredState(click.item()));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+    }
+
+    private static ReactiveMenu reactiveDragMirrorMenu() {
+        return new StandardMenuService().reactive()
+                .state(new StoredState(null))
+                .render(state -> ReactiveMenuView.builder("Reactive Drag")
+                        .place(31, state.stored() != null
+                                ? state.stored()
+                                : MenuDisplayItem.builder(MenuIcon.vanilla("barrel"))
+                                        .name("Drop Target")
+                                        .description("Dragging a cursor stack across slot 31 should mirror it here.")
+                                        .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Drag drag
+                            && drag.cursor() != null
+                            && drag.slots().contains(31)) {
+                        return ReactiveMenuResult.stay(new StoredState(drag.cursor()));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+    }
+
     private static TestPlayer player() {
         return new TestPlayer(UUID.randomUUID());
+    }
+
+    private static ItemStack namedMinestomItem(Material material, String name, int amount) {
+        return ItemStack.of(material, amount)
+                .withCustomName(Component.text(name))
+                .withoutExtraTooltip();
     }
 
     private static String slotTitle(Inventory inventory, int slot) {
@@ -447,6 +542,7 @@ class MinestomMenuRuntimeTest {
     private static final class TestPlayer extends Player {
 
         private final List<Inventory> openedInventories = new ArrayList<>();
+        private Inventory openInventory;
         private int closeCount;
 
         private TestPlayer(UUID uuid) {
@@ -456,12 +552,19 @@ class MinestomMenuRuntimeTest {
         @Override
         public boolean openInventory(Inventory inventory) {
             openedInventories.add(inventory);
+            openInventory = inventory;
             return true;
         }
 
         @Override
         public void closeInventory() {
+            openInventory = null;
             closeCount++;
+        }
+
+        @Override
+        public net.minestom.server.inventory.AbstractInventory getOpenInventory() {
+            return openInventory;
         }
 
         private Inventory lastOpenedInventory() {
@@ -475,6 +578,9 @@ class MinestomMenuRuntimeTest {
         private int closeCount() {
             return closeCount;
         }
+    }
+
+    private record StoredState(MenuStack stored) {
     }
 
     private static final class RecordingSoundCueService implements SoundCueService {

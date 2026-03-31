@@ -10,15 +10,18 @@ import net.minestom.server.item.Material;
 import net.minestom.server.timer.TaskSchedule;
 import sh.harold.creative.library.menu.CanvasMenuBuilder;
 import sh.harold.creative.library.menu.ListMenuBuilder;
-import sh.harold.creative.library.menu.Menu;
 import sh.harold.creative.library.menu.MenuButton;
+import sh.harold.creative.library.menu.MenuDefinition;
 import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuItem;
 import sh.harold.creative.library.menu.MenuService;
+import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
+import sh.harold.creative.library.menu.ReactiveMenuBuilder;
 import sh.harold.creative.library.menu.TabsMenuBuilder;
+import sh.harold.creative.library.menu.core.MenuTickScheduler;
 import sh.harold.creative.library.menu.core.StandardMenuService;
 import sh.harold.creative.library.sound.SoundCueService;
 import sh.harold.creative.library.sound.core.StandardSoundCueService;
@@ -57,7 +60,7 @@ public final class MinestomMenuPlatform implements AutoCloseable {
         this.parentNode = Objects.requireNonNull(parentNode, "parentNode");
         this.sounds = Objects.requireNonNull(sounds, "sounds");
         this.closeSounds = closeSounds;
-        this.runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), sounds);
+        this.runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), sounds, scheduleTicks());
         this.runtimeNode = runtime.createEventNode("menu-runtime-" + UUID.randomUUID());
         this.parentNode.addChild(runtimeNode);
     }
@@ -74,6 +77,10 @@ public final class MinestomMenuPlatform implements AutoCloseable {
         return menus.canvas();
     }
 
+    public ReactiveMenuBuilder<Void> reactive() {
+        return menus.reactive();
+    }
+
     public MenuButton.Builder button(Material material) {
         return MenuButton.builder(icon(material));
     }
@@ -88,6 +95,14 @@ public final class MinestomMenuPlatform implements AutoCloseable {
 
     public MenuDisplayItem.Builder display(ItemStack itemStack) {
         return MenuDisplayItem.builder(icon(itemStack));
+    }
+
+    public MenuStack.Builder stack(Material material) {
+        return MenuStack.builder(icon(material));
+    }
+
+    public MenuStack.Builder stack(ItemStack itemStack) {
+        return MenuStack.builder(icon(itemStack));
     }
 
     public MenuTab.Builder tab(String id, Material material) {
@@ -110,7 +125,7 @@ public final class MinestomMenuPlatform implements AutoCloseable {
         return MenuTab.canvas(id, name, icon(material), consumer);
     }
 
-    public void open(Player player, Menu menu) {
+    public void open(Player player, MenuDefinition menu) {
         runtime.open(Objects.requireNonNull(player, "player"), Objects.requireNonNull(menu, "menu"));
     }
 
@@ -143,5 +158,18 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     private static MenuIcon icon(ItemStack itemStack) {
         Objects.requireNonNull(itemStack, "itemStack");
         return icon(itemStack.material());
+    }
+
+    private static MenuTickScheduler scheduleTicks() {
+        return (intervalTicks, action) -> {
+            if (intervalTicks <= 0L) {
+                throw new IllegalArgumentException("intervalTicks must be greater than zero");
+            }
+            var task = MinecraftServer.getSchedulerManager().scheduleTask(
+                    Objects.requireNonNull(action, "action"),
+                    TaskSchedule.tick(Math.toIntExact(intervalTicks)),
+                    TaskSchedule.tick(Math.toIntExact(intervalTicks)));
+            return task::cancel;
+        };
     }
 }

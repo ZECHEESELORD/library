@@ -13,8 +13,13 @@ public record MenuSlot(
         Component title,
         List<Component> lore,
         boolean glow,
-        Map<MenuClick, MenuInteraction> interactions
+        Map<MenuClick, MenuInteraction> interactions,
+        int amount
 ) {
+
+    public MenuSlot(int slot, MenuIcon icon, Component title, List<Component> lore, boolean glow, Map<MenuClick, MenuInteraction> interactions) {
+        this(slot, icon, title, lore, glow, interactions, 1);
+    }
 
     public MenuSlot {
         if (slot < 0 || slot > 53) {
@@ -24,6 +29,9 @@ public record MenuSlot(
         title = Objects.requireNonNull(title, "title");
         lore = List.copyOf(lore);
         interactions = copyInteractions(interactions);
+        if (amount <= 0) {
+            throw new IllegalArgumentException("amount must be greater than zero");
+        }
     }
 
     public boolean clickable() {

@@ -14,7 +14,7 @@ public final class MenuContext {
             }
 
             @Override
-            public void open(Menu menu) {
+            public void open(MenuDefinition menu) {
             }
 
             @Override
@@ -28,7 +28,7 @@ public final class MenuContext {
 
         void refresh();
 
-        void open(Menu menu);
+        void open(MenuDefinition menu);
 
         void back();
 
@@ -67,7 +67,7 @@ public final class MenuContext {
         controls.refresh();
     }
 
-    public void open(Menu menu) {
+    public void open(MenuDefinition menu) {
         controls.open(java.util.Objects.requireNonNull(menu, "menu"));
     }
 

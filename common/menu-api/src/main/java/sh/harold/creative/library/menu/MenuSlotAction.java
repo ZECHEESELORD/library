@@ -2,7 +2,7 @@ package sh.harold.creative.library.menu;
 
 import java.util.Objects;
 
-public sealed interface MenuSlotAction permits MenuSlotAction.Execute, MenuSlotAction.OpenFrame, MenuSlotAction.Close {
+public sealed interface MenuSlotAction permits MenuSlotAction.Close, MenuSlotAction.Dispatch, MenuSlotAction.Execute, MenuSlotAction.OpenFrame {
 
     record Execute(MenuAction action) implements MenuSlotAction {
 
@@ -19,6 +19,9 @@ public sealed interface MenuSlotAction permits MenuSlotAction.Execute, MenuSlotA
                 throw new IllegalArgumentException("frameId cannot be blank");
             }
         }
+    }
+
+    record Dispatch(Object message) implements MenuSlotAction {
     }
 
     record Close() implements MenuSlotAction {

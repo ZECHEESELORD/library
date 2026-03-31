@@ -5,12 +5,64 @@ import sh.harold.creative.library.menu.Menu;
 import sh.harold.creative.library.menu.MenuFrame;
 import sh.harold.creative.library.menu.MenuGeometry;
 
-import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.Collections;
+import java.util.function.Function;
 
-record StandardMenu(Component title, MenuGeometry geometry, int rows, String initialFrameId, Map<String, MenuFrame> frames) implements Menu {
+final class StandardMenu implements Menu {
 
-    StandardMenu {
-        title = java.util.Objects.requireNonNull(title, "title");
-        frames = Map.copyOf(frames);
+    private final Component title;
+    private final MenuGeometry geometry;
+    private final int rows;
+    private final String initialFrameId;
+    private final Set<String> frameIds;
+    private final Function<String, MenuFrame> frameResolver;
+    private final ConcurrentMap<String, MenuFrame> frames = new ConcurrentHashMap<>();
+
+    StandardMenu(Component title, MenuGeometry geometry, int rows, String initialFrameId,
+                 Set<String> frameIds, Function<String, MenuFrame> frameResolver) {
+        this.title = Objects.requireNonNull(title, "title");
+        this.geometry = Objects.requireNonNull(geometry, "geometry");
+        this.rows = rows;
+        this.initialFrameId = Objects.requireNonNull(initialFrameId, "initialFrameId");
+        this.frameIds = Collections.unmodifiableSet(new LinkedHashSet<>(Objects.requireNonNull(frameIds, "frameIds")));
+        this.frameResolver = Objects.requireNonNull(frameResolver, "frameResolver");
+    }
+
+    @Override
+    public Component title() {
+        return title;
+    }
+
+    @Override
+    public MenuGeometry geometry() {
+        return geometry;
+    }
+
+    @Override
+    public int rows() {
+        return rows;
+    }
+
+    @Override
+    public String initialFrameId() {
+        return initialFrameId;
+    }
+
+    @Override
+    public Set<String> frameIds() {
+        return frameIds;
+    }
+
+    @Override
+    public MenuFrame frame(String frameId) {
+        if (!frameIds.contains(frameId)) {
+            throw new IllegalArgumentException("Unknown menu frame: " + frameId);
+        }
+        return frames.computeIfAbsent(frameId, id -> Objects.requireNonNull(frameResolver.apply(id), "frameResolver"));
     }
 }

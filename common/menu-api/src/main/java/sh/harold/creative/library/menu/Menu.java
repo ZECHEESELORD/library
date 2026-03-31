@@ -2,21 +2,19 @@ package sh.harold.creative.library.menu;
 
 import net.kyori.adventure.text.Component;
 
-import java.util.Map;
+import java.util.Set;
 
-public interface Menu {
-
-    MenuGeometry geometry();
-
-    int rows();
+public interface Menu extends MenuDefinition {
 
     Component title();
 
     String initialFrameId();
 
-    Map<String, MenuFrame> frames();
+    Set<String> frameIds();
+
+    MenuFrame frame(String frameId);
 
     default MenuFrame initialFrame() {
-        return frames().get(initialFrameId());
+        return frame(initialFrameId());
     }
 }

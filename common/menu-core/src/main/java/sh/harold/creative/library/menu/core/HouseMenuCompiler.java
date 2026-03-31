@@ -6,7 +6,6 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import sh.harold.creative.library.menu.AccentFamily;
 import sh.harold.creative.library.menu.MenuBlock;
-import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuClick;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuItem;
@@ -20,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-final class HouseMenuCompiler {
+public final class HouseMenuCompiler {
 
     private static final WrapProfile DEFAULT_WRAP_PROFILE = new WrapProfile(20, 30);
     private static final WrapProfile BULLET_WRAP_PROFILE = new WrapProfile(30, 50);
@@ -34,11 +33,12 @@ final class HouseMenuCompiler {
     private HouseMenuCompiler() {
     }
 
-    static MenuSlot compile(int slot, MenuItem item) {
-        return compile(slot, item.icon(), item.name(), item.secondary().orElse(null), item.blocks(), item.glow(), interactions(item), promptSuppressed(item));
+    public static MenuSlot compile(int slot, MenuItem item) {
+        return compile(slot, item.icon(), item.name(), item.secondary().orElse(null), item.blocks(), item.glow(),
+                item.interactions(), item.promptSuppressed(), item.amount());
     }
 
-    static MenuSlot compile(
+    public static MenuSlot compile(
             int slot,
             MenuIcon icon,
             Component name,
@@ -46,13 +46,14 @@ final class HouseMenuCompiler {
             List<MenuBlock> blocks,
             boolean glow,
             Map<MenuClick, MenuInteraction> interactions,
-            boolean promptSuppressed
+            boolean promptSuppressed,
+            int amount
     ) {
         List<Component> lore = new ArrayList<>();
         appendSecondary(secondary, lore);
         appendBlocks(blocks, lore);
         appendPrompt(interactions, promptSuppressed, lore);
-        return new MenuSlot(slot, icon, name, lore, glow, interactions);
+        return new MenuSlot(slot, icon, name, lore, glow, interactions, amount);
     }
 
     static int footerStart(int rows) {
@@ -98,17 +99,6 @@ final class HouseMenuCompiler {
             }
             lore.addAll(promptLines);
         }
-    }
-
-    private static Map<MenuClick, MenuInteraction> interactions(MenuItem item) {
-        if (item instanceof MenuButton button) {
-            return button.interactions();
-        }
-        return Map.of();
-    }
-
-    private static boolean promptSuppressed(MenuItem item) {
-        return item instanceof MenuButton button && button.promptSuppressed();
     }
 
     private static List<Component> renderBlock(MenuBlock block) {

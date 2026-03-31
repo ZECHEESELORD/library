@@ -4,12 +4,15 @@ import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import org.bukkit.Material;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.DragType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -21,8 +24,14 @@ import org.mockito.Mockito;
 import sh.harold.creative.library.menu.ActionVerb;
 import sh.harold.creative.library.menu.Menu;
 import sh.harold.creative.library.menu.MenuButton;
+import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
+import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
+import sh.harold.creative.library.menu.ReactiveMenu;
+import sh.harold.creative.library.menu.ReactiveMenuInput;
+import sh.harold.creative.library.menu.ReactiveMenuResult;
+import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.menu.core.StandardMenuService;
 import sh.harold.creative.library.sound.CuePlayback;
 import sh.harold.creative.library.sound.SoundCue;
@@ -36,6 +45,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
@@ -48,6 +58,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PaperMenuRuntimeTest {
@@ -311,6 +322,60 @@ class PaperMenuRuntimeTest {
         ), sounds.playedKeys());
     }
 
+    @Test
+    void reactiveMenusCanMirrorBottomInventoryClicks() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveInventoryMirrorMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        int topSize = inventory.getSize();
+        ItemStack bottomItem = namedBukkitItem(Material.STONE, "Bottom Item", 3);
+
+        InventoryView view = view(player, inventory);
+        InventoryClickEvent click = mock(InventoryClickEvent.class);
+        when(click.getView()).thenReturn(view);
+        when(click.getWhoClicked()).thenReturn(player);
+        when(click.getRawSlot()).thenReturn(topSize);
+        when(click.getSlot()).thenReturn(0);
+        when(click.isLeftClick()).thenReturn(true);
+        when(click.isRightClick()).thenReturn(false);
+        when(click.isShiftClick()).thenReturn(false);
+        when(click.getCurrentItem()).thenReturn(bottomItem);
+        when(click.getCursor()).thenReturn(null);
+        runtime.onInventoryClick(click);
+
+        verify(click).setCancelled(true);
+        assertEquals("Bottom Item", slotTitle(access, inventory, 31));
+    }
+
+    @Test
+    void reactiveMenusCanMirrorDraggedCursorStacks() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveDragMirrorMenu());
+        Inventory inventory = access.lastOpenedInventory();
+
+        InventoryView view = view(player, inventory);
+        InventoryDragEvent drag = mock(InventoryDragEvent.class);
+        ItemStack cursorItem = namedBukkitItem(Material.EMERALD, "Cursor Item", 2);
+        when(drag.getView()).thenReturn(view);
+        when(drag.getWhoClicked()).thenReturn(player);
+        when(drag.getRawSlots()).thenReturn(Set.of(31));
+        when(drag.getType()).thenReturn(DragType.EVEN);
+        when(drag.getOldCursor()).thenReturn(cursorItem);
+
+        runtime.onInventoryDrag(drag);
+
+        verify(drag).setCancelled(true);
+        assertEquals("Cursor Item", slotTitle(access, inventory, 31));
+    }
+
     private static Menu pagedMenu() {
         return new StandardMenuService().list()
                 .title("Profiles")
@@ -437,10 +502,66 @@ class PaperMenuRuntimeTest {
                 .build();
     }
 
+    private static ReactiveMenu reactiveInventoryMirrorMenu() {
+        return new StandardMenuService().reactive()
+                .state(new StoredState(null))
+                .render(state -> ReactiveMenuView.builder("Reactive Mirror")
+                        .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("hopper"))
+                                .name("Inventory Click Demo")
+                                .description("Bottom-inventory clicks should patch the center slot.")
+                                .build())
+                        .place(31, state.stored() != null
+                                ? state.stored()
+                                : MenuDisplayItem.builder(MenuIcon.vanilla("barrel"))
+                                        .name("Input Slot")
+                                        .description("Click an item in the bottom inventory to mirror it here.")
+                                        .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.InventoryClick click && click.item() != null) {
+                        return ReactiveMenuResult.stay(new StoredState(click.item()));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+    }
+
+    private static ReactiveMenu reactiveDragMirrorMenu() {
+        return new StandardMenuService().reactive()
+                .state(new StoredState(null))
+                .render(state -> ReactiveMenuView.builder("Reactive Drag")
+                        .place(31, state.stored() != null
+                                ? state.stored()
+                                : MenuDisplayItem.builder(MenuIcon.vanilla("barrel"))
+                                        .name("Drop Target")
+                                        .description("Dragging a cursor stack across slot 31 should mirror it here.")
+                                        .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Drag drag
+                            && drag.cursor() != null
+                            && drag.slots().contains(31)) {
+                        return ReactiveMenuResult.stay(new StoredState(drag.cursor()));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+    }
+
     private static Player player(UUID uuid) {
         Player player = mock(Player.class);
         when(player.getUniqueId()).thenReturn(uuid);
         return player;
+    }
+
+    private static ItemStack namedBukkitItem(Material material, String name, int amount) {
+        ItemStack itemStack = mock(ItemStack.class);
+        ItemMeta meta = mock(ItemMeta.class);
+        when(itemStack.getType()).thenReturn(material);
+        when(itemStack.getAmount()).thenReturn(amount);
+        when(itemStack.getItemMeta()).thenReturn(meta);
+        when(meta.displayName()).thenReturn(Component.text(name));
+        return itemStack;
     }
 
     private static InventoryClickEvent click(Player player, Inventory inventory, int rawSlot, ClickType clickType) {
@@ -595,6 +716,7 @@ class PaperMenuRuntimeTest {
         private final Inventory topInventory;
         private final Inventory bottomInventory;
         private final HumanEntity player;
+        private ItemStack cursor;
 
         private TestInventoryView(Inventory topInventory, Inventory bottomInventory, HumanEntity player) {
             this.topInventory = topInventory;
@@ -633,11 +755,12 @@ class PaperMenuRuntimeTest {
 
         @Override
         public void setCursor(ItemStack item) {
+            this.cursor = item;
         }
 
         @Override
         public ItemStack getCursor() {
-            return null;
+            return cursor;
         }
 
         @Override
@@ -691,5 +814,8 @@ class PaperMenuRuntimeTest {
         public org.bukkit.inventory.MenuType getMenuType() {
             return org.bukkit.inventory.MenuType.GENERIC_9X6;
         }
+    }
+
+    private record StoredState(MenuStack stored) {
     }
 }

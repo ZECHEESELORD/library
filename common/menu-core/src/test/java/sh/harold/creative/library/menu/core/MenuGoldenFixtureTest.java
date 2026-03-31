@@ -136,9 +136,10 @@ class MenuGoldenFixtureTest {
         builder.append("GEOMETRY ").append(menu.geometry()).append('\n');
         builder.append("INITIAL ").append(menu.initialFrameId()).append('\n');
         String frameId = menu.initialFrameId();
+        var frame = menu.frame(frameId);
         builder.append("FRAME ").append(frameId);
         for (int slot : List.of(1, 4, 5, 6, 10, 11, 19, 49)) {
-            builder.append('\n').append(slot).append(':').append(slotSnapshot(menu.frames().get(frameId).slots().get(slot)));
+            builder.append('\n').append(slot).append(':').append(slotSnapshot(frame.slots().get(slot)));
         }
         return builder.toString();
     }

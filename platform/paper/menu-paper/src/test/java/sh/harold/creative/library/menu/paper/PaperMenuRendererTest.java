@@ -50,6 +50,7 @@ class PaperMenuRendererTest {
         AtomicReference<List<Component>> lore = new AtomicReference<>();
         AtomicBoolean glint = new AtomicBoolean();
         when(itemStack.getItemMeta()).thenReturn(meta);
+        when(itemStack.clone()).thenReturn(itemStack);
         when(meta.displayName()).thenAnswer(invocation -> displayName.get());
         when(meta.lore()).thenAnswer(invocation -> lore.get());
         when(meta.getEnchantmentGlintOverride()).thenAnswer(invocation -> glint.get() ? Boolean.TRUE : null);

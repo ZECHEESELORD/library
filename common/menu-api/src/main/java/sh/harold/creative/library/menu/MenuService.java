@@ -7,4 +7,6 @@ public interface MenuService {
     TabsMenuBuilder tabs();
 
     CanvasMenuBuilder canvas();
+
+    ReactiveMenuBuilder<Void> reactive();
 }

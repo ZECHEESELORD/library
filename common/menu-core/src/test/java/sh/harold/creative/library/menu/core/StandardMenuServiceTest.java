@@ -9,6 +9,7 @@ import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuClick;
 import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuFrame;
+import sh.harold.creative.library.menu.MenuGeometry;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuItem;
@@ -17,9 +18,15 @@ import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.MenuTabGroup;
+import sh.harold.creative.library.menu.ReactiveMenu;
+import sh.harold.creative.library.menu.ReactiveMenuInput;
+import sh.harold.creative.library.menu.ReactiveMenuResult;
+import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.sound.SoundCueKeys;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,8 +45,8 @@ class StandardMenuServiceTest {
                 .addItems(sampleButtons("Item", 73))
                 .build();
 
-        MenuFrame firstPage = menu.frames().get("page:0");
-        MenuFrame middlePage = menu.frames().get("page:1");
+        MenuFrame firstPage = menu.frame("page:0");
+        MenuFrame middlePage = menu.frame("page:1");
 
         assertEquals("Profiles (1/3)", ComponentText.flatten(firstPage.title()));
         assertEquals("Profiles (2/3)", ComponentText.flatten(middlePage.title()));
@@ -157,9 +164,9 @@ class StandardMenuServiceTest {
                         .toList()))
                 .build();
 
-        MenuFrame initial = menu.frames().get("tab:tab-0:nav:0:page:0");
-        MenuFrame scrolled = menu.frames().get("tab:tab-0:nav:1:page:0");
-        MenuFrame end = menu.frames().get("tab:tab-0:nav:3:page:0");
+        MenuFrame initial = menu.frame("tab:tab-0:nav:0:page:0");
+        MenuFrame scrolled = menu.frame("tab:tab-0:nav:1:page:0");
+        MenuFrame end = menu.frame("tab:tab-0:nav:3:page:0");
 
         assertEquals("Previous Tab", titleAt(initial, 0));
         assertEquals(NamedTextColor.GREEN, titleColorAt(initial, 0));
@@ -190,8 +197,8 @@ class StandardMenuServiceTest {
                 .addTab(MenuTab.of("beta", "Beta", MenuIcon.vanilla("diamond"), sampleButtons("Beta", 1)))
                 .build();
 
-        MenuFrame firstPage = menu.frames().get("tab:alpha:nav:0:page:0");
-        MenuFrame secondPage = menu.frames().get("tab:alpha:nav:0:page:1");
+        MenuFrame firstPage = menu.frame("tab:alpha:nav:0:page:0");
+        MenuFrame secondPage = menu.frame("tab:alpha:nav:0:page:1");
 
         assertEquals("Alpha Item 0", titleAt(firstPage, 19));
         assertEquals("Alpha Item 20", titleAt(firstPage, 43));
@@ -322,6 +329,60 @@ class StandardMenuServiceTest {
     }
 
     @Test
+    void compiledMenusResolveFramesLazilyAndCachePerFrame() {
+        AtomicInteger resolutions = new AtomicInteger();
+        Menu menu = new StandardMenu(
+                Component.text("Lazy"),
+                MenuGeometry.LIST,
+                6,
+                "page:0",
+                Set.of("page:0", "page:1"),
+                frameId -> {
+                    resolutions.incrementAndGet();
+                    return new MenuFrame(Component.text(frameId), List.of());
+                });
+
+        assertEquals(0, resolutions.get());
+        assertEquals("page:0", ComponentText.flatten(menu.frame("page:0").title()));
+        assertEquals(1, resolutions.get());
+        assertEquals("page:0", ComponentText.flatten(menu.frame("page:0").title()));
+        assertEquals(1, resolutions.get());
+        assertEquals("page:1", ComponentText.flatten(menu.frame("page:1").title()));
+        assertEquals(2, resolutions.get());
+    }
+
+    @Test
+    void reactiveMenusKeepSessionStateIsolatedAndPatchRenderedSlots() {
+        ReactiveMenu menu = menus.reactive()
+                .stateFactory(() -> new ToggleState(false))
+                .render(state -> ReactiveMenuView.builder("Reactive Toggle")
+                        .place(13, MenuButton.builder(MenuIcon.vanilla("lever"))
+                                .name(state.enabled() ? "Canvas Filler: On" : "Canvas Filler: Off")
+                                .description("Toggle the filler state without reopening the menu.")
+                                .emit(ActionVerb.TOGGLE, "toggle-filler")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click click && "toggle-filler".equals(click.message())) {
+                        return ReactiveMenuResult.stay(new ToggleState(!state.enabled()));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+
+        MenuSessionState first = new MenuSessionState(menu);
+        MenuSessionState second = new MenuSessionState(menu);
+
+        assertEquals("Canvas Filler: Off", titleAt(first.currentFrame(), 13));
+        assertEquals("Canvas Filler: Off", titleAt(second.currentFrame(), 13));
+
+        first.dispatchReactive(new ReactiveMenuInput.Click(13, MenuClick.LEFT, false, "toggle-filler"));
+
+        assertEquals("Canvas Filler: On", titleAt(first.currentFrame(), 13));
+        assertEquals("Canvas Filler: Off", titleAt(second.currentFrame(), 13));
+    }
+
+    @Test
     void tabsCustomFooterAllowCanvasContentInRowFive() {
         Menu menu = menus.tabs()
                 .title("Canvas Tabs")
@@ -449,5 +510,8 @@ class StandardMenuServiceTest {
         return slot.lore().stream()
                 .map(ComponentText::flatten)
                 .toList();
+    }
+
+    private record ToggleState(boolean enabled) {
     }
 }
