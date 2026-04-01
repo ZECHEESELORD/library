@@ -1,0 +1,5 @@
+jdk:
+  - openjdk25
+
+install:
+  - ./gradlew --no-daemon build publishToMavenLocal

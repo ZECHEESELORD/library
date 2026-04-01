@@ -1,18 +1,38 @@
 import org.gradle.api.plugins.JavaLibraryPlugin
+import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.withType
-import org.gradle.api.plugins.JavaPluginExtension
 
 plugins {
     base
 }
 
-group = property("group").toString()
-version = property("version").toString()
+val isJitPackBuild = System.getenv("JITPACK")?.equals("true", ignoreCase = true) == true
+val configuredGroup = property("group").toString()
+val configuredVersion = property("version").toString()
+val jitPackGroup = System.getenv("GROUP")
+    ?.takeUnless(String::isBlank)
+    ?.let { "$it.${rootProject.name}" }
+val jitPackVersion = System.getenv("VERSION")?.takeUnless(String::isBlank)
+val unpublishedProjectPaths = setOf(
+    ":platform:paper:paper-example",
+    ":platform:paper:paper-entity-example",
+    ":platform:minestom:minestom-example",
+    ":platform:minestom:minestom-entity-example",
+    ":platform:velocity:velocity-example",
+)
+
+// JitPack serves multi-module repos under com.github.<owner>.<repo>.
+group = if (isJitPackBuild && jitPackGroup != null) jitPackGroup else configuredGroup
+version = if (isJitPackBuild && jitPackVersion != null) jitPackVersion else configuredVersion
 
 subprojects {
     group = rootProject.group
@@ -21,8 +41,12 @@ subprojects {
     apply<JavaLibraryPlugin>()
 
     val targetJava = if (path.startsWith(":platform:minestom:")) 25 else 21
+    val javaExtension = extensions.getByType<JavaPluginExtension>()
 
-    extensions.getByType<JavaPluginExtension>().toolchain.languageVersion.set(JavaLanguageVersion.of(targetJava))
+    // JitPack runs the build on one configured JDK; use --release for mixed targets there.
+    if (!isJitPackBuild) {
+        javaExtension.toolchain.languageVersion.set(JavaLanguageVersion.of(targetJava))
+    }
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
@@ -37,6 +61,20 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+    }
+
+    if (path !in unpublishedProjectPaths) {
+        apply(plugin = "maven-publish")
+        javaExtension.withSourcesJar()
+
+        extensions.configure<PublishingExtension> {
+            publications {
+                create<MavenPublication>("mavenJava") {
+                    from(components["java"])
+                    artifactId = project.name
+                }
+            }
+        }
     }
 }
 
