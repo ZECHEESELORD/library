@@ -106,7 +106,7 @@ public final class MinestomExampleBootstrap {
                 primitiveExamples.tweenUsage(),
                 new String[]{"all", "easings", "envelopes", "vectors", "angles", "delay", "zero", "repeat", "pause", "replace", "refresh", "clear", "help"},
                 feedback,
-                primitiveExamples::playTween
+                (player, variant, extraArgs) -> primitiveExamples.playTween(player, variant)
         ));
         MinecraftServer.getCommandManager().register(new MinestomHarnessVariantCommand(
                 "testcurves",
@@ -115,34 +115,34 @@ public final class MinestomExampleBootstrap {
                 primitiveExamples.curveUsage(),
                 new String[]{"all", "line", "quadratic", "cubic", "catmull", "arc", "split", "trim", "reverse", "resample", "clear", "help"},
                 feedback,
-                primitiveExamples::playCurve
+                (player, variant, extraArgs) -> primitiveExamples.playCurve(player, variant)
         ));
         MinecraftServer.getCommandManager().register(new MinestomHarnessVariantCommand(
                 "testtelegraphs",
                 "testtelegraph",
-                "all",
+                "showcase",
                 primitiveExamples.telegraphUsage(),
-                new String[]{"all", "circle", "ring", "rectangle", "line", "corridor", "cone", "arc", "path", "refresh", "replace", "missinganchor", "scopes", "clear", "help"},
+                new String[]{"showcase", "countdown", "circle", "ring", "rectangle", "line", "corridor", "cone", "arc", "path", "refresh", "replace", "missinganchor", "scopes", "clear", "help"},
                 feedback,
                 primitiveExamples::playTelegraph
         ));
         MinecraftServer.getCommandManager().register(new MinestomHarnessVariantCommand(
                 "testtrajectories",
                 "testtrajectory",
-                "all",
+                "showcase",
                 primitiveExamples.trajectoryUsage(),
-                new String[]{"all", "ballistic", "responses", "oneshot", "everytick", "threshold", "refresh", "replace", "scopes", "clear", "help"},
+                new String[]{"showcase", "throwable", "arrow", "responses", "oneshot", "everytick", "threshold", "refresh", "replace", "scopes", "clear", "help"},
                 feedback,
                 primitiveExamples::playTrajectory
         ));
         MinecraftServer.getCommandManager().register(new MinestomHarnessVariantCommand(
                 "testimpulses",
                 "testimpulse",
-                "all",
+                "showcase",
                 primitiveExamples.impulseUsage(),
-                new String[]{"all", "add", "set", "clamped", "dash", "pull", "push", "launch", "local", "masks", "stack", "refresh", "replace", "clear", "help"},
+                new String[]{"showcase", "add", "set", "clamped", "dash", "pull", "push", "launch", "local", "masks", "stack", "refresh", "replace", "clear", "help"},
                 feedback,
-                primitiveExamples::playImpulse
+                (player, variant, extraArgs) -> primitiveExamples.playImpulse(player, variant)
         ));
         MinecraftServer.getCommandManager().register(new MinestomHarnessVariantCommand(
                 "testambient",
@@ -151,7 +151,7 @@ public final class MinestomExampleBootstrap {
                 primitiveExamples.ambientUsage(),
                 new String[]{"all", "channels", "hardedge", "feather", "weights", "blend", "priority", "ttl", "refresh", "clear", "help"},
                 feedback,
-                primitiveExamples::playAmbient
+                (player, variant, extraArgs) -> primitiveExamples.playAmbient(player, variant)
         ));
         MinecraftServer.getCommandManager().register(new MinestomHarnessVariantCommand(
                 "testprimitives",
@@ -160,7 +160,7 @@ public final class MinestomExampleBootstrap {
                 primitiveExamples.primitivesUsage(),
                 new String[]{"all", "pathwarning", "previewimpact", "dashassist", "zonepulse", "clear", "help"},
                 feedback,
-                primitiveExamples::playPrimitives
+                (player, variant, extraArgs) -> primitiveExamples.playPrimitives(player, variant)
         ));
         MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent.class, event -> {
             event.setSpawningInstance(instance);

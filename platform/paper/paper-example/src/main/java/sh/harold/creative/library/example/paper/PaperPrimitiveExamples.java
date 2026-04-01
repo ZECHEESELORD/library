@@ -2,15 +2,22 @@ package sh.harold.creative.library.example.paper;
 
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.format.TextColor;
+import org.bukkit.Material;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import sh.harold.creative.library.ambient.AmbientBlendMode;
 import sh.harold.creative.library.ambient.AmbientProfile;
 import sh.harold.creative.library.ambient.AmbientSnapshot;
@@ -88,6 +95,7 @@ import sh.harold.creative.library.tween.core.StandardTweenController;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,7 +105,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-import net.kyori.adventure.sound.Sound;
 
 final class PaperPrimitiveExamples implements AutoCloseable {
 
@@ -113,6 +120,9 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     private static final int COLOR_TELEGRAPH = 0xFF7272;
     private static final int COLOR_TELEGRAPH_ALT = 0xC7A6FF;
     private static final int COLOR_AMBIENT = 0x6EC6FF;
+    private static final Display.Brightness FULL_BRIGHT = new Display.Brightness(15, 15);
+    private static final float TELEGRAPH_BLOCK_HEIGHT = 0.06f;
+    private static final double TELEGRAPH_DISPLAY_LIFT = 0.03;
 
     private final JavaPlugin plugin;
     private final PaperSoundCuePlatform sounds;
@@ -148,15 +158,15 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     String telegraphUsage() {
-        return "/testtelegraphs all|circle|ring|rectangle|line|corridor|cone|arc|path|refresh|replace|missinganchor|scopes|clear|help";
+        return "/testtelegraphs showcase|countdown [radius]|circle|ring|rectangle|line|corridor|cone|arc|path|refresh|replace|missinganchor|scopes|clear|help";
     }
 
     String trajectoryUsage() {
-        return "/testtrajectories all|ballistic|responses|oneshot|everytick|threshold|refresh|replace|scopes|clear|help";
+        return "/testtrajectories showcase|throwable [power]|arrow [charge]|responses|oneshot|everytick|threshold|refresh|replace|scopes|clear|help";
     }
 
     String impulseUsage() {
-        return "/testimpulses all|add|set|clamped|dash|pull|push|launch|local|masks|stack|refresh|replace|clear|help";
+        return "/testimpulses showcase|add|set|clamped|dash|pull|push|launch|local|masks|stack|refresh|replace|clear|help";
     }
 
     String ambientUsage() {
@@ -227,21 +237,33 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     void playTelegraph(Player player, String variant) {
+        playTelegraph(player, variant, new String[0]);
+    }
+
+    void playTelegraph(Player player, String variant, String[] extraArgs) {
         if ("clear".equals(variant)) {
             clear(player);
             feedback.success(player, "Cleared active telegraph harness state.");
             return;
         }
+        double countdownRadius = "countdown".equals(variant)
+                ? parseOptionalPositiveDouble(player, extraArgs, 4.0, "radius")
+                : 4.0;
+        if (Double.isNaN(countdownRadius)) {
+            return;
+        }
         Session session = restart(player);
         feedback.info(player, "Running telegraph demo {variant}.", Message.slot("variant", variant));
         switch (variant) {
-            case "all" -> {
-                sequence(session, "circle", 0L, this::runTelegraphCircle);
+            case "showcase" -> {
+                sequence(session, "countdown", 0L, (queuedSession, queuedPlayer) -> runTelegraphCountdown(queuedSession, queuedPlayer, 4.0));
                 sequence(session, "corridor", SEQUENCE_GAP_TICKS, this::runTelegraphCorridor);
                 sequence(session, "cone", SEQUENCE_GAP_TICKS * 2L, this::runTelegraphCone);
                 sequence(session, "path", SEQUENCE_GAP_TICKS * 3L, this::runTelegraphPath);
-                sequence(session, "refresh", SEQUENCE_GAP_TICKS * 4L, this::runTelegraphRefresh);
+                sequence(session, "scopes", SEQUENCE_GAP_TICKS * 4L, this::runTelegraphScopes);
+                sequence(session, "replace", SEQUENCE_GAP_TICKS * 5L, this::runTelegraphReplace);
             }
+            case "countdown" -> runTelegraphCountdown(session, player, countdownRadius);
             case "circle" -> runTelegraphCircle(session, player);
             case "ring" -> runTelegraphRing(session, player);
             case "rectangle" -> runTelegraphRectangle(session, player);
@@ -259,22 +281,35 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     void playTrajectory(Player player, String variant) {
+        playTrajectory(player, variant, new String[0]);
+    }
+
+    void playTrajectory(Player player, String variant, String[] extraArgs) {
         if ("clear".equals(variant)) {
             clear(player);
             feedback.success(player, "Cleared active trajectory harness state.");
             return;
         }
+        double scalar = switch (variant) {
+            case "throwable" -> parseOptionalPositiveDouble(player, extraArgs, 1.0, "power");
+            case "arrow" -> parseOptionalPositiveDouble(player, extraArgs, 1.0, "charge");
+            default -> 1.0;
+        };
+        if (Double.isNaN(scalar)) {
+            return;
+        }
         Session session = restart(player);
         feedback.info(player, "Running trajectory demo {variant}.", Message.slot("variant", variant));
         switch (variant) {
-            case "all" -> {
-                sequence(session, "ballistic", 0L, this::runTrajectoryBallistic);
-                sequence(session, "oneshot", SEQUENCE_GAP_TICKS, this::runTrajectoryOneShot);
+            case "showcase" -> {
+                sequence(session, "throwable", 0L, (queuedSession, queuedPlayer) -> runTrajectoryThrowable(queuedSession, queuedPlayer, 1.0));
+                sequence(session, "arrow", SEQUENCE_GAP_TICKS, (queuedSession, queuedPlayer) -> runTrajectoryArrow(queuedSession, queuedPlayer, 1.0));
                 sequence(session, "everytick", SEQUENCE_GAP_TICKS * 2L, this::runTrajectoryEveryTick);
-                sequence(session, "threshold", SEQUENCE_GAP_TICKS * 3L, this::runTrajectoryThreshold);
-                sequence(session, "refresh", SEQUENCE_GAP_TICKS * 4L, this::runTrajectoryRefresh);
+                sequence(session, "replace", SEQUENCE_GAP_TICKS * 3L, this::runTrajectoryReplace);
+                sequence(session, "responses", SEQUENCE_GAP_TICKS * 4L, this::runTrajectoryResponses);
             }
-            case "ballistic" -> runTrajectoryBallistic(session, player);
+            case "throwable" -> runTrajectoryThrowable(session, player, scalar);
+            case "arrow" -> runTrajectoryArrow(session, player, scalar);
             case "responses" -> runTrajectoryResponses(session, player);
             case "oneshot" -> runTrajectoryOneShot(session, player);
             case "everytick" -> runTrajectoryEveryTick(session, player);
@@ -295,13 +330,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         Session session = restart(player);
         feedback.info(player, "Running impulse demo {variant}.", Message.slot("variant", variant));
         switch (variant) {
-            case "all" -> {
-                sequence(session, "add", 0L, this::runImpulseAdd);
-                sequence(session, "dash", SEQUENCE_GAP_TICKS, this::runImpulseDash);
-                sequence(session, "launch", SEQUENCE_GAP_TICKS * 2L, this::runImpulseLaunch);
-                sequence(session, "stack", SEQUENCE_GAP_TICKS * 3L, this::runImpulseStack);
-                sequence(session, "refresh", SEQUENCE_GAP_TICKS * 4L, this::runImpulseRefresh);
-            }
+            case "showcase" -> runImpulseShowcase(session, player);
             case "add" -> runImpulseAdd(session, player);
             case "set" -> runImpulseSet(session, player);
             case "clamped" -> runImpulseClamped(session, player);
@@ -721,8 +750,20 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         renderStatic(session, List.of(player), transform(frame, path.resampleEvenly(12)), COLOR_CURVE, 0.95f, DRAW_TICKS);
     }
 
+    private void runTelegraphCountdown(Session session, Player player, double radius) {
+        startTelegraph(session, new TelegraphSpec(
+                session.key("telegraph/countdown"),
+                fixedAnchor(player),
+                new TelegraphShape.Circle(radius),
+                new ViewerScope.Everyone(),
+                new TelegraphTiming(4L, 10L, 4L, 1.0, 1.2),
+                InstanceConflictPolicy.REPLACE,
+                0
+        ));
+    }
+
     private void runTelegraphCircle(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/circle"),
                 fixedAnchor(player),
                 new TelegraphShape.Circle(3.0),
@@ -734,7 +775,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runTelegraphRing(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/ring"),
                 fixedAnchor(player),
                 new TelegraphShape.Ring(3.6, 0.45),
@@ -746,7 +787,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runTelegraphRectangle(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/rectangle"),
                 fixedAnchor(player),
                 new TelegraphShape.Rectangle(2.0, 3.2),
@@ -758,7 +799,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runTelegraphLine(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/line"),
                 fixedAnchor(player),
                 new TelegraphShape.LineRibbon(new Vec3(-2.5, 0.0, 0.0), new Vec3(2.5, 0.0, 4.0), 0.25),
@@ -770,7 +811,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runTelegraphCorridor(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/corridor"),
                 fixedAnchor(player),
                 new TelegraphShape.CapsuleCorridor(new Vec3(-1.5, 0.0, 0.0), new Vec3(1.5, 0.0, 5.0), 0.75),
@@ -782,7 +823,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runTelegraphCone(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/cone"),
                 fixedAnchor(player),
                 new TelegraphShape.Cone(5.0, Angle.degrees(35.0)),
@@ -794,7 +835,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runTelegraphArc(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/arc"),
                 fixedAnchor(player),
                 new TelegraphShape.Arc(4.0, 0.35, Angle.degrees(-120.0), Angle.degrees(240.0)),
@@ -814,7 +855,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                         new Vec3(2.5, 0.0, 5.0)
                 )
         )));
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/path"),
                 fixedAnchor(player),
                 new TelegraphShape.PathRibbon(path, 0.35),
@@ -827,7 +868,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
 
     private void runTelegraphRefresh(Session session, Player player) {
         Key key = session.key("telegraph/same");
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 key,
                 fixedAnchor(player),
                 new TelegraphShape.Circle(2.5),
@@ -836,7 +877,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                 InstanceConflictPolicy.REPLACE,
                 0
         ));
-        session.schedule(6L, () -> session.telegraphs.start(new TelegraphSpec(
+        session.schedule(6L, () -> startTelegraph(session, new TelegraphSpec(
                 key,
                 fixedAnchor(player),
                 new TelegraphShape.Circle(4.0),
@@ -849,7 +890,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
 
     private void runTelegraphReplace(Session session, Player player) {
         Key key = session.key("telegraph/replace");
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 key,
                 fixedAnchor(player),
                 new TelegraphShape.Circle(2.0),
@@ -858,7 +899,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                 InstanceConflictPolicy.REPLACE,
                 0
         ));
-        session.schedule(6L, () -> session.telegraphs.start(new TelegraphSpec(
+        session.schedule(6L, () -> startTelegraph(session, new TelegraphSpec(
                 key,
                 fixedAnchor(player),
                 new TelegraphShape.Rectangle(2.2, 4.0),
@@ -870,7 +911,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runTelegraphMissingAnchor(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/missing"),
                 new AnchorRef.Entity(spaceId(player.getWorld()), UUID.randomUUID()),
                 new TelegraphShape.Circle(3.0),
@@ -882,7 +923,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runTelegraphScopes(Session session, Player player) {
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/everyone"),
                 fixedAnchor(player),
                 new TelegraphShape.Circle(2.2),
@@ -891,7 +932,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                 InstanceConflictPolicy.REPLACE,
                 0
         ));
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/source"),
                 new AnchorRef.Offset(entityAnchor(player), new Vec3(0.0, 0.0, 4.0)),
                 new TelegraphShape.Cone(3.8, Angle.degrees(22.0)),
@@ -900,7 +941,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                 InstanceConflictPolicy.REPLACE,
                 1
         ));
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/explicit"),
                 new AnchorRef.Offset(fixedAnchor(player), new Vec3(0.0, 0.0, 6.0)),
                 new TelegraphShape.Ring(1.8, 0.2),
@@ -909,7 +950,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                 InstanceConflictPolicy.REPLACE,
                 2
         ));
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("telegraph/relation"),
                 new AnchorRef.Offset(fixedAnchor(player), new Vec3(3.0, 0.0, 0.0)),
                 new TelegraphShape.Rectangle(1.2, 2.2),
@@ -921,141 +962,366 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         feedback.info(player, "Relation scopes use the example harness policy: enemy means viewers other than the source.");
     }
 
-    private void runTrajectoryBallistic(Session session, Player player) {
-        renderTrajectory(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()), motion(player, new Vec3(0.55, 0.75, 0.0), new Vec3(0.0, -0.06, 0.0), 18L, CollisionResponseMode.STOP_ON_HIT), false);
+    private void runTrajectoryThrowable(Session session, Player player, double power) {
+        renderTrajectory(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()),
+                throwableMotion(player, power, 30L, CollisionResponseMode.STOP_ON_HIT), false);
+    }
+
+    private void runTrajectoryArrow(Session session, Player player, double charge) {
+        renderTrajectory(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()),
+                arrowMotion(player, charge, 36L, CollisionResponseMode.STOP_ON_HIT), false);
     }
 
     private void runTrajectoryResponses(Session session, Player player) {
-        renderTrajectory(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()), motion(player, new Vec3(0.5, 0.35, 0.0), Vec3.ZERO, 14L, CollisionResponseMode.STOP_ON_HIT), false);
-        renderTrajectoryStatic(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()), motion(player, new Vec3(0.5, 0.35, 0.0), Vec3.ZERO, 14L, CollisionResponseMode.REPORT_ONLY), COLOR_CURVE_ALT);
-        renderTrajectoryStatic(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()), motion(player, new Vec3(0.5, 0.35, 0.0), Vec3.ZERO, 14L, CollisionResponseMode.PASS_THROUGH), COLOR_CURVE);
+        renderTrajectory(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()),
+                throwableMotion(player, 1.0, 28L, CollisionResponseMode.STOP_ON_HIT), false);
+        renderTrajectoryStatic(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()),
+                throwableMotion(player, 1.0, 28L, CollisionResponseMode.REPORT_ONLY), COLOR_CURVE_ALT);
+        renderTrajectoryStatic(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()),
+                throwableMotion(player, 1.0, 28L, CollisionResponseMode.PASS_THROUGH), COLOR_CURVE);
         feedback.info(player, "BOUNCE and SLIDE currently stop at collision in the shared solver, so this harness does not fake distinct behavior.");
     }
 
     private void runTrajectoryOneShot(Session session, Player player) {
-        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(motion(player, new Vec3(0.45, 0.6, 0.0), new Vec3(0.0, -0.05, 0.0), 16L, CollisionResponseMode.STOP_ON_HIT));
+        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(throwableMotion(player, 1.0, 30L, CollisionResponseMode.STOP_ON_HIT));
         renderPreviewController(session, player, "trajectory/oneshot", motion, new PreviewRecomputePolicy.OneShot(), true, false, false);
     }
 
     private void runTrajectoryEveryTick(Session session, Player player) {
-        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(motion(player, new Vec3(0.45, 0.55, 0.0), new Vec3(0.0, -0.05, 0.0), 16L, CollisionResponseMode.STOP_ON_HIT));
+        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(throwableMotion(player, 1.0, 30L, CollisionResponseMode.STOP_ON_HIT));
         renderPreviewController(session, player, "trajectory/everytick", motion, new PreviewRecomputePolicy.EveryTick(), false, true, false);
     }
 
     private void runTrajectoryThreshold(Session session, Player player) {
-        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(motion(player, new Vec3(0.45, 0.55, 0.0), new Vec3(0.0, -0.05, 0.0), 16L, CollisionResponseMode.STOP_ON_HIT));
+        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(throwableMotion(player, 1.0, 30L, CollisionResponseMode.STOP_ON_HIT));
         renderPreviewController(session, player, "trajectory/threshold", motion, new PreviewRecomputePolicy.Thresholded(1.0, Angle.degrees(12.0)), false, true, false);
     }
 
     private void runTrajectoryRefresh(Session session, Player player) {
-        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(motion(player, new Vec3(0.42, 0.55, 0.0), new Vec3(0.0, -0.05, 0.0), 16L, CollisionResponseMode.STOP_ON_HIT));
+        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(throwableMotion(player, 0.9, 30L, CollisionResponseMode.STOP_ON_HIT));
         renderPreviewController(session, player, "trajectory/refresh", motion, new PreviewRecomputePolicy.OneShot(), false, false, true);
     }
 
     private void runTrajectoryReplace(Session session, Player player) {
         StandardTrajectoryPreviewController controller = new StandardTrajectoryPreviewController();
-        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(motion(player, new Vec3(0.42, 0.55, 0.0), new Vec3(0.0, -0.05, 0.0), 16L, CollisionResponseMode.STOP_ON_HIT));
+        AtomicReference<TrajectoryMotion> motion = new AtomicReference<>(throwableMotion(player, 0.95, 30L, CollisionResponseMode.STOP_ON_HIT));
         controller.start(previewSpec(session.key("trajectory/replace"), player, motion::get, new PreviewRecomputePolicy.EveryTick(), InstanceConflictPolicy.REPLACE));
         session.schedule(6L, () -> controller.start(previewSpec(session.key("trajectory/replace"), player,
-                () -> motion(player, new Vec3(0.65, 0.25, 0.0), Vec3.ZERO, 12L, CollisionResponseMode.STOP_ON_HIT),
+                () -> arrowMotion(player, 1.0, 36L, CollisionResponseMode.STOP_ON_HIT),
                 new PreviewRecomputePolicy.EveryTick(),
                 InstanceConflictPolicy.REPLACE)));
         renderPreviewSnapshots(session, player, controller);
     }
 
     private void runTrajectoryScopes(Session session, Player player) {
-        renderTrajectory(session, player, new PreviewScope.Everyone(), motion(player, new Vec3(0.45, 0.55, 0.0), new Vec3(0.0, -0.05, 0.0), 14L, CollisionResponseMode.STOP_ON_HIT), false);
-        renderTrajectory(session, player, new PreviewScope.Explicit(Set.of(player.getUniqueId())), motion(player, new Vec3(0.35, 0.7, 0.0), new Vec3(0.0, -0.05, 0.0), 12L, CollisionResponseMode.STOP_ON_HIT), false);
+        renderTrajectory(session, player, new PreviewScope.Everyone(), throwableMotion(player, 1.0, 28L, CollisionResponseMode.STOP_ON_HIT), false);
+        renderTrajectory(session, player, new PreviewScope.Explicit(Set.of(player.getUniqueId())), arrowMotion(player, 0.8, 34L, CollisionResponseMode.STOP_ON_HIT), false);
+    }
+
+    private void runImpulseShowcase(Session session, Player player) {
+        Key boosterKey = session.key("impulse/showcase/booster");
+        startImpulse(player, session, impulseSpec(
+                boosterKey,
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.LocalLook(new Vec3(0.0, 0.28, 1.35)),
+                10L,
+                new Envelope.AttackHoldRelease(1L, 4L, 5L, 1.0),
+                AxisMask.ALL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/showcase/lift"),
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.World(new Vec3(0.0, 1.20, 0.0)),
+                6L,
+                new Envelope.AttackHoldRelease(1L, 1L, 4L, 1.0),
+                AxisMask.VERTICAL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ), false);
+        session.schedule(6L, () -> startImpulse(player, session, impulseSpec(
+                boosterKey,
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.LocalLook(new Vec3(0.0, 0.55, 2.10)),
+                10L,
+                new Envelope.EaseOut(1.0, Easing.QUINT_OUT),
+                AxisMask.ALL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REFRESH
+        ), false));
+        session.schedule(10L, () -> startImpulse(player, session, impulseSpec(
+                session.key("impulse/showcase/strafe"),
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.LocalHorizontal(new Vec3(1.60, 0.0, 0.80)),
+                8L,
+                new Envelope.AttackHoldRelease(1L, 2L, 5L, 1.0),
+                AxisMask.HORIZONTAL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ), false));
+        session.schedule(18L, () -> startImpulse(player, session, impulseSpec(
+                session.key("impulse/showcase/rewrite"),
+                ImpulseMode.SET_VELOCITY,
+                new ImpulseVector.LocalLook(new Vec3(1.75, 0.95, -0.85)),
+                8L,
+                new Envelope.EaseOut(1.0, Easing.CUBIC_OUT),
+                AxisMask.ALL,
+                ImpulseStackMode.PRIORITY_WINNER,
+                0.0,
+                4,
+                InstanceConflictPolicy.REPLACE
+        ), false));
     }
 
     private void runImpulseAdd(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/add"), ImpulseMode.ADD_VELOCITY,
-                new ImpulseVector.World(new Vec3(0.0, 0.18, 0.65)), AxisMask.ALL, ImpulseStackMode.ADD, 0.0, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/add"),
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.World(new Vec3(0.0, 0.28, 1.25)),
+                8L,
+                new Envelope.EaseOut(1.0, Easing.QUINT_OUT),
+                AxisMask.ALL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ));
     }
 
     private void runImpulseSet(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/set"), ImpulseMode.SET_VELOCITY,
-                new ImpulseVector.World(new Vec3(0.0, 0.15, 1.15)), AxisMask.ALL, ImpulseStackMode.PRIORITY_WINNER, 0.0, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/set"),
+                ImpulseMode.SET_VELOCITY,
+                new ImpulseVector.World(new Vec3(0.0, 0.35, 2.20)),
+                8L,
+                new Envelope.EaseOut(1.0, Easing.CUBIC_OUT),
+                AxisMask.ALL,
+                ImpulseStackMode.PRIORITY_WINNER,
+                0.0,
+                2,
+                InstanceConflictPolicy.REPLACE
+        ));
     }
 
     private void runImpulseClamped(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/clamped"), ImpulseMode.CLAMPED_ADD,
-                new ImpulseVector.World(new Vec3(0.0, 0.6, 1.5)), AxisMask.ALL, ImpulseStackMode.ADD, 0.8, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/clamped"),
+                ImpulseMode.CLAMPED_ADD,
+                new ImpulseVector.World(new Vec3(0.0, 1.80, 3.60)),
+                10L,
+                new Envelope.ExponentialHalfLife(1.6, 3L),
+                AxisMask.ALL,
+                ImpulseStackMode.ADD,
+                1.40,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ));
     }
 
     private void runImpulseDash(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/dash"), ImpulseMode.DASH_TOWARD_DIRECTION,
-                new ImpulseVector.LocalHorizontal(new Vec3(0.0, 0.0, 1.3)), AxisMask.HORIZONTAL, ImpulseStackMode.PRIORITY_WINNER, 0.0, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/dash"),
+                ImpulseMode.DASH_TOWARD_DIRECTION,
+                new ImpulseVector.LocalHorizontal(new Vec3(0.0, 0.0, 2.90)),
+                5L,
+                new Envelope.AttackHoldRelease(1L, 1L, 3L, 1.0),
+                AxisMask.HORIZONTAL,
+                ImpulseStackMode.PRIORITY_WINNER,
+                0.0,
+                3,
+                InstanceConflictPolicy.REPLACE
+        ));
     }
 
     private void runImpulsePull(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/pull"), ImpulseMode.PULL_TOWARD_POINT,
-                new ImpulseVector.TowardPoint(worldPoint(player, new Vec3(0.0, 1.0, 0.0), 4.0), 0.9), AxisMask.ALL, ImpulseStackMode.ADD, 0.0, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/pull"),
+                ImpulseMode.PULL_TOWARD_POINT,
+                new ImpulseVector.TowardPoint(worldPoint(player, new Vec3(0.0, 2.0, 0.0), 8.0), 1.80),
+                10L,
+                new Envelope.AttackHoldRelease(1L, 3L, 6L, 1.0),
+                AxisMask.ALL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ));
     }
 
     private void runImpulsePush(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/push"), ImpulseMode.PUSH_AWAY_FROM_POINT,
-                new ImpulseVector.AwayFromPoint(worldPoint(player, new Vec3(0.0, 0.0, 0.0), 2.0), 0.9), AxisMask.HORIZONTAL, ImpulseStackMode.ADD, 0.0, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/push"),
+                ImpulseMode.PUSH_AWAY_FROM_POINT,
+                new ImpulseVector.AwayFromPoint(worldPoint(player, new Vec3(0.0, 0.0, 0.0), -1.5), 2.0),
+                7L,
+                new Envelope.EaseOut(1.0, Easing.QUINT_OUT),
+                AxisMask.HORIZONTAL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ));
     }
 
     private void runImpulseLaunch(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/launch"), ImpulseMode.UPWARD_LAUNCH,
-                new ImpulseVector.World(new Vec3(0.0, 1.1, 0.0)), AxisMask.VERTICAL, ImpulseStackMode.PRIORITY_WINNER, 0.0, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/launch"),
+                ImpulseMode.UPWARD_LAUNCH,
+                new ImpulseVector.World(new Vec3(0.0, 1.90, 0.0)),
+                4L,
+                new Envelope.AttackHoldRelease(1L, 1L, 2L, 1.0),
+                AxisMask.VERTICAL,
+                ImpulseStackMode.PRIORITY_WINNER,
+                0.0,
+                3,
+                InstanceConflictPolicy.REPLACE
+        ));
     }
 
     private void runImpulseLocal(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/local"), ImpulseMode.ADD_VELOCITY,
-                new ImpulseVector.LocalLook(new Vec3(0.0, 0.15, 0.85)), AxisMask.ALL, ImpulseStackMode.ADD, 0.0, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/local"),
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.LocalLook(new Vec3(0.35, 0.35, 1.60)),
+                8L,
+                new Envelope.AttackHoldRelease(1L, 2L, 5L, 1.0),
+                AxisMask.ALL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ));
     }
 
     private void runImpulseMasks(Session session, Player player) {
-        startImpulse(player, session, impulseSpec(session.key("impulse/masks"), ImpulseMode.ADD_VELOCITY,
-                new ImpulseVector.World(new Vec3(0.0, 0.75, 1.2)), AxisMask.HORIZONTAL, ImpulseStackMode.ADD, 0.0, InstanceConflictPolicy.REPLACE));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/masks/planar"),
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.LocalLook(new Vec3(1.15, 1.80, 2.10)),
+                8L,
+                new Envelope.AttackHoldRelease(1L, 2L, 5L, 1.0),
+                AxisMask.HORIZONTAL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ));
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/masks/lift"),
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.World(new Vec3(0.0, 1.25, 0.0)),
+                6L,
+                new Envelope.AttackHoldRelease(1L, 1L, 4L, 1.0),
+                AxisMask.VERTICAL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ), false);
     }
 
     private void runImpulseStack(Session session, Player player) {
-        startImpulse(player, session, new ImpulseSpec(
+        startImpulse(player, session, impulseSpec(
                 session.key("impulse/stack/a"),
                 ImpulseMode.ADD_VELOCITY,
-                new ImpulseVector.World(new Vec3(0.35, 0.15, 0.55)),
-                0L,
-                5L,
-                Envelope.constant(1.0),
+                new ImpulseVector.LocalLook(new Vec3(1.10, 0.25, 1.90)),
+                8L,
+                new Envelope.AttackHoldRelease(1L, 2L, 5L, 1.0),
                 AxisMask.ALL,
                 ImpulseStackMode.MAX_MAGNITUDE_PER_AXIS,
                 0.0,
                 0,
                 InstanceConflictPolicy.REPLACE
         ));
-        startImpulse(player, session, new ImpulseSpec(
+        startImpulse(player, session, impulseSpec(
                 session.key("impulse/stack/b"),
                 ImpulseMode.ADD_VELOCITY,
-                new ImpulseVector.World(new Vec3(-0.65, 0.05, 0.35)),
-                0L,
-                5L,
-                Envelope.constant(1.0),
+                new ImpulseVector.World(new Vec3(-0.80, 1.35, 0.85)),
+                9L,
+                new Envelope.AttackHoldRelease(1L, 3L, 5L, 1.0),
                 AxisMask.ALL,
                 ImpulseStackMode.MAX_MAGNITUDE_PER_AXIS,
                 0.0,
                 0,
                 InstanceConflictPolicy.REPLACE
-        ));
+        ), false);
+        startImpulse(player, session, impulseSpec(
+                session.key("impulse/stack/c"),
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.LocalHorizontal(new Vec3(0.0, 0.0, -2.40)),
+                6L,
+                new Envelope.AttackHoldRelease(1L, 1L, 4L, 1.0),
+                AxisMask.HORIZONTAL,
+                ImpulseStackMode.MAX_MAGNITUDE_PER_AXIS,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ), false);
     }
 
     private void runImpulseRefresh(Session session, Player player) {
         Key key = session.key("impulse/refresh");
-        startImpulse(player, session, impulseSpec(key, ImpulseMode.ADD_VELOCITY,
-                new ImpulseVector.World(new Vec3(0.0, 0.15, 0.55)), AxisMask.ALL, ImpulseStackMode.ADD, 0.0, InstanceConflictPolicy.REPLACE));
-        session.schedule(4L, () -> startImpulse(player, session, impulseSpec(key, ImpulseMode.ADD_VELOCITY,
-                new ImpulseVector.World(new Vec3(0.0, 0.35, 1.05)), AxisMask.ALL, ImpulseStackMode.ADD, 0.0, InstanceConflictPolicy.REFRESH)));
+        startImpulse(player, session, impulseSpec(
+                key,
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.LocalLook(new Vec3(0.0, 0.25, 1.15)),
+                10L,
+                new Envelope.AttackHoldRelease(1L, 4L, 5L, 1.0),
+                AxisMask.ALL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REPLACE
+        ));
+        session.schedule(6L, () -> startImpulse(player, session, impulseSpec(
+                key,
+                ImpulseMode.ADD_VELOCITY,
+                new ImpulseVector.LocalLook(new Vec3(0.0, 0.55, 1.95)),
+                10L,
+                new Envelope.EaseOut(1.0, Easing.QUINT_OUT),
+                AxisMask.ALL,
+                ImpulseStackMode.ADD,
+                0.0,
+                0,
+                InstanceConflictPolicy.REFRESH
+        ), false));
     }
 
     private void runImpulseReplace(Session session, Player player) {
         Key key = session.key("impulse/replace");
-        startImpulse(player, session, impulseSpec(key, ImpulseMode.SET_VELOCITY,
-                new ImpulseVector.World(new Vec3(0.0, 0.15, 0.55)), AxisMask.ALL, ImpulseStackMode.PRIORITY_WINNER, 0.0, InstanceConflictPolicy.REPLACE));
-        session.schedule(4L, () -> startImpulse(player, session, impulseSpec(key, ImpulseMode.SET_VELOCITY,
-                new ImpulseVector.World(new Vec3(0.0, 0.10, 1.25)), AxisMask.ALL, ImpulseStackMode.PRIORITY_WINNER, 0.0, InstanceConflictPolicy.REPLACE)));
+        startImpulse(player, session, impulseSpec(
+                key,
+                ImpulseMode.SET_VELOCITY,
+                new ImpulseVector.LocalHorizontal(new Vec3(0.0, 0.0, 2.20)),
+                10L,
+                new Envelope.EaseOut(1.0, Easing.CUBIC_OUT),
+                AxisMask.HORIZONTAL,
+                ImpulseStackMode.PRIORITY_WINNER,
+                0.0,
+                2,
+                InstanceConflictPolicy.REPLACE
+        ));
+        session.schedule(5L, () -> startImpulse(player, session, impulseSpec(
+                key,
+                ImpulseMode.SET_VELOCITY,
+                new ImpulseVector.LocalLook(new Vec3(1.60, 0.90, -0.90)),
+                8L,
+                new Envelope.EaseOut(1.0, Easing.CUBIC_OUT),
+                AxisMask.ALL,
+                ImpulseStackMode.PRIORITY_WINNER,
+                0.0,
+                4,
+                InstanceConflictPolicy.REPLACE
+        ), false));
     }
 
     private void runAmbientChannels(Session session, Player player) {
@@ -1215,7 +1481,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                         new Vec3(2.6, 0.0, 5.0)
                 )
         )));
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("combo/pathwarning"),
                 fixedAnchor(player),
                 new TelegraphShape.PathRibbon(path, 0.45),
@@ -1227,11 +1493,11 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runPreviewImpact(Session session, Player player) {
-        TrajectoryMotion motion = motion(player, new Vec3(0.55, 0.65, 0.0), new Vec3(0.0, -0.05, 0.0), 16L, CollisionResponseMode.STOP_ON_HIT);
+        TrajectoryMotion motion = throwableMotion(player, 1.0, 30L, CollisionResponseMode.STOP_ON_HIT);
         var result = trajectories.solve(motion, collisionQuery(player.getWorld()));
         renderTrajectoryResult(session, List.of(player), result, COLOR_TRAJECTORY);
         Frame3 impactFrame = Frame3.world(result.endPosition());
-        session.telegraphs.start(new TelegraphSpec(
+        startTelegraph(session, new TelegraphSpec(
                 session.key("combo/impact"),
                 new AnchorRef.Fixed(new AnchorSnapshot(spaceId(player.getWorld()), impactFrame)),
                 new TelegraphShape.Circle(1.8),
@@ -1243,7 +1509,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     }
 
     private void runDashAssist(Session session, Player player) {
-        TrajectoryMotion motion = motion(player, new Vec3(0.6, 0.0, 0.0), Vec3.ZERO, 8L, CollisionResponseMode.PASS_THROUGH);
+        TrajectoryMotion motion = straightLookMotion(player, 1.1, 10L, CollisionResponseMode.PASS_THROUGH);
         renderTrajectory(session, player, new PreviewScope.OwnerOnly(player.getUniqueId()), motion, true);
         session.schedule(12L, () -> startImpulse(player, session, impulseSpec(
                 session.key("combo/dash"),
@@ -1387,11 +1653,11 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         StandardTrajectoryPreviewController controller = new StandardTrajectoryPreviewController();
         controller.start(previewSpec(session.key(keyPath), player, motion::get, policy, InstanceConflictPolicy.REPLACE));
         if (driftLate) {
-            session.schedule(6L, () -> motion.set(motion(player, new Vec3(0.65, 0.25, 0.0), Vec3.ZERO, 14L, CollisionResponseMode.STOP_ON_HIT)));
+            session.schedule(6L, () -> motion.set(arrowMotion(player, 1.0, 36L, CollisionResponseMode.STOP_ON_HIT)));
         }
         if (forceRefresh) {
             session.schedule(8L, () -> {
-                motion.set(motion(player, new Vec3(0.62, 0.32, 0.0), Vec3.ZERO, 14L, CollisionResponseMode.STOP_ON_HIT));
+                motion.set(arrowMotion(player, 0.85, 34L, CollisionResponseMode.STOP_ON_HIT));
                 controller.refresh(session.key(keyPath));
             });
         }
@@ -1402,7 +1668,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                 return false;
             }
             if (driftEachTick) {
-                motion.set(motion(owner, new Vec3(0.45 + (tick * 0.02), 0.55, 0.0), new Vec3(0.0, -0.05, 0.0), 14L, CollisionResponseMode.STOP_ON_HIT));
+                motion.set(throwableMotion(owner, 1.0 + (tick * 0.08), 30L, CollisionResponseMode.STOP_ON_HIT));
             }
             for (TrajectoryPreviewSnapshot snapshot : controller.tick()) {
                 renderTrajectoryResult(session, session.viewers(snapshot.scope(), owner), snapshot.result(),
@@ -1459,10 +1725,20 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         });
     }
 
+    private void startTelegraph(Session session, TelegraphSpec spec) {
+        session.startTelegraph(spec);
+    }
+
     private void startImpulse(Player player, Session session, ImpulseSpec spec) {
+        startImpulse(player, session, spec, true);
+    }
+
+    private void startImpulse(Player player, Session session, ImpulseSpec spec, boolean playCue) {
         KeyedHandle handle = impulses.start(player.getUniqueId(), spec);
         session.handles.add(handle);
-        sounds.play(player, SoundCueKeys.RESULT_CONFIRM);
+        if (playCue) {
+            sounds.play(player, SoundCueKeys.RESULT_CONFIRM);
+        }
     }
 
     private CurvePath simpleCurve() {
@@ -1524,18 +1800,105 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         return trajectories.blockCollision(world);
     }
 
-    private TrajectoryMotion motion(Player player, Vec3 localVelocity, Vec3 acceleration, long ticks, CollisionResponseMode mode) {
-        Frame3 frame = entityFrame(player, false);
-        Vec3 start = frame.origin().add(Vec3.UNIT_Y.multiply(1.0));
-        return new TrajectoryMotion(
-                start,
-                frame.localToWorldVector(localVelocity),
-                acceleration,
+    private TrajectoryMotion throwableMotion(Player player, double power, long ticks, CollisionResponseMode mode) {
+        double launchPower = Math.max(0.1, power);
+        return lookMotion(
+                player,
+                lookDirection(player).multiply(1.5 * launchPower),
+                new Vec3(0.0, -0.03, 0.0),
+                new Vec3(0.99, 0.99, 0.99),
+                0.25,
+                ticks,
+                mode
+        );
+    }
+
+    private TrajectoryMotion arrowMotion(Player player, double charge, long ticks, CollisionResponseMode mode) {
+        double pull = Math.max(0.05, Math.min(1.0, charge));
+        double normalized = (pull * pull + (pull * 2.0)) / 3.0;
+        double speed = Math.min(1.0, normalized) * 3.0;
+        return lookMotion(
+                player,
+                lookDirection(player).multiply(speed),
+                new Vec3(0.0, -0.05, 0.0),
+                new Vec3(0.99, 0.99, 0.99),
+                0.25,
+                ticks,
+                mode
+        );
+    }
+
+    private TrajectoryMotion straightLookMotion(Player player, double speed, long ticks, CollisionResponseMode mode) {
+        return lookMotion(
+                player,
+                lookDirection(player).multiply(speed),
+                Vec3.ZERO,
                 new Vec3(1.0, 1.0, 1.0),
                 0.0,
                 ticks,
                 mode
         );
+    }
+
+    private TrajectoryMotion lookMotion(
+            Player player,
+            Vec3 launchVelocity,
+            Vec3 acceleration,
+            Vec3 drag,
+            double collisionRadius,
+            long ticks,
+            CollisionResponseMode mode
+    ) {
+        Vec3 start = eyePosition(player).add(lookDirection(player).multiply(0.25));
+        return new TrajectoryMotion(
+                start,
+                launchVelocity.add(playerVelocity(player)),
+                acceleration,
+                drag,
+                collisionRadius,
+                ticks,
+                mode
+        );
+    }
+
+    private double parseOptionalPositiveDouble(Player player, String[] extraArgs, double defaultValue, String label) {
+        if (extraArgs.length == 0) {
+            return defaultValue;
+        }
+        if (extraArgs.length > 1) {
+            feedback.error(player, "Expected at most one positive {label} value.", Message.slot("label", label));
+            return Double.NaN;
+        }
+        try {
+            double value = Double.parseDouble(extraArgs[0]);
+            if (!Double.isFinite(value) || value <= 0.0) {
+                feedback.error(player, "Expected a positive {label} value.", Message.slot("label", label));
+                return Double.NaN;
+            }
+            return value;
+        } catch (NumberFormatException exception) {
+            feedback.error(player, "Expected a numeric {label} value.", Message.slot("label", label));
+            return Double.NaN;
+        }
+    }
+
+    private Vec3 eyePosition(Player player) {
+        Location eye = player.getEyeLocation();
+        return new Vec3(eye.getX(), eye.getY(), eye.getZ());
+    }
+
+    private Vec3 lookDirection(Player player) {
+        org.bukkit.util.Vector direction = player.getEyeLocation().getDirection();
+        Vec3 forward = new Vec3(direction.getX(), direction.getY(), direction.getZ());
+        if (forward.isZero(1.0e-6)) {
+            return Vec3.UNIT_Z;
+        }
+        return forward.normalize();
+    }
+
+    private Vec3 playerVelocity(Player player) {
+        org.bukkit.util.Vector velocity = player.getVelocity();
+        return new Vec3(velocity.getX(), velocity.getY(), velocity.getZ());
     }
 
     private ImpulseSpec impulseSpec(
@@ -1547,17 +1910,32 @@ final class PaperPrimitiveExamples implements AutoCloseable {
             double maxMagnitude,
             InstanceConflictPolicy conflictPolicy
     ) {
+        return impulseSpec(key, mode, vector, 6L, Envelope.constant(1.0), axisMask, stackMode, maxMagnitude, 0, conflictPolicy);
+    }
+
+    private ImpulseSpec impulseSpec(
+            Key key,
+            ImpulseMode mode,
+            ImpulseVector vector,
+            long durationTicks,
+            Envelope envelope,
+            AxisMask axisMask,
+            ImpulseStackMode stackMode,
+            double maxMagnitude,
+            int priority,
+            InstanceConflictPolicy conflictPolicy
+    ) {
         return new ImpulseSpec(
                 key,
                 mode,
                 vector,
                 0L,
-                4L,
-                Envelope.constant(1.0),
+                durationTicks,
+                envelope,
                 axisMask,
                 stackMode,
                 maxMagnitude,
-                0,
+                priority,
                 conflictPolicy
         );
     }
@@ -1678,6 +2056,87 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         return points;
     }
 
+    private List<Vec3> telegraphDisplayPoints(TelegraphFrame frame) {
+        return compressPoints(densify(sampleShape(frame), Math.max(0.35, 0.7 - (frame.thickness() * 0.2))), 0.28);
+    }
+
+    private List<Vec3> densify(List<Vec3> points, double step) {
+        List<Vec3> dense = new ArrayList<>();
+        if (points.isEmpty()) {
+            return dense;
+        }
+        dense.add(points.getFirst());
+        for (int index = 0; index < points.size() - 1; index++) {
+            Vec3 start = points.get(index);
+            Vec3 end = points.get(index + 1);
+            double distance = start.distance(end);
+            int samples = Math.max(1, (int) Math.ceil(distance / Math.max(0.1, step)));
+            for (int sample = 1; sample <= samples; sample++) {
+                double progress = sample / (double) samples;
+                dense.add(start.add(end.subtract(start).multiply(progress)));
+            }
+        }
+        return dense;
+    }
+
+    private List<Vec3> compressPoints(List<Vec3> points, double minDistance) {
+        List<Vec3> compact = new ArrayList<>();
+        for (Vec3 point : points) {
+            if (compact.isEmpty() || compact.getLast().distance(point) >= minDistance) {
+                compact.add(point);
+            }
+        }
+        return compact;
+    }
+
+    private Material telegraphMaterial(TelegraphFrame frame, TelegraphSpec spec) {
+        if (frame.key().value().contains("telegraph/countdown")) {
+            return countdownMaterial(frame, spec);
+        }
+        String value = frame.key().value();
+        if (value.contains("impact")) {
+            return Material.ORANGE_CONCRETE;
+        }
+        if (value.contains("combo")) {
+            return Material.MAGENTA_CONCRETE;
+        }
+        if (value.contains("path")) {
+            return Material.YELLOW_CONCRETE;
+        }
+        if (value.contains("source") || value.contains("explicit")) {
+            return Material.LIGHT_BLUE_CONCRETE;
+        }
+        return Material.RED_CONCRETE;
+    }
+
+    private Material countdownMaterial(TelegraphFrame frame, TelegraphSpec spec) {
+        if (spec == null) {
+            return Material.YELLOW_CONCRETE;
+        }
+        double progress = (frame.ageTicks() + 1.0) / spec.timing().totalDurationTicks();
+        if (progress <= (1.0 / 3.0)) {
+            return Material.LIME_CONCRETE;
+        }
+        if (progress <= (2.0 / 3.0)) {
+            return Material.YELLOW_CONCRETE;
+        }
+        return Material.RED_CONCRETE;
+    }
+
+    private float telegraphBlockScale(TelegraphFrame frame) {
+        double alpha = Math.max(0.2, Math.min(1.0, frame.alpha()));
+        return (float) Math.min(0.8, 0.16 + (frame.thickness() * 0.22) + (alpha * 0.2));
+    }
+
+    private Transformation flatBlockTransform(float scale) {
+        return new Transformation(
+                new Vector3f(-scale / 2.0f, 0.0f, -scale / 2.0f),
+                new Quaternionf(),
+                new Vector3f(scale, TELEGRAPH_BLOCK_HEIGHT, scale),
+                new Quaternionf()
+        );
+    }
+
     private static List<Player> online(Collection<? extends Player> viewers) {
         List<Player> online = new ArrayList<>();
         for (Player viewer : viewers) {
@@ -1700,6 +2159,8 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         private final List<AutoCloseable> handles = new ArrayList<>();
         private final PaperTelegraphPlatform telegraphs;
         private final PaperAmbientZonePlatform ambient;
+        private final Map<Key, TelegraphSpec> telegraphSpecs = new LinkedHashMap<>();
+        private final Map<Key, PaperTelegraphVisual> telegraphVisuals = new LinkedHashMap<>();
 
         private boolean closed;
         private int overlayBucket = -1;
@@ -1723,6 +2184,11 @@ final class PaperPrimitiveExamples implements AutoCloseable {
 
         private Key key(String path) {
             return Key.key("example", "paper/" + ownerId + "/" + path);
+        }
+
+        private void startTelegraph(TelegraphSpec spec) {
+            telegraphSpecs.put(spec.key(), spec);
+            telegraphs.start(spec);
         }
 
         private void schedule(long delayTicks, Runnable action) {
@@ -1774,14 +2240,34 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         }
 
         private void acceptTelegraphs(List<TelegraphFrame> frames) {
+            Set<Key> activeKeys = new HashSet<>();
             for (TelegraphFrame frame : frames) {
+                activeKeys.add(frame.key());
                 List<Player> viewers = viewers(frame.viewerScope(), frame.anchor().spaceId());
-                if (viewers.isEmpty()) {
+                List<Vec3> points = telegraphDisplayPoints(frame);
+                if (viewers.isEmpty() || points.isEmpty()) {
+                    PaperTelegraphVisual visual = telegraphVisuals.remove(frame.key());
+                    if (visual != null) {
+                        visual.close();
+                    }
                     continue;
                 }
-                int rgb = telegraphColor(frame.key());
-                float scale = Math.max(0.55f, (float) frame.thickness());
-                debug.polyline(viewers, sampleShape(frame), DRAW_STEP, applyAlpha(rgb, frame.alpha()), scale);
+                TelegraphSpec spec = telegraphSpecs.get(frame.key());
+                telegraphVisuals.computeIfAbsent(frame.key(), ignored -> new PaperTelegraphVisual())
+                        .sync(viewers, points, telegraphMaterial(frame, spec), telegraphBlockScale(frame));
+            }
+            List<Key> staleKeys = new ArrayList<>();
+            for (Key key : telegraphVisuals.keySet()) {
+                if (!activeKeys.contains(key)) {
+                    staleKeys.add(key);
+                }
+            }
+            for (Key staleKey : staleKeys) {
+                PaperTelegraphVisual visual = telegraphVisuals.remove(staleKey);
+                if (visual != null) {
+                    visual.close();
+                }
+                telegraphSpecs.remove(staleKey);
             }
         }
 
@@ -1928,6 +2414,104 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                     .collect(java.util.stream.Collectors.toList());
         }
 
+        private final class PaperTelegraphVisual implements AutoCloseable {
+
+            private final List<BlockDisplay> displays = new ArrayList<>();
+            private final Set<UUID> visibleViewerIds = new HashSet<>();
+            private Material material = Material.RED_CONCRETE;
+            private float scale = 0.4f;
+
+            private void sync(List<Player> viewers, List<Vec3> points, Material nextMaterial, float nextScale) {
+                Player owner = owner();
+                if (owner == null) {
+                    close();
+                    return;
+                }
+                World world = owner.getWorld();
+                ensureDisplayCount(world, points.size());
+                material = nextMaterial;
+                scale = nextScale;
+                for (int index = 0; index < points.size(); index++) {
+                    BlockDisplay display = displays.get(index);
+                    Vec3 point = points.get(index);
+                    display.teleport(new Location(world, point.x(), point.y() + TELEGRAPH_DISPLAY_LIFT, point.z()));
+                    display.setBlock(material.createBlockData());
+                    display.setTransformation(flatBlockTransform(scale));
+                }
+                reconcileViewers(viewers);
+            }
+
+            private void ensureDisplayCount(World world, int count) {
+                while (displays.size() < count) {
+                    BlockDisplay display = world.spawn(new Location(world, 0.0, 0.0, 0.0), BlockDisplay.class, this::configure);
+                    for (UUID viewerId : visibleViewerIds) {
+                        Player viewer = Bukkit.getPlayer(viewerId);
+                        if (viewer != null && viewer.isOnline()) {
+                            viewer.showEntity(plugin, display);
+                        }
+                    }
+                    displays.add(display);
+                }
+                while (displays.size() > count) {
+                    displays.removeLast().remove();
+                }
+            }
+
+            private void reconcileViewers(List<Player> viewers) {
+                Set<UUID> nextViewerIds = new HashSet<>();
+                for (Player viewer : viewers) {
+                    nextViewerIds.add(viewer.getUniqueId());
+                    if (visibleViewerIds.add(viewer.getUniqueId())) {
+                        for (BlockDisplay display : displays) {
+                            viewer.showEntity(plugin, display);
+                        }
+                    }
+                }
+                List<UUID> staleViewerIds = new ArrayList<>();
+                for (UUID viewerId : visibleViewerIds) {
+                    if (!nextViewerIds.contains(viewerId)) {
+                        staleViewerIds.add(viewerId);
+                    }
+                }
+                for (UUID staleViewerId : staleViewerIds) {
+                    Player viewer = Bukkit.getPlayer(staleViewerId);
+                    if (viewer != null) {
+                        for (BlockDisplay display : displays) {
+                            viewer.hideEntity(plugin, display);
+                        }
+                    }
+                    visibleViewerIds.remove(staleViewerId);
+                }
+            }
+
+            private void configure(BlockDisplay display) {
+                display.setVisibleByDefault(false);
+                display.setBillboard(Display.Billboard.FIXED);
+                display.setBrightness(FULL_BRIGHT);
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(1);
+                display.setTeleportDuration(1);
+                display.setViewRange(64.0f);
+                display.setShadowRadius(0.0f);
+                display.setShadowStrength(0.0f);
+                display.setGravity(false);
+                display.setInvulnerable(true);
+                display.setPersistent(false);
+                display.setSilent(true);
+                display.setBlock(material.createBlockData());
+                display.setTransformation(flatBlockTransform(scale));
+            }
+
+            @Override
+            public void close() {
+                for (BlockDisplay display : displays) {
+                    display.remove();
+                }
+                displays.clear();
+                visibleViewerIds.clear();
+            }
+        }
+
         private boolean sameSpace(Player player, SpaceId spaceId) {
             return spaceId(player.getWorld()).equals(spaceId);
         }
@@ -1938,6 +2522,9 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                 return;
             }
             closed = true;
+            telegraphSpecs.clear();
+            telegraphVisuals.values().forEach(PaperTelegraphVisual::close);
+            telegraphVisuals.clear();
             telegraphs.close();
             ambient.close();
             for (AutoCloseable handle : handles) {

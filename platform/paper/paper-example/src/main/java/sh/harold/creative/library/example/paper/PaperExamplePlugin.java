@@ -25,6 +25,7 @@ import sh.harold.creative.library.overlay.paper.PaperScreenOverlayPlatform;
 import sh.harold.creative.library.message.Message;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +33,11 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public final class PaperExamplePlugin extends JavaPlugin implements Listener {
+
+    @FunctionalInterface
+    private interface VariantCommandAction {
+        void accept(Player player, String variant, String[] extraArgs);
+    }
 
     private static final List<Material> TEST_HOTBAR_POOL = List.of(
             Material.COMPASS,
@@ -256,8 +262,8 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
                             List.of("testtelegraph"),
                             playerVariantCommand(
                                     primitiveExamples.telegraphUsage(),
-                                    player -> primitiveExamples.playTelegraph(player, "all"),
-                                    primitiveExamples::playTelegraph
+                                    player -> primitiveExamples.playTelegraph(player, "showcase"),
+                                    (player, variant, extraArgs) -> primitiveExamples.playTelegraph(player, variant, extraArgs)
                             )
                     );
                     event.registrar().register(
@@ -266,8 +272,8 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
                             List.of("testtrajectory"),
                             playerVariantCommand(
                                     primitiveExamples.trajectoryUsage(),
-                                    player -> primitiveExamples.playTrajectory(player, "all"),
-                                    primitiveExamples::playTrajectory
+                                    player -> primitiveExamples.playTrajectory(player, "showcase"),
+                                    (player, variant, extraArgs) -> primitiveExamples.playTrajectory(player, variant, extraArgs)
                             )
                     );
                     event.registrar().register(
@@ -276,7 +282,7 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
                             List.of("testimpulse"),
                             playerVariantCommand(
                                     primitiveExamples.impulseUsage(),
-                                    player -> primitiveExamples.playImpulse(player, "all"),
+                                    player -> primitiveExamples.playImpulse(player, "showcase"),
                                     primitiveExamples::playImpulse
                             )
                     );
@@ -308,6 +314,14 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
             Consumer<Player> defaultAction,
             BiConsumer<Player, String> action
     ) {
+        return playerVariantCommand(usage, defaultAction, (player, variant, extraArgs) -> action.accept(player, variant));
+    }
+
+    private BasicCommand playerVariantCommand(
+            String usage,
+            Consumer<Player> defaultAction,
+            VariantCommandAction action
+    ) {
         return new BasicCommand() {
             @Override
             public void execute(CommandSourceStack stack, String[] args) {
@@ -327,7 +341,7 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
                     feedback.info(player, usage);
                     return;
                 }
-                action.accept(player, variant);
+                action.accept(player, variant, Arrays.copyOfRange(args, 1, args.length));
             }
         };
     }
