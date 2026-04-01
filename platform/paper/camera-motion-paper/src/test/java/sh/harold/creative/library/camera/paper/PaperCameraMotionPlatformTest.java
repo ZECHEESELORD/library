@@ -140,8 +140,8 @@ class PaperCameraMotionPlatformTest {
         PaperCameraMotionPlatform platform = new PaperCameraMotionPlatform(plugin, motions, scheduler, ignored -> player, false);
         platform.start(viewerId, impulse("cleanup", 1.0, 0.0));
 
-        org.bukkit.event.player.PlayerQuitEvent quit = mock(org.bukkit.event.player.PlayerQuitEvent.class);
-        when(quit.getPlayer()).thenReturn(player);
+        org.bukkit.event.player.PlayerQuitEvent quit =
+                new org.bukkit.event.player.PlayerQuitEvent(player, net.kyori.adventure.text.Component.text("quit"));
 
         platform.onPlayerQuit(quit);
 
