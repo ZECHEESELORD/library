@@ -61,6 +61,7 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
     private PaperScreenOverlayExamples overlayExamples;
     private PaperCameraMotionPlatform camera;
     private PaperPrimitiveExamples primitiveExamples;
+    private PaperCooldownExamples cooldownExamples;
     private PaperExampleMessages feedback;
 
     @Override
@@ -73,15 +74,19 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
         examples = new PaperMenuExampleMenus(menus);
         overlayExamples = new PaperScreenOverlayExamples(this, overlays, feedback);
         primitiveExamples = new PaperPrimitiveExamples(this, sounds, overlays, camera, feedback);
+        cooldownExamples = new PaperCooldownExamples(menus, feedback);
         registerCommands();
         getServer().getPluginManager().registerEvents(this, this);
-        getLogger().info("Paper example ready. Joining players open the house-style gallery, and /testmenus, /testoverlays, plus /testprimitives expose the dev harness.");
+        getLogger().info("Paper example ready. Joining players open the house-style gallery, and /testmenus, /testoverlays, /testprimitives, and /testcooldowns expose the dev harness.");
     }
 
     @Override
     public void onDisable() {
         if (primitiveExamples != null) {
             primitiveExamples.close();
+        }
+        if (cooldownExamples != null) {
+            cooldownExamples.close();
         }
         if (camera != null) {
             camera.close();
@@ -104,10 +109,11 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
         Bukkit.getScheduler().runTask(this, () -> menus.open(event.getPlayer(), examples.gallery()));
         feedback.info(
                 event.getPlayer(),
-                "Use {menus} to reopen the menu gallery, {overlays} to preview the screen overlay subsystem, and {primitives} for the primitive harness commands.",
+                "Use {menus} to reopen the menu gallery, {overlays} to preview the screen overlay subsystem, {primitives} for the primitive harness commands, and {cooldowns} to test scoped cooldown keys.",
                 Message.slot("menus", feedback.command("/testmenus")),
                 Message.slot("overlays", feedback.command("/testoverlays")),
-                Message.slot("primitives", feedback.command("/testprimitives help"))
+                Message.slot("primitives", feedback.command("/testprimitives help")),
+                Message.slot("cooldowns", feedback.command("/testcooldowns help"))
         );
     }
 
@@ -140,6 +146,16 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
     private void registerCommands() {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 {
+                    event.registrar().register(
+                            "testcooldowns",
+                            "Run the cooldown key harness.",
+                            java.util.List.of(),
+                            playerVariantCommand(
+                                    cooldownExamples.usage(),
+                                    player -> cooldownExamples.run(player, "keys"),
+                                    cooldownExamples::run
+                            )
+                    );
                     event.registrar().register(
                             "testmenus",
                             "Open the menu demo harness.",

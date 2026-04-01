@@ -20,6 +20,8 @@ include(
     ":common:camera-motion-core",
     ":common:data-api",
     ":common:data-memory",
+    ":common:cooldown-api",
+    ":common:cooldown-core",
     ":common:ui-values-api",
     ":common:screen-overlay-api",
     ":common:screen-overlay-core",

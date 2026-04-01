@@ -3,6 +3,7 @@ package sh.harold.creative.library.example.minestom;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.minestom.server.entity.Player;
 import sh.harold.creative.library.menu.MenuTraceSnapshot;
+import sh.harold.creative.library.message.MessageBlock;
 import sh.harold.creative.library.message.Message;
 import sh.harold.creative.library.message.SlotBinding;
 import sh.harold.creative.library.message.minestom.MinestomMessageSender;
@@ -10,6 +11,10 @@ import sh.harold.creative.library.message.minestom.MinestomMessageSender;
 final class MinestomDevHarnessMessages {
 
     private final MinestomMessageSender sender = new MinestomMessageSender();
+
+    void send(Player player, MessageBlock block) {
+        sender.send(player, block);
+    }
 
     void info(Player player, String template, SlotBinding... slots) {
         sender.send(player, Message.info(template, slots));
@@ -26,13 +31,14 @@ final class MinestomDevHarnessMessages {
     void sendQuickStart(Player player) {
         info(
                 player,
-                "Use {menus}, {messages}, {sounds}, {camera}, {overlays}, {npcs}, and {primitives} for the Minestom dev harness.",
+                "Use {menus}, {messages}, {sounds}, {camera}, {overlays}, {npcs}, {cooldowns}, and {primitives} for the Minestom dev harness.",
                 Message.slot("menus", command("/testmenus")),
                 Message.slot("messages", command("/testmessages")),
                 Message.slot("sounds", command("/testsoundfx")),
                 Message.slot("camera", command("/testcamera")),
                 Message.slot("overlays", command("/testoverlays")),
                 Message.slot("npcs", command("/testnpcs")),
+                Message.slot("cooldowns", command("/testcooldowns")),
                 Message.slot("primitives", command("/testprimitives help"))
         );
     }
@@ -69,6 +75,10 @@ final class MinestomDevHarnessMessages {
                 .bullet(
                         "{command} reset|clear",
                         Message.slot("command", command("/testnpcs"))
+                )
+                .bullet(
+                        "{command} keys|local|shared|context|menu|npc|clear|help",
+                        Message.slot("command", command("/testcooldowns"))
                 )
                 .bullet(
                         "{command} help",

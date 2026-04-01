@@ -77,11 +77,13 @@ public final class MinestomExampleBootstrap {
                 feedback
         );
         Pos spawn = new Pos(0.5, 42.0, 0.5);
+        MinestomCooldownHarness cooldownExamples = new MinestomCooldownHarness(instance, spawn, menus, feedback);
         MinestomEntityExampleHarness entityExamples = new MinestomEntityExampleHarness(instance, spawn, menus, examples, sounds, feedback);
 
         entityExamples.reset();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            cooldownExamples.close();
             primitiveExamples.close();
             entityExamples.close();
             camera.close();
@@ -96,6 +98,7 @@ public final class MinestomExampleBootstrap {
         MinecraftServer.getCommandManager().register(new MinestomCameraMotionCommand(cameraExamples, feedback));
         MinecraftServer.getCommandManager().register(new MinestomScreenOverlayCommand(overlayExamples, feedback));
         MinecraftServer.getCommandManager().register(new MinestomEntityExamplesCommand(entityExamples, feedback));
+        MinecraftServer.getCommandManager().register(new MinestomCooldownCommand(cooldownExamples, feedback));
         MinecraftServer.getCommandManager().register(new MinestomHarnessVariantCommand(
                 "testtweens",
                 "testtween",
@@ -179,7 +182,7 @@ public final class MinestomExampleBootstrap {
                 primitiveExamples.discard(event.getPlayer().getUuid()));
 
         log("Unified Minestom dev harness ready on localhost:" + PORT
-                + ". Use /testmenus, /testmessages, /testsoundfx, /testcamera, /testoverlays, /testnpcs, and /testprimitives.");
+                + ". Use /testmenus, /testmessages, /testsoundfx, /testcamera, /testoverlays, /testnpcs, /testcooldowns, and /testprimitives.");
         minecraftServer.start(HOST, PORT);
     }
 

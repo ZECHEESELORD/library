@@ -1,4 +1,6 @@
 dependencies {
+    implementation(project(":common:cooldown-api"))
+    implementation(project(":common:cooldown-core"))
     implementation(project(":common:data-memory"))
     implementation(project(":common:message-core"))
     implementation(project(":common:state-machine-core"))
