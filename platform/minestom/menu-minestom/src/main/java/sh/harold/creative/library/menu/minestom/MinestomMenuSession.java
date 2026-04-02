@@ -28,6 +28,8 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
     private volatile List<MenuSlot> renderedSlots = List.of();
     private volatile MenuStack renderedCursor;
     private volatile MenuTickHandle tickHandle = MenuTickHandle.noop();
+    private volatile MenuTickHandle inputGuardRearmHandle = MenuTickHandle.noop();
+    private volatile boolean inputGuardLocked;
     private volatile long tickIntervalTicks;
 
     MinestomMenuSession(MinestomMenuRuntime runtime, Player viewer, MenuSessionState state) {
@@ -89,6 +91,7 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
     void detach() {
         state.closed();
         stopTicking();
+        stopInputGuard();
     }
 
     @Override
@@ -109,6 +112,33 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
     @Override
     public void close() {
         runtime.close(this);
+    }
+
+    boolean tryAcquireInputGuard() {
+        if (inputGuardLocked) {
+            return false;
+        }
+        inputGuardLocked = true;
+        scheduleInputGuardRearm();
+        return true;
+    }
+
+    void rearmInputGuard() {
+        inputGuardRearmHandle = MenuTickHandle.noop();
+        inputGuardLocked = false;
+    }
+
+    private void scheduleInputGuardRearm() {
+        MenuTrace.time("runtime.inputGuardSchedule", () -> {
+            inputGuardRearmHandle.cancel();
+            inputGuardRearmHandle = runtime.scheduleNextTick(() -> runtime.rearmInputGuard(this));
+        });
+    }
+
+    private void stopInputGuard() {
+        MenuTrace.time("runtime.inputGuardCancel", inputGuardRearmHandle::cancel);
+        inputGuardRearmHandle = MenuTickHandle.noop();
+        inputGuardLocked = false;
     }
 
     private void updateTicking() {

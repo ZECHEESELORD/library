@@ -34,6 +34,7 @@ import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
 import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.menu.core.StandardMenuService;
+import sh.harold.creative.library.menu.core.MenuTickHandle;
 import sh.harold.creative.library.sound.CuePlayback;
 import sh.harold.creative.library.sound.SoundCue;
 import sh.harold.creative.library.sound.SoundCueKeys;
@@ -44,11 +45,15 @@ import sh.harold.creative.library.sound.core.StandardSoundCueRegistry;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,10 +74,57 @@ class MinestomMenuRuntimeTest {
         }
     }
 
+    private static MinestomMenuRuntime runtime() {
+        return runtime(new RecordingSoundCueService());
+    }
+
+    private static MinestomMenuRuntime runtime(SoundCueService sounds) {
+        return runtime(sounds, new ArrayDeque<>());
+    }
+
+    private static MinestomMenuRuntime runtime(SoundCueService sounds, Deque<Runnable> scheduled) {
+        return new MinestomMenuRuntime(
+                new MinestomMenuRenderer(),
+                sounds,
+                sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                nextTickScheduler(scheduled),
+                new MenuTraceController(),
+                message -> { });
+    }
+
+    private static MinestomMenuRuntime runtime(SoundCueService sounds, MenuTraceController trace, List<String> logs,
+                                               Deque<Runnable> scheduled) {
+        return new MinestomMenuRuntime(
+                new MinestomMenuRenderer(),
+                sounds,
+                sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                nextTickScheduler(scheduled),
+                trace,
+                logs::add);
+    }
+
+    private static Function<Runnable, MenuTickHandle> nextTickScheduler(Deque<Runnable> scheduled) {
+        return action -> {
+            scheduled.addLast(action);
+            return () -> scheduled.remove(action);
+        };
+    }
+
+    private static void drainScheduled(Deque<Runnable> scheduled) {
+        while (!scheduled.isEmpty()) {
+            scheduled.removeFirst().run();
+        }
+    }
+
+    private static InventoryPreClickEvent click(Player player, Inventory inventory, Click click) {
+        return new InventoryPreClickEvent(inventory, player, click);
+    }
+
     @Test
     void openClickNavigateAndCloseUsesOwnedInventoryIdentity() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
         Menu menu = pagedMenu();
 
         runtime.open(player, menu);
@@ -87,6 +139,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(nextPage);
 
         assertTrue(nextPage.isCancelled());
+        drainScheduled(scheduled);
         Inventory secondPageInventory = player.lastOpenedInventory();
         assertNotSame(inventory, secondPageInventory);
         assertEquals("Previous Page", slotTitle(secondPageInventory, 45));
@@ -104,7 +157,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void actionCanReplaceCurrentMenuAndRefreshRenderedContents() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        MinestomMenuRuntime runtime = runtime();
         AtomicBoolean enabled = new AtomicBoolean(false);
 
         runtime.open(player, toggleMenu(enabled));
@@ -120,7 +173,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void closeAndSpoofedInventoriesDoNotRouteByTitle() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        MinestomMenuRuntime runtime = runtime();
         runtime.open(player, pagedMenu());
         Inventory inventory = player.lastOpenedInventory();
 
@@ -140,7 +193,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void disconnectCleansUpViewerSession() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        MinestomMenuRuntime runtime = runtime();
         runtime.open(player, pagedMenu());
         Inventory inventory = player.lastOpenedInventory();
 
@@ -154,7 +207,8 @@ class MinestomMenuRuntimeTest {
     @Test
     void childBackUsesHistoryAndTabSwitchesPushFrameHistory() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
 
         runtime.open(player, launcherMenu());
         Inventory rootInventory = player.lastOpenedInventory();
@@ -164,6 +218,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(openChild);
 
         assertTrue(openChild.isCancelled());
+        drainScheduled(scheduled);
         Inventory inventory = player.lastOpenedInventory();
 
         assertEquals("Go Back", slotTitle(inventory, 48));
@@ -175,6 +230,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(switchTab);
 
         assertTrue(switchTab.isCancelled());
+        drainScheduled(scheduled);
         assertEquals("Profiles", slotTitle(inventory, 3));
         assertEquals("Progress", slotTitle(inventory, 4));
         assertEquals("Farming XLIX", slotTitle(inventory, 19));
@@ -183,6 +239,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(backToPreviousFrame);
 
         assertTrue(backToPreviousFrame.isCancelled());
+        drainScheduled(scheduled);
         Inventory afterFrameBack = player.lastOpenedInventory();
         assertEquals("Go Back", slotTitle(afterFrameBack, 48));
         assertEquals("Your SkyBlock Profile", slotTitle(afterFrameBack, 19));
@@ -198,7 +255,8 @@ class MinestomMenuRuntimeTest {
     @Test
     void navArrowsScrollStripWithoutChangingActiveContent() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
 
         runtime.open(player, overflowGalleryMenu());
         Inventory inventory = player.lastOpenedInventory();
@@ -215,6 +273,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(scrollRight);
 
         assertTrue(scrollRight.isCancelled());
+        drainScheduled(scheduled);
         assertEquals("Tab 1", slotTitle(inventory, 1));
         assertEquals("Tab 7", slotTitle(inventory, 7));
         assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
@@ -223,6 +282,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(jumpEnd);
 
         assertTrue(jumpEnd.isCancelled());
+        drainScheduled(scheduled);
         assertEquals("Tab 3", slotTitle(inventory, 1));
         assertEquals("Tab 9", slotTitle(inventory, 7));
         assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
@@ -237,7 +297,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void pagedTabContentUsesFooterArrowsForLargeTabs() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        MinestomMenuRuntime runtime = runtime();
 
         runtime.open(player, pagedTabGalleryMenu());
         Inventory inventory = player.lastOpenedInventory();
@@ -259,7 +319,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void canvasRoutesPlacedItemsThroughOwnedInventoryIdentity() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        MinestomMenuRuntime runtime = runtime();
         AtomicBoolean opened = new AtomicBoolean(false);
 
         runtime.open(player, canvasMenu(opened));
@@ -278,14 +338,18 @@ class MinestomMenuRuntimeTest {
     void interactionSoundsUseDefaultAndOverrideMappings() {
         TestPlayer player = player();
         RecordingSoundCueService sounds = new RecordingSoundCueService();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), sounds);
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(sounds, scheduled);
 
         runtime.open(player, soundMenu());
         Inventory inventory = player.lastOpenedInventory();
 
         runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(10)));
+        drainScheduled(scheduled);
         runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(11)));
+        drainScheduled(scheduled);
         runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(12)));
+        drainScheduled(scheduled);
 
         runtime.open(player, pagedMenu());
         Inventory pagedInventory = player.lastOpenedInventory();
@@ -300,9 +364,65 @@ class MinestomMenuRuntimeTest {
     }
 
     @Test
+    void compiledMenusRequireLiteralClickVariants() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = runtime();
+        AtomicInteger triggered = new AtomicInteger();
+
+        runtime.open(player, new StandardMenuService().list()
+                .title("Compiled Clicks")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("Action")
+                        .action(ActionVerb.VIEW, context -> triggered.incrementAndGet())
+                        .build())
+                .build());
+        Inventory inventory = player.lastOpenedInventory();
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.LeftShift(10)));
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Double(10)));
+        assertEquals(0, triggered.get());
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(10)));
+        assertEquals(1, triggered.get());
+    }
+
+    @Test
+    void compiledMenuClicksAreCappedToOnePerTick() {
+        TestPlayer player = player();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
+        AtomicInteger triggered = new AtomicInteger();
+
+        runtime.open(player, new StandardMenuService().list()
+                .title("Tick Cap")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("First")
+                        .action(ActionVerb.VIEW, context -> triggered.incrementAndGet())
+                        .build())
+                .addItem(MenuButton.builder(MenuIcon.vanilla("book"))
+                        .name("Second")
+                        .action(ActionVerb.VIEW, context -> triggered.incrementAndGet())
+                        .build())
+                .build());
+        Inventory inventory = player.lastOpenedInventory();
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(10)));
+        assertEquals(1, triggered.get());
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(11)));
+        assertEquals(1, triggered.get());
+
+        drainScheduled(scheduled);
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(11)));
+        assertEquals(2, triggered.get());
+    }
+
+    @Test
     void reactiveMenusCanMoveInventoryStacksWithoutDuplicatingThem() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
 
         runtime.open(player, reactiveClickInsertMenu(false));
         Inventory inventory = player.lastOpenedInventory();
@@ -313,6 +433,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(click);
 
         assertTrue(click.isCancelled());
+        drainScheduled(scheduled);
         assertEquals(Material.AIR, player.getInventory().getItemStack(0).material());
         assertEquals("Bottom Item", slotTitle(inventory, 31));
 
@@ -320,14 +441,37 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(returnClick);
 
         assertTrue(returnClick.isCancelled());
+        drainScheduled(scheduled);
         assertEquals("Bottom Item", slotTitle(player.getInventory(), 0));
         assertEquals("Click An Inventory Stack", slotTitle(inventory, 31));
     }
 
     @Test
+    void reactiveMenuClicksAreCappedToOnePerTick() {
+        TestPlayer player = player();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
+
+        runtime.open(player, reactiveClickRoutingMenu());
+        Inventory inventory = player.lastOpenedInventory();
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(22)));
+        assertEquals("Placed Clicks: 1", slotTitle(inventory, 22));
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(22)));
+        assertEquals("Placed Clicks: 1", slotTitle(inventory, 22));
+
+        drainScheduled(scheduled);
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(22)));
+        assertEquals("Placed Clicks: 2", slotTitle(inventory, 22));
+    }
+
+    @Test
     void reactiveMenusCanMoveDraggedStacksWithoutDuplicatingThem() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
 
         runtime.open(player, reactiveDragInsertMenu(false));
         Inventory inventory = player.lastOpenedInventory();
@@ -337,6 +481,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(pickup);
 
         assertTrue(pickup.isCancelled());
+        drainScheduled(scheduled);
         assertEquals(Material.AIR, player.getInventory().getItemStack(4).material());
         assertEquals("Dragged Item", itemTitle(player.getInventory().getCursorItem()));
         assertEquals(Material.AIR, inventory.getItemStack(31).material());
@@ -346,6 +491,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(drag);
 
         assertTrue(drag.isCancelled());
+        drainScheduled(scheduled);
         assertEquals(Material.AIR, player.getInventory().getCursorItem().material());
         assertEquals("Dragged Item", slotTitle(inventory, 31));
 
@@ -353,6 +499,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(returnClick);
 
         assertTrue(returnClick.isCancelled());
+        drainScheduled(scheduled);
         assertEquals("Dragged Item", slotTitle(player.getInventory(), 4));
         assertEquals(Material.AIR, inventory.getItemStack(31).material());
     }
@@ -360,19 +507,23 @@ class MinestomMenuRuntimeTest {
     @Test
     void reactiveMenusCanPlacePickedUpCenterStacksIntoEmptyInventorySlots() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
 
         runtime.open(player, reactiveDragInsertMenu(false));
         Inventory inventory = player.lastOpenedInventory();
         player.getInventory().setItemStack(4, namedMinestomItem(Material.EMERALD, "Dragged Item", 2));
 
         runtime.onInventoryPreClick(new InventoryPreClickEvent(player.getInventory(), player, new Click.Left(4)));
+        drainScheduled(scheduled);
         runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.LeftDrag(List.of(31))));
+        drainScheduled(scheduled);
 
         InventoryPreClickEvent pickupFromCenter = new InventoryPreClickEvent(inventory, player, new Click.Left(31));
         runtime.onInventoryPreClick(pickupFromCenter);
 
         assertTrue(pickupFromCenter.isCancelled());
+        drainScheduled(scheduled);
         assertEquals("Dragged Item", itemTitle(player.getInventory().getCursorItem()));
         assertEquals(Material.AIR, inventory.getItemStack(31).material());
 
@@ -380,6 +531,7 @@ class MinestomMenuRuntimeTest {
         runtime.onInventoryPreClick(placeIntoInventory);
 
         assertTrue(placeIntoInventory.isCancelled());
+        drainScheduled(scheduled);
         assertEquals("Dragged Item", slotTitle(player.getInventory(), 8));
         assertEquals(Material.AIR, player.getInventory().getCursorItem().material());
         assertEquals(Material.AIR, inventory.getItemStack(31).material());
@@ -388,7 +540,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void reactiveMenusDoNotMutateLockedInsertTargets() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        MinestomMenuRuntime runtime = runtime();
 
         runtime.open(player, reactiveClickInsertMenu(true));
         Inventory inventory = player.lastOpenedInventory();
@@ -405,7 +557,7 @@ class MinestomMenuRuntimeTest {
     @Test
     void reactiveMenusIgnoreInertBaseChromeClicks() {
         TestPlayer player = player();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService());
+        MinestomMenuRuntime runtime = runtime();
 
         runtime.open(player, reactiveClickRoutingMenu());
         Inventory inventory = player.lastOpenedInventory();
@@ -424,8 +576,7 @@ class MinestomMenuRuntimeTest {
         MenuTraceController trace = new MenuTraceController();
         trace.traceAll();
         List<String> logs = new ArrayList<>();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService(),
-                sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), trace, logs::add);
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), trace, logs, new ArrayDeque<>());
 
         runtime.open(player, reactiveClickRoutingMenu());
 
@@ -452,8 +603,7 @@ class MinestomMenuRuntimeTest {
         MenuTraceController trace = new MenuTraceController();
         trace.traceMenuTitles(List.of("Reactive Routing"));
         List<String> logs = new ArrayList<>();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService(),
-                sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), trace, logs::add);
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), trace, logs, new ArrayDeque<>());
 
         runtime.open(player, pagedMenu());
         assertTrue(logs.isEmpty());
@@ -468,8 +618,7 @@ class MinestomMenuRuntimeTest {
         MenuTraceController trace = new MenuTraceController();
         trace.traceAll();
         List<String> logs = new ArrayList<>();
-        MinestomMenuRuntime runtime = new MinestomMenuRuntime(new MinestomMenuRenderer(), new RecordingSoundCueService(),
-                sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), trace, logs::add);
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), trace, logs, new ArrayDeque<>());
 
         runtime.open(player, overflowGalleryMenu());
         Inventory inventory = player.lastOpenedInventory();

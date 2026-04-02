@@ -56,7 +56,7 @@ public final class PaperMenuPlatform implements AutoCloseable {
         this.closeSounds = closeSounds;
         this.traceController = new MenuTraceController();
         this.runtime = new PaperMenuRuntime(new BukkitPaperMenuAccess(), org.bukkit.Bukkit::getPlayer, new PaperMenuRenderer(), sounds,
-                scheduleTicks(plugin), action -> plugin.getServer().getScheduler().runTask(plugin, action),
+                scheduleTicks(plugin), action -> plugin.getServer().getScheduler().runTask(plugin, action)::cancel,
                 traceController, message -> plugin.getLogger().info("[paper-menu-trace] " + message));
         this.listener = new PaperMenuListener(runtime);
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);

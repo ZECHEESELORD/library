@@ -6,6 +6,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.DragType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -27,6 +28,7 @@ import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.core.HouseMenuCompiler;
 import sh.harold.creative.library.menu.core.MenuTrace;
 import sh.harold.creative.library.menu.core.MenuSessionState;
+import sh.harold.creative.library.menu.core.MenuTickHandle;
 import sh.harold.creative.library.menu.core.MenuTickScheduler;
 import sh.harold.creative.library.sound.SoundCueService;
 
@@ -49,37 +51,66 @@ final class PaperMenuRuntime implements AutoCloseable {
     private final PaperMenuSlotRenderer renderer;
     private final SoundCueService sounds;
     private final MenuTickScheduler tickScheduler;
-    private final Consumer<Runnable> inventoryTaskScheduler;
+    private final Function<Runnable, MenuTickHandle> nextTickScheduler;
     private final MenuTraceController traceController;
     private final Consumer<String> traceSink;
     private int inventoryInteractionDepth;
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer, SoundCueService sounds) {
-        this(access, playerLookup, renderer, sounds, MenuTickScheduler.unsupported(), Runnable::run,
+        this(access, playerLookup, renderer, sounds, MenuTickScheduler.unsupported(),
+                action -> {
+                    action.run();
+                    return MenuTickHandle.noop();
+                },
                 new MenuTraceController(), message -> { });
     }
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
                      SoundCueService sounds, MenuTickScheduler tickScheduler) {
-        this(access, playerLookup, renderer, sounds, tickScheduler, Runnable::run,
+        this(access, playerLookup, renderer, sounds, tickScheduler,
+                action -> {
+                    action.run();
+                    return MenuTickHandle.noop();
+                },
                 new MenuTraceController(), message -> { });
     }
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
-                     SoundCueService sounds, MenuTickScheduler tickScheduler, Consumer<Runnable> inventoryTaskScheduler) {
-        this(access, playerLookup, renderer, sounds, tickScheduler, inventoryTaskScheduler,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Consumer<Runnable> nextTickScheduler) {
+        this(access, playerLookup, renderer, sounds, tickScheduler,
+                action -> {
+                    nextTickScheduler.accept(action);
+                    return MenuTickHandle.noop();
+                },
                 new MenuTraceController(), message -> { });
     }
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
-                     SoundCueService sounds, MenuTickScheduler tickScheduler, Consumer<Runnable> inventoryTaskScheduler,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler) {
+        this(access, playerLookup, renderer, sounds, tickScheduler, nextTickScheduler,
+                new MenuTraceController(), message -> { });
+    }
+
+    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Consumer<Runnable> nextTickScheduler,
+                     MenuTraceController traceController, Consumer<String> traceSink) {
+        this(access, playerLookup, renderer, sounds, tickScheduler,
+                action -> {
+                    nextTickScheduler.accept(action);
+                    return MenuTickHandle.noop();
+                },
+                traceController, traceSink);
+    }
+
+    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler,
                      MenuTraceController traceController, Consumer<String> traceSink) {
         this.access = Objects.requireNonNull(access, "access");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.sounds = Objects.requireNonNull(sounds, "sounds");
         this.tickScheduler = Objects.requireNonNull(tickScheduler, "tickScheduler");
-        this.inventoryTaskScheduler = Objects.requireNonNull(inventoryTaskScheduler, "inventoryTaskScheduler");
+        this.nextTickScheduler = Objects.requireNonNull(nextTickScheduler, "nextTickScheduler");
         this.traceController = Objects.requireNonNull(traceController, "traceController");
         this.traceSink = Objects.requireNonNull(traceSink, "traceSink");
     }
@@ -141,7 +172,7 @@ final class PaperMenuRuntime implements AutoCloseable {
                 return;
             }
 
-            MenuClick click = toMenuClick(event);
+            MenuClick click = toCompiledMenuClick(event.getClick());
             if (click == null) {
                 return;
             }
@@ -156,6 +187,9 @@ final class PaperMenuRuntime implements AutoCloseable {
                 MenuTrace.field("slot", rawSlot);
                 MenuTrace.field("button", click);
                 MenuTrace.title(session.state().currentFrame().title());
+                if (!allowInput(session, new CompiledClickInput(rawSlot, click))) {
+                    return;
+                }
 
                 MenuTrace.time("runtime.handleDirectInteraction", () -> handleDirectInteraction(session, player, click, interaction));
             });
@@ -199,7 +233,11 @@ final class PaperMenuRuntime implements AutoCloseable {
                 MenuTrace.setCount("dragSlots", slots.size());
 
                 event.setCancelled(true);
-                handleReactiveInput(session, player, new ReactiveMenuInput.Drag(button, slots, toMenuStack(event.getOldCursor())), null);
+                List<Integer> fingerprintSlots = slots.stream().sorted().toList();
+                if (!allowInput(session, new ReactiveDragInput(button, fingerprintSlots))) {
+                    return;
+                }
+                handleReactiveInput(session, player, new ReactiveMenuInput.Drag(button, fingerprintSlots, toMenuStack(event.getOldCursor())), null);
             });
         });
     }
@@ -295,7 +333,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (player != null) {
             if (shouldDeferInventoryTransitions()) {
                 Inventory closingInventory = session.inventory();
-                inventoryTaskScheduler.accept(MenuTrace.propagate(() -> {
+                scheduleNextTick(MenuTrace.propagate(() -> {
                     if (access.topInventory(player) == closingInventory) {
                         MenuTrace.time("runtime.inventoryClose", () -> access.closeInventory(player));
                     }
@@ -349,6 +387,10 @@ final class PaperMenuRuntime implements AutoCloseable {
         return tickScheduler;
     }
 
+    MenuTickHandle scheduleNextTick(Runnable action) {
+        return nextTickScheduler.apply(Objects.requireNonNull(action, "action"));
+    }
+
     @Override
     public void close() {
         sessions.values().forEach(this::close);
@@ -356,33 +398,43 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     private void handleReactiveOutsideClick(PaperMenuSession session, Player player, InventoryClickEvent event) {
-        MenuClick click = toMenuClick(event);
+        ReactiveClickBinding click = toReactiveClick(event.getClick());
         if (click == null) {
             return;
         }
-        MenuTrace.field("button", click);
-        handleReactiveInput(session, player, new ReactiveMenuInput.DropCursor(click, toMenuStack(event.getCursor())), null);
+        MenuTrace.field("button", click.button());
+        if (!allowInput(session, new ReactiveDropCursorInput(click.button()))) {
+            return;
+        }
+        handleReactiveInput(session, player, new ReactiveMenuInput.DropCursor(click.button(), toMenuStack(event.getCursor())), null);
     }
 
     private void handleReactiveTopClick(PaperMenuSession session, Player player, int rawSlot, InventoryClickEvent event) {
-        MenuClick click = toMenuClick(event);
+        ReactiveClickBinding click = toReactiveClick(event.getClick());
         if (click == null) {
             return;
         }
-        MenuTrace.field("button", click);
-        MenuInteraction interaction = session.state().interaction(rawSlot, click).orElse(null);
+        MenuTrace.field("button", click.button());
+        MenuInteraction interaction = session.state().interaction(rawSlot, click.button()).orElse(null);
+        ReactiveTopClickInput fingerprint = new ReactiveTopClickInput(rawSlot, click.button(), click.shift());
         if (interaction != null && !(interaction.action() instanceof MenuSlotAction.Dispatch)) {
-            handleDirectInteraction(session, player, click, interaction);
+            if (!allowInput(session, fingerprint)) {
+                return;
+            }
+            handleDirectInteraction(session, player, click.button(), interaction);
             return;
         }
         if (interaction == null && !session.state().acceptsReactiveClick(rawSlot)) {
             return;
         }
+        if (!allowInput(session, fingerprint)) {
+            return;
+        }
         Object message = interaction != null ? ((MenuSlotAction.Dispatch) interaction.action()).message() : null;
         handleReactiveInput(session, player, new ReactiveMenuInput.Click(
                 rawSlot,
-                click,
-                event.isShiftClick(),
+                click.button(),
+                click.shift(),
                 message,
                 toMenuStack(event.getCursor()),
                 toMenuStack(event.getCurrentItem())),
@@ -390,19 +442,22 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     private void handleReactiveBottomClick(PaperMenuSession session, Player player, InventoryClickEvent event) {
-        MenuClick click = toMenuClick(event);
+        ReactiveClickBinding click = toReactiveClick(event.getClick());
         if (click == null) {
             return;
         }
-        MenuTrace.field("button", click);
+        MenuTrace.field("button", click.button());
         int slot = event.getSlot();
         if (slot < 0) {
             return;
         }
+        if (!allowInput(session, new ReactiveInventoryClickInput(slot, click.button(), click.shift()))) {
+            return;
+        }
         handleReactiveInput(session, player, new ReactiveMenuInput.InventoryClick(
                 slot,
-                click,
-                event.isShiftClick(),
+                click.button(),
+                click.shift(),
                 toMenuStack(event.getCurrentItem())),
                 null);
     }
@@ -490,7 +545,7 @@ final class PaperMenuRuntime implements AutoCloseable {
             MenuTrace.time("runtime.inventoryOpen", () -> access.openInventory(player, inventory));
             return;
         }
-        inventoryTaskScheduler.accept(MenuTrace.propagate(() -> {
+        scheduleNextTick(MenuTrace.propagate(() -> {
             if (sessions.get(session.viewerId()) == session && session.inventory() == inventory) {
                 MenuTrace.time("runtime.inventoryOpen", () -> access.openInventory(player, inventory));
             }
@@ -507,14 +562,36 @@ final class PaperMenuRuntime implements AutoCloseable {
         return session.inventory() == inventory ? session : null;
     }
 
-    private static MenuClick toMenuClick(InventoryClickEvent event) {
-        if (event.isLeftClick()) {
-            return MenuClick.LEFT;
+    private boolean allowInput(PaperMenuSession session, AcceptedInput input) {
+        PaperMenuSession.InputGateResult result = session.acceptInput(input);
+        if (result == PaperMenuSession.InputGateResult.ACCEPTED) {
+            return true;
         }
-        if (event.isRightClick()) {
-            return MenuClick.RIGHT;
-        }
-        return null;
+        MenuTrace.field("inputGuard", result == PaperMenuSession.InputGateResult.DUPLICATE ? "duplicate" : "tickCap");
+        MenuTrace.field("guardInputKind", input.kind());
+        MenuTrace.incrementCount("suppressedInputs");
+        MenuTrace.incrementCount(result == PaperMenuSession.InputGateResult.DUPLICATE
+                ? "suppressedInputDuplicates"
+                : "suppressedInputTickCap");
+        return false;
+    }
+
+    private static MenuClick toCompiledMenuClick(ClickType clickType) {
+        return switch (clickType) {
+            case LEFT -> MenuClick.LEFT;
+            case RIGHT -> MenuClick.RIGHT;
+            default -> null;
+        };
+    }
+
+    private static ReactiveClickBinding toReactiveClick(ClickType clickType) {
+        return switch (clickType) {
+            case LEFT -> new ReactiveClickBinding(MenuClick.LEFT, false);
+            case SHIFT_LEFT -> new ReactiveClickBinding(MenuClick.LEFT, true);
+            case RIGHT -> new ReactiveClickBinding(MenuClick.RIGHT, false);
+            case SHIFT_RIGHT -> new ReactiveClickBinding(MenuClick.RIGHT, true);
+            default -> null;
+        };
     }
 
     private static MenuStack toMenuStack(ItemStack itemStack) {
@@ -573,6 +650,55 @@ final class PaperMenuRuntime implements AutoCloseable {
             action.run();
         } finally {
             inventoryInteractionDepth--;
+        }
+    }
+
+    private record ReactiveClickBinding(MenuClick button, boolean shift) {
+    }
+
+    private sealed interface AcceptedInput permits CompiledClickInput, ReactiveDragInput,
+            ReactiveDropCursorInput, ReactiveInventoryClickInput, ReactiveTopClickInput {
+
+        String kind();
+    }
+
+    private record CompiledClickInput(int slot, MenuClick button) implements AcceptedInput {
+
+        @Override
+        public String kind() {
+            return "compiled-click";
+        }
+    }
+
+    private record ReactiveTopClickInput(int slot, MenuClick button, boolean shift) implements AcceptedInput {
+
+        @Override
+        public String kind() {
+            return "reactive-top-click";
+        }
+    }
+
+    private record ReactiveInventoryClickInput(int slot, MenuClick button, boolean shift) implements AcceptedInput {
+
+        @Override
+        public String kind() {
+            return "reactive-inventory-click";
+        }
+    }
+
+    private record ReactiveDragInput(MenuClick button, List<Integer> slots) implements AcceptedInput {
+
+        @Override
+        public String kind() {
+            return "reactive-drag";
+        }
+    }
+
+    private record ReactiveDropCursorInput(MenuClick button) implements AcceptedInput {
+
+        @Override
+        public String kind() {
+            return "reactive-drop-cursor";
         }
     }
 }

@@ -29,7 +29,9 @@ final class PaperMenuSession implements InventoryHolder, MenuContext.SessionCont
     private volatile List<MenuSlot> renderedSlots = List.of();
     private volatile MenuStack renderedCursor;
     private volatile MenuTickHandle tickHandle = MenuTickHandle.noop();
+    private volatile MenuTickHandle inputGateHandle = MenuTickHandle.noop();
     private volatile long tickIntervalTicks;
+    private volatile Object acceptedInput;
 
     PaperMenuSession(PaperMenuRuntime runtime, UUID viewerId, MenuSessionState state) {
         this.runtime = Objects.requireNonNull(runtime, "runtime");
@@ -51,6 +53,20 @@ final class PaperMenuSession implements InventoryHolder, MenuContext.SessionCont
 
     long actionVersion() {
         return actionVersion.get();
+    }
+
+    InputGateResult acceptInput(Object fingerprint) {
+        Objects.requireNonNull(fingerprint, "fingerprint");
+        Object previous = acceptedInput;
+        if (previous != null) {
+            return previous.equals(fingerprint) ? InputGateResult.DUPLICATE : InputGateResult.TICK_CAP;
+        }
+        acceptedInput = fingerprint;
+        MenuTrace.time("runtime.inputGateArm", () -> {
+            inputGateHandle.cancel();
+            inputGateHandle = runtime.scheduleNextTick(this::rearmInputGate);
+        });
+        return InputGateResult.ACCEPTED;
     }
 
     void open(Player player) {
@@ -91,6 +107,7 @@ final class PaperMenuSession implements InventoryHolder, MenuContext.SessionCont
     void detach() {
         state.closed();
         stopTicking();
+        stopInputGate();
     }
 
     boolean matches(Player player, Inventory inventory) {
@@ -142,5 +159,22 @@ final class PaperMenuSession implements InventoryHolder, MenuContext.SessionCont
         MenuTrace.time("runtime.tickCancel", tickHandle::cancel);
         tickHandle = MenuTickHandle.noop();
         tickIntervalTicks = 0L;
+    }
+
+    private void rearmInputGate() {
+        acceptedInput = null;
+        inputGateHandle = MenuTickHandle.noop();
+    }
+
+    private void stopInputGate() {
+        acceptedInput = null;
+        MenuTrace.time("runtime.inputGateCancel", inputGateHandle::cancel);
+        inputGateHandle = MenuTickHandle.noop();
+    }
+
+    enum InputGateResult {
+        ACCEPTED,
+        DUPLICATE,
+        TICK_CAP
     }
 }

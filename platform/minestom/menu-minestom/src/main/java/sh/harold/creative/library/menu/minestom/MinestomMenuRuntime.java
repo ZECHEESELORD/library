@@ -3,6 +3,7 @@ package sh.harold.creative.library.menu.minestom;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import net.minestom.server.MinecraftServer;
 import net.minestom.server.component.DataComponents;
 import net.minestom.server.entity.Player;
 import net.minestom.server.event.Event;
@@ -16,6 +17,7 @@ import net.minestom.server.inventory.PlayerInventory;
 import net.minestom.server.inventory.click.Click;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
+import net.minestom.server.timer.TaskSchedule;
 import sh.harold.creative.library.menu.MenuClick;
 import sh.harold.creative.library.menu.MenuContext;
 import sh.harold.creative.library.menu.MenuDefinition;
@@ -30,6 +32,7 @@ import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.core.HouseMenuCompiler;
 import sh.harold.creative.library.menu.core.MenuTrace;
 import sh.harold.creative.library.menu.core.MenuSessionState;
+import sh.harold.creative.library.menu.core.MenuTickHandle;
 import sh.harold.creative.library.menu.core.MenuTickScheduler;
 import sh.harold.creative.library.sound.SoundCueService;
 
@@ -39,6 +42,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 final class MinestomMenuRuntime implements AutoCloseable {
 
@@ -48,22 +52,31 @@ final class MinestomMenuRuntime implements AutoCloseable {
     private final MinestomMenuRenderer renderer;
     private final SoundCueService sounds;
     private final MenuTickScheduler tickScheduler;
+    private final Function<Runnable, MenuTickHandle> nextTickScheduler;
     private final MenuTraceController traceController;
     private final Consumer<String> traceSink;
 
     MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds) {
-        this(renderer, sounds, MenuTickScheduler.unsupported(), new MenuTraceController(), message -> { });
+        this(renderer, sounds, MenuTickScheduler.unsupported(), MinestomMenuRuntime::scheduleOnServerTick,
+                new MenuTraceController(), message -> { });
     }
 
     MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds, MenuTickScheduler tickScheduler) {
-        this(renderer, sounds, tickScheduler, new MenuTraceController(), message -> { });
+        this(renderer, sounds, tickScheduler, MinestomMenuRuntime::scheduleOnServerTick, new MenuTraceController(), message -> { });
     }
 
     MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds, MenuTickScheduler tickScheduler,
                         MenuTraceController traceController, Consumer<String> traceSink) {
+        this(renderer, sounds, tickScheduler, MinestomMenuRuntime::scheduleOnServerTick, traceController, traceSink);
+    }
+
+    MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds, MenuTickScheduler tickScheduler,
+                        Function<Runnable, MenuTickHandle> nextTickScheduler, MenuTraceController traceController,
+                        Consumer<String> traceSink) {
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.sounds = Objects.requireNonNull(sounds, "sounds");
         this.tickScheduler = Objects.requireNonNull(tickScheduler, "tickScheduler");
+        this.nextTickScheduler = Objects.requireNonNull(nextTickScheduler, "nextTickScheduler");
         this.traceController = Objects.requireNonNull(traceController, "traceController");
         this.traceSink = Objects.requireNonNull(traceSink, "traceSink");
     }
@@ -116,7 +129,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
             return;
         }
 
-        MenuClick click = toMenuClick(event.getClick());
+        MenuClick click = toCompiledMenuClick(event.getClick());
         if (click == null) {
             return;
         }
@@ -124,6 +137,11 @@ final class MinestomMenuRuntime implements AutoCloseable {
         int slot = event.getSlot();
         MenuInteraction interaction = session.state().interaction(slot, click).orElse(null);
         if (interaction == null) {
+            return;
+        }
+
+        if (!session.tryAcquireInputGuard()) {
+            trace(player, cause(event.getClick()), () -> recordSuppressedInput("compiled", slot, click, "tick-cap"));
             return;
         }
 
@@ -263,31 +281,23 @@ final class MinestomMenuRuntime implements AutoCloseable {
     private void handleReactiveClick(MinestomMenuSession session, InventoryPreClickEvent event, Inventory inventory) {
         Click click = event.getClick();
         if (click instanceof Click.LeftDrag leftDrag) {
-            MenuTrace.field("button", MenuClick.LEFT);
             handleReactiveDrag(session, MenuClick.LEFT, leftDrag.slots(), inventory);
             return;
         }
         if (click instanceof Click.RightDrag rightDrag) {
-            MenuTrace.field("button", MenuClick.RIGHT);
             handleReactiveDrag(session, MenuClick.RIGHT, rightDrag.slots(), inventory);
             return;
         }
         if (click instanceof Click.LeftDropCursor) {
-            MenuTrace.field("button", MenuClick.LEFT);
-            handleReactiveInput(session, new ReactiveMenuInput.DropCursor(
-                    MenuClick.LEFT,
-                    toMenuStack(session.viewer().getInventory().getCursorItem())), null);
+            handleReactiveDropCursor(session, MenuClick.LEFT);
             return;
         }
         if (click instanceof Click.RightDropCursor) {
-            MenuTrace.field("button", MenuClick.RIGHT);
-            handleReactiveInput(session, new ReactiveMenuInput.DropCursor(
-                    MenuClick.RIGHT,
-                    toMenuStack(session.viewer().getInventory().getCursorItem())), null);
+            handleReactiveDropCursor(session, MenuClick.RIGHT);
             return;
         }
 
-        MenuClick button = toMenuClick(click);
+        MenuClick button = toReactiveMenuClick(click);
         if (button == null) {
             return;
         }
@@ -298,10 +308,18 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (clickedInventory == inventory && slot >= 0 && slot < inventory.getSize()) {
             MenuInteraction interaction = session.state().interaction(slot, button).orElse(null);
             if (interaction != null && !(interaction.action() instanceof MenuSlotAction.Dispatch)) {
+                if (!session.tryAcquireInputGuard()) {
+                    trace(session.viewer(), cause(click), () -> recordSuppressedInput("reactive-top", slot, button, "tick-cap"));
+                    return;
+                }
                 handleDirectInteraction(session, button, interaction);
                 return;
             }
             if (interaction == null && !session.state().acceptsReactiveClick(slot)) {
+                return;
+            }
+            if (!session.tryAcquireInputGuard()) {
+                trace(session.viewer(), cause(click), () -> recordSuppressedInput("reactive-top", slot, button, "tick-cap"));
                 return;
             }
             Object message = interaction != null ? ((MenuSlotAction.Dispatch) interaction.action()).message() : null;
@@ -327,6 +345,10 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (bottomSlot < 0) {
             return;
         }
+        if (!session.tryAcquireInputGuard()) {
+            trace(session.viewer(), cause(click), () -> recordSuppressedInput("reactive-bottom", bottomSlot, button, "tick-cap"));
+            return;
+        }
         handleReactiveInput(session, new ReactiveMenuInput.InventoryClick(
                 bottomSlot,
                 button,
@@ -342,9 +364,27 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (filtered.isEmpty()) {
             return;
         }
+        if (!session.tryAcquireInputGuard()) {
+            trace(session.viewer(), "drag", () -> recordSuppressedInput("reactive-drag", filtered.get(0), button, "tick-cap"));
+            return;
+        }
+        MenuTrace.field("button", button);
+        MenuTrace.setCount("dragSlots", filtered.size());
         handleReactiveInput(session, new ReactiveMenuInput.Drag(
                 button,
                 filtered,
+                toMenuStack(session.viewer().getInventory().getCursorItem())),
+                null);
+    }
+
+    private void handleReactiveDropCursor(MinestomMenuSession session, MenuClick button) {
+        if (!session.tryAcquireInputGuard()) {
+            trace(session.viewer(), "drop-cursor", () -> recordSuppressedInput("reactive-drop-cursor", -1, button, "tick-cap"));
+            return;
+        }
+        MenuTrace.field("button", button);
+        handleReactiveInput(session, new ReactiveMenuInput.DropCursor(
+                button,
                 toMenuStack(session.viewer().getInventory().getCursorItem())),
                 null);
     }
@@ -399,6 +439,17 @@ final class MinestomMenuRuntime implements AutoCloseable {
         return false;
     }
 
+    void rearmInputGuard(MinestomMenuSession session) {
+        if (sessions.get(session.viewer().getUuid()) != session) {
+            return;
+        }
+        MenuTrace.time("runtime.inputGuardRearm", session::rearmInputGuard);
+    }
+
+    MenuTickHandle scheduleNextTick(Runnable action) {
+        return MenuTrace.time("runtime.inputGuardScheduleTask", () -> nextTickScheduler.apply(Objects.requireNonNull(action, "action")));
+    }
+
     private void applyViewerInventorySlot(Player player, int slot, MenuStack stack) {
         player.getInventory().setItemStack(slot, renderStack(stack));
     }
@@ -435,7 +486,17 @@ final class MinestomMenuRuntime implements AutoCloseable {
         return click instanceof Click.LeftShift || click instanceof Click.RightShift;
     }
 
-    private static MenuClick toMenuClick(Click click) {
+    private static MenuClick toCompiledMenuClick(Click click) {
+        if (click instanceof Click.Left) {
+            return MenuClick.LEFT;
+        }
+        if (click instanceof Click.Right) {
+            return MenuClick.RIGHT;
+        }
+        return null;
+    }
+
+    private static MenuClick toReactiveMenuClick(Click click) {
         if (click instanceof Click.Left || click instanceof Click.LeftShift) {
             return MenuClick.LEFT;
         }
@@ -443,6 +504,27 @@ final class MinestomMenuRuntime implements AutoCloseable {
             return MenuClick.RIGHT;
         }
         return null;
+    }
+
+    private static MenuTickHandle scheduleOnServerTick(Runnable action) {
+        var task = MinecraftServer.getSchedulerManager().scheduleTask(
+                Objects.requireNonNull(action, "action"),
+                TaskSchedule.tick(1),
+                TaskSchedule.stop());
+        return task::cancel;
+    }
+
+    private void recordSuppressedInput(String path, int slot, MenuClick button, String reason) {
+        MenuTrace.incrementCount("suppressedInputs");
+        MenuTrace.incrementCount("suppressedTickCapInputs");
+        MenuTrace.field("inputPath", path);
+        MenuTrace.field("suppressedReason", reason);
+        if (slot >= 0) {
+            MenuTrace.field("slot", slot);
+        }
+        if (button != null) {
+            MenuTrace.field("button", button);
+        }
     }
 
     private static MenuStack toMenuStack(ItemStack itemStack) {

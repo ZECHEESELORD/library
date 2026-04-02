@@ -32,6 +32,7 @@ import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
 import sh.harold.creative.library.menu.ReactiveMenuView;
+import sh.harold.creative.library.menu.core.MenuTickHandle;
 import sh.harold.creative.library.menu.core.StandardMenuService;
 import sh.harold.creative.library.sound.CuePlayback;
 import sh.harold.creative.library.sound.SoundCue;
@@ -50,7 +51,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,6 +118,63 @@ class PaperMenuRuntimeTest {
 
         assertEquals("Enabled", slotTitle(access, inventory, 10));
         assertEquals(1, access.openedInventories.size());
+    }
+
+    @Test
+    void compiledMenusIgnoreDoubleAndShiftClickVariants() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+        AtomicInteger count = new AtomicInteger();
+
+        runtime.open(player, counterMenu(count));
+        Inventory inventory = access.lastOpenedInventory();
+
+        InventoryClickEvent doubleClick = click(player, inventory, 10, ClickType.DOUBLE_CLICK);
+        runtime.onInventoryClick(doubleClick);
+
+        InventoryClickEvent shifted = click(player, inventory, 10, ClickType.SHIFT_LEFT);
+        runtime.onInventoryClick(shifted);
+
+        assertTrue(doubleClick.isCancelled());
+        assertTrue(shifted.isCancelled());
+        assertEquals(0, count.get());
+    }
+
+    @Test
+    void compiledMenusAcceptOnlyOneInputPerTick() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        AtomicInteger first = new AtomicInteger();
+        AtomicInteger second = new AtomicInteger();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+
+        runtime.open(player, dualCounterMenu(first, second));
+        Inventory inventory = access.lastOpenedInventory();
+
+        InventoryClickEvent firstClick = click(player, inventory, 10, ClickType.LEFT);
+        runtime.onInventoryClick(firstClick);
+
+        InventoryClickEvent secondClick = click(player, inventory, 11, ClickType.LEFT);
+        runtime.onInventoryClick(secondClick);
+
+        assertTrue(firstClick.isCancelled());
+        assertTrue(secondClick.isCancelled());
+        assertEquals(1, first.get());
+        assertEquals(0, second.get());
+        assertEquals(1, scheduled.size());
+
+        runNextTick(scheduled);
+
+        runtime.onInventoryClick(click(player, inventory, 11, ClickType.LEFT));
+
+        assertEquals(1, first.get());
+        assertEquals(1, second.get());
     }
 
     @Test
@@ -459,13 +519,50 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
+    void reactiveMenusAcceptOnlyOneInputPerTickAcrossDifferentInputPaths() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+
+        runtime.open(player, reactiveClickInsertMenu(false));
+        Inventory inventory = access.lastOpenedInventory();
+        int topSize = inventory.getSize();
+        ItemStack bottomItem = namedBukkitItem(Material.STONE, "Bottom Item", 3);
+        playerInventory(player).setItem(5, bottomItem);
+
+        InventoryClickEvent load = click(player, inventory, topSize + 5, ClickType.LEFT);
+        runtime.onInventoryClick(load);
+
+        InventoryClickEvent returnClick = click(player, inventory, 31, ClickType.LEFT);
+        runtime.onInventoryClick(returnClick);
+
+        assertTrue(load.isCancelled());
+        assertTrue(returnClick.isCancelled());
+        assertNull(playerInventory(player).getItem(5));
+        assertEquals("Bottom Item", slotTitle(access, inventory, 31));
+        assertEquals(1, scheduled.size());
+
+        runNextTick(scheduled);
+
+        runtime.onInventoryClick(click(player, inventory, 31, ClickType.LEFT));
+
+        assertEquals("Bottom Item", itemTitle(playerInventory(player).getItem(5)));
+        assertEquals("Click An Inventory Stack", slotTitle(access, inventory, 31));
+    }
+
+    @Test
     void inventoryTransitionsFromClickAreDeferredUntilScheduled() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
         Deque<Runnable> scheduled = new ArrayDeque<>();
         PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
-                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), scheduled::addLast);
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
 
         runtime.open(player, launcherMenu());
         Inventory rootInventory = access.lastOpenedInventory();
@@ -475,9 +572,10 @@ class PaperMenuRuntimeTest {
 
         assertTrue(openChild.isCancelled());
         assertEquals(1, access.openedInventories.size());
-        assertEquals(1, scheduled.size());
+        assertEquals(2, scheduled.size());
 
-        scheduled.removeFirst().run();
+        runNextTick(scheduled);
+        runNextTick(scheduled);
 
         assertEquals(2, access.openedInventories.size());
         assertEquals("Gallery", inventoryTitle(access, access.lastOpenedInventory()));
@@ -490,7 +588,8 @@ class PaperMenuRuntimeTest {
         TestPaperMenuAccess access = new TestPaperMenuAccess();
         Deque<Runnable> scheduled = new ArrayDeque<>();
         PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
-                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(), scheduled::addLast);
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
 
         runtime.open(player, pagedMenu());
         Inventory inventory = access.lastOpenedInventory();
@@ -502,7 +601,7 @@ class PaperMenuRuntimeTest {
         assertTrue(access.closedPlayers.isEmpty());
         assertEquals(1, scheduled.size());
 
-        scheduled.removeFirst().run();
+        runNextTick(scheduled);
 
         assertEquals(List.of(viewerId), access.closedPlayers);
     }
@@ -535,6 +634,36 @@ class PaperMenuRuntimeTest {
         assertTrue(clickSummary.contains("menu=\"Reactive Routing\""));
         assertTrue(clickSummary.contains("button=\"LEFT\""));
         assertTrue(clickSummary.contains("runtime.reactiveDispatch="));
+    }
+
+    @Test
+    void traceCountsSuppressedReactiveDuplicateClicks() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        MenuTraceController trace = new MenuTraceController();
+        trace.traceAll();
+        List<String> logs = new ArrayList<>();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled), trace, logs::add);
+
+        runtime.open(player, reactiveClickRoutingMenu());
+        logs.clear();
+        Inventory inventory = access.lastOpenedInventory();
+
+        runtime.onInventoryClick(click(player, inventory, 22, ClickType.LEFT));
+        logs.clear();
+
+        runtime.onInventoryClick(click(player, inventory, 22, ClickType.LEFT));
+
+        String clickSummary = summaryLine(logs, "click");
+        assertTrue(clickSummary.contains("inputGuard=\"duplicate\""));
+        assertTrue(clickSummary.contains("guardInputKind=\"reactive-top-click\""));
+        assertTrue(clickSummary.contains("suppressedInputs=\"1\""));
+        assertTrue(clickSummary.contains("suppressedInputDuplicates=\"1\""));
+        assertEquals(1, scheduled.size());
     }
 
     @Test
@@ -592,6 +721,30 @@ class PaperMenuRuntimeTest {
                         .name("Item " + i)
                         .action(ActionVerb.VIEW, context -> { })
                         .build()).toList())
+                .build();
+    }
+
+    private static Menu counterMenu(AtomicInteger count) {
+        return new StandardMenuService().list()
+                .title("Counter")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("Increment")
+                        .action(ActionVerb.VIEW, context -> count.incrementAndGet())
+                        .build())
+                .build();
+    }
+
+    private static Menu dualCounterMenu(AtomicInteger first, AtomicInteger second) {
+        return new StandardMenuService().list()
+                .title("Dual Counter")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("First")
+                        .action(ActionVerb.VIEW, context -> first.incrementAndGet())
+                        .build())
+                .addItem(MenuButton.builder(MenuIcon.vanilla("lever"))
+                        .name("Second")
+                        .action(ActionVerb.VIEW, context -> second.incrementAndGet())
+                        .build())
                 .build();
     }
 
@@ -914,6 +1067,17 @@ class PaperMenuRuntimeTest {
         StringBuilder builder = new StringBuilder();
         append(builder, component);
         return builder.toString();
+    }
+
+    private static Function<Runnable, MenuTickHandle> queuedScheduler(Deque<Runnable> scheduled) {
+        return action -> {
+            scheduled.addLast(action);
+            return () -> scheduled.remove(action);
+        };
+    }
+
+    private static void runNextTick(Deque<Runnable> scheduled) {
+        scheduled.removeFirst().run();
     }
 
     private static PaperMenuSlotRenderer renderer() {
