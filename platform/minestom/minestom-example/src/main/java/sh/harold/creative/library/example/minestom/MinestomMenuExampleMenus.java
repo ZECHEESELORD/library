@@ -515,7 +515,7 @@ final class MinestomMenuExampleMenus {
 
     private List<MenuItem> reactiveTabsOverviewItems(ReactiveTabsState state) {
         return IntStream.range(0, 29)
-                .mapToObj(index -> menus.button(Material.BOOK)
+                .mapToObj(index -> (MenuItem) menus.button(Material.BOOK)
                         .name(FakeSkyBlockMenuTitles.normal("Overview Entry " + index))
                         .secondary(index == state.focusedIndex() ? "Selected" : "Browse list")
                         .description(index == state.focusedIndex()
@@ -528,7 +528,7 @@ final class MinestomMenuExampleMenus {
 
     private List<MenuItem> reactiveTabsSignalItems(ReactiveTabsState state) {
         return IntStream.range(0, 18)
-                .mapToObj(index -> menus.button(Material.COMPASS)
+                .mapToObj(index -> (MenuItem) menus.button(Material.COMPASS)
                         .name(FakeSkyBlockMenuTitles.perk("Signal " + index))
                         .secondary(index == state.focusedIndex() ? "Selected" : "Reactive signal")
                         .description(index == state.focusedIndex()
