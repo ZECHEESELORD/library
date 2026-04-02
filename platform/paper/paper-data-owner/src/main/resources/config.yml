@@ -1,0 +1,15 @@
+backend:
+  type: memory
+  yaml:
+    root: yaml-data
+  mongodb:
+    connectionString: mongodb://localhost:27017
+    database: library_data_owner
+
+cache:
+  enabled: true
+  maximumSize: 10000
+  ttlSeconds: 5
+
+sharing:
+  extraNamespaces: {}

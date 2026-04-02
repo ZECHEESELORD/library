@@ -4,20 +4,21 @@ import sh.harold.creative.library.data.DocumentKey;
 import sh.harold.creative.library.data.DocumentPatch;
 import sh.harold.creative.library.data.DocumentSnapshot;
 import sh.harold.creative.library.data.DocumentStore;
+import sh.harold.creative.library.data.DocumentValues;
+import sh.harold.creative.library.data.WriteCondition;
+import sh.harold.creative.library.data.WriteResult;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.UnaryOperator;
 
-public final class InMemoryDocumentStore implements LocalDocumentStore {
+public final class InMemoryDocumentStore implements DocumentStore {
 
-    private final Map<String, Map<String, Map<String, Object>>> collections = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, Map<String, StoredDocument>>> namespaces = new ConcurrentHashMap<>();
+    private final Map<DocumentKey, Long> revisions = new ConcurrentHashMap<>();
 
     @Override
     public CompletionStage<DocumentSnapshot> read(DocumentKey key) {
@@ -25,110 +26,137 @@ public final class InMemoryDocumentStore implements LocalDocumentStore {
     }
 
     @Override
-    public CompletionStage<Void> write(DocumentKey key, Map<String, Object> data) {
-        writeNow(key, data);
-        return CompletableFuture.completedFuture(null);
+    public CompletionStage<WriteResult> write(DocumentKey key, Map<String, Object> data, WriteCondition condition) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(data, "data");
+        Objects.requireNonNull(condition, "condition");
+        Map<String, StoredDocument> documents = documents(key.namespace(), key.collection());
+        synchronized (documents) {
+            StoredDocument current = documents.get(key.id());
+            DocumentSnapshot currentSnapshot = snapshot(key, current);
+            if (!condition.matches(currentSnapshot)) {
+                return CompletableFuture.completedFuture(WriteResult.conditionFailed(currentSnapshot));
+            }
+
+            long nextRevision = nextRevision(key);
+            StoredDocument updated = new StoredDocument(DocumentValues.normalizeRoot(data), nextRevision);
+            documents.put(key.id(), updated);
+            return CompletableFuture.completedFuture(WriteResult.applied(snapshot(key, updated)));
+        }
     }
 
     @Override
-    public CompletionStage<DocumentSnapshot> update(DocumentKey key, UnaryOperator<Map<String, Object>> mutator) {
-        return CompletableFuture.completedFuture(updateSnapshot(key, mutator));
+    public CompletionStage<WriteResult> patch(DocumentKey key, DocumentPatch patch, WriteCondition condition) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(patch, "patch");
+        Objects.requireNonNull(condition, "condition");
+        Map<String, StoredDocument> documents = documents(key.namespace(), key.collection());
+        synchronized (documents) {
+            StoredDocument current = documents.get(key.id());
+            DocumentSnapshot currentSnapshot = snapshot(key, current);
+            if (!condition.matches(currentSnapshot)) {
+                return CompletableFuture.completedFuture(WriteResult.conditionFailed(currentSnapshot));
+            }
+
+            Map<String, Object> working = current == null
+                    ? new LinkedHashMap<>()
+                    : DocumentValues.deepCopyMap(current.data());
+            for (Map.Entry<String, Object> entry : patch.setValues().entrySet()) {
+                DocumentValues.writePath(working, entry.getKey(), entry.getValue());
+            }
+            for (String path : patch.removePaths()) {
+                DocumentValues.removePath(working, path);
+            }
+
+            if (current == null && working.isEmpty()) {
+                return CompletableFuture.completedFuture(WriteResult.applied(currentSnapshot));
+            }
+
+            long nextRevision = nextRevision(key);
+            StoredDocument updated = new StoredDocument(working, nextRevision);
+            documents.put(key.id(), updated);
+            return CompletableFuture.completedFuture(WriteResult.applied(snapshot(key, updated)));
+        }
     }
 
     @Override
-    public CompletionStage<Boolean> delete(DocumentKey key) {
-        return CompletableFuture.completedFuture(deleteNow(key));
+    public CompletionStage<WriteResult> delete(DocumentKey key, WriteCondition condition) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(condition, "condition");
+        Map<String, StoredDocument> documents = documents(key.namespace(), key.collection());
+        synchronized (documents) {
+            StoredDocument current = documents.get(key.id());
+            DocumentSnapshot currentSnapshot = snapshot(key, current);
+            if (!condition.matches(currentSnapshot)) {
+                return CompletableFuture.completedFuture(WriteResult.conditionFailed(currentSnapshot));
+            }
+
+            if (current == null) {
+                return CompletableFuture.completedFuture(WriteResult.applied(currentSnapshot));
+            }
+
+            long nextRevision = nextRevision(key);
+            documents.remove(key.id());
+            return CompletableFuture.completedFuture(WriteResult.applied(new DocumentSnapshot(
+                    key,
+                    Map.of(),
+                    false,
+                    revisionString(nextRevision)
+            )));
+        }
     }
 
     @Override
-    public CompletionStage<List<DocumentSnapshot>> all(String collection) {
-        return CompletableFuture.completedFuture(allSnapshots(collection));
-    }
-
-    @Override
-    public CompletionStage<Long> count(String collection) {
-        return CompletableFuture.completedFuture(countNow(collection));
+    public CompletionStage<Long> count(String namespace, String collection) {
+        return CompletableFuture.completedFuture((long) documents(namespace, collection).size());
     }
 
     @Override
     public void close() {
-        collections.clear();
+        namespaces.clear();
+        revisions.clear();
     }
 
-    @Override
-    public DocumentSnapshot readSnapshot(DocumentKey key) {
+    private DocumentSnapshot readSnapshot(DocumentKey key) {
         Objects.requireNonNull(key, "key");
-        Map<String, Object> current = collection(key.collection()).get(key.id());
-        return new DocumentSnapshot(key, current == null ? Map.of() : PathMaps.deepCopy(current), current != null);
+        StoredDocument current = documents(key.namespace(), key.collection()).get(key.id());
+        return snapshot(key, current);
     }
 
-    @Override
-    public void writeNow(DocumentKey key, Map<String, Object> data) {
-        Objects.requireNonNull(key, "key");
-        collection(key.collection()).put(key.id(), PathMaps.deepCopy(Objects.requireNonNullElse(data, Map.of())));
-    }
-
-    @Override
-    public DocumentSnapshot updateSnapshot(DocumentKey key, UnaryOperator<Map<String, Object>> mutator) {
-        Objects.requireNonNull(key, "key");
-        Objects.requireNonNull(mutator, "mutator");
-        Map<String, Map<String, Object>> collection = collection(key.collection());
-        collection.compute(key.id(), (ignored, current) -> {
-            Map<String, Object> editable = current == null ? new LinkedHashMap<>() : PathMaps.deepCopy(current);
-            Map<String, Object> updated = Objects.requireNonNull(mutator.apply(editable), "mutator result");
-            return PathMaps.deepCopy(updated);
-        });
-        return readSnapshot(key);
-    }
-
-    @Override
-    public void patchNow(DocumentKey key, DocumentPatch patch) {
-        Objects.requireNonNull(key, "key");
-        Objects.requireNonNull(patch, "patch");
-        if (!readSnapshot(key).exists() && patch.setValues().isEmpty()) {
-            return;
+    private DocumentSnapshot snapshot(DocumentKey key, StoredDocument current) {
+        if (current == null) {
+            long revision = revisions.getOrDefault(key, 0L);
+            return new DocumentSnapshot(key, Map.of(), false, revisionString(revision));
         }
-        updateSnapshot(key, current -> {
-            for (Map.Entry<String, Object> entry : patch.setValues().entrySet()) {
-                PathMaps.write(current, entry.getKey(), entry.getValue());
-            }
-            for (String path : patch.removePaths()) {
-                PathMaps.remove(current, path);
-            }
-            return current;
-        });
+        return new DocumentSnapshot(key, current.data(), true, revisionString(current.revision()));
     }
 
-    @Override
-    public boolean deleteNow(DocumentKey key) {
-        Objects.requireNonNull(key, "key");
-        return collection(key.collection()).remove(key.id()) != null;
+    private long nextRevision(DocumentKey key) {
+        return revisions.merge(key, 1L, Long::sum);
     }
 
-    @Override
-    public List<DocumentSnapshot> allSnapshots(String collection) {
-        Map<String, Map<String, Object>> documents = collection(collection);
-        List<DocumentSnapshot> snapshots = new ArrayList<>(documents.size());
-        for (Map.Entry<String, Map<String, Object>> entry : documents.entrySet()) {
-            snapshots.add(new DocumentSnapshot(
-                    new DocumentKey(collection, entry.getKey()),
-                    PathMaps.deepCopy(entry.getValue()),
-                    true
-            ));
+    private String revisionString(long revision) {
+        return Long.toString(revision);
+    }
+
+    private Map<String, StoredDocument> documents(String namespace, String collection) {
+        Objects.requireNonNull(namespace, "namespace");
+        Objects.requireNonNull(collection, "collection");
+        if (namespace.isBlank()) {
+            throw new IllegalArgumentException("namespace cannot be blank");
         }
-        return snapshots;
-    }
-
-    @Override
-    public long countNow(String collection) {
-        return collection(collection).size();
-    }
-
-    private Map<String, Map<String, Object>> collection(String name) {
-        Objects.requireNonNull(name, "name");
-        if (name.isBlank()) {
+        if (collection.isBlank()) {
             throw new IllegalArgumentException("collection cannot be blank");
         }
-        return collections.computeIfAbsent(name, ignored -> new ConcurrentHashMap<>());
+        return namespaces
+                .computeIfAbsent(namespace, ignored -> new ConcurrentHashMap<>())
+                .computeIfAbsent(collection, ignored -> new ConcurrentHashMap<>());
+    }
+
+    private record StoredDocument(Map<String, Object> data, long revision) {
+
+        private StoredDocument {
+            data = DocumentValues.normalizeRoot(data);
+        }
     }
 }

@@ -25,8 +25,11 @@ val jitPackVersion = System.getenv("VERSION")?.takeUnless(String::isBlank)
 val unpublishedProjectPaths = setOf(
     ":platform:paper:paper-example",
     ":platform:paper:paper-entity-example",
+    ":platform:paper:paper-data-owner",
     ":platform:minestom:minestom-example",
     ":platform:minestom:minestom-entity-example",
+    ":platform:minestom:minestom-data-owner",
+    ":platform:velocity:velocity-data-owner",
     ":platform:velocity:velocity-example",
 )
 

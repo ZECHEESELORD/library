@@ -1,22 +1,23 @@
 package sh.harold.creative.library.data;
 
-import java.util.List;
-import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 
 public interface DocumentCollection {
 
+    DataNamespace namespace();
+
     String name();
 
-    CompletionStage<Document> load(String id);
+    DocumentKey key(String id);
 
-    CompletionStage<Document> put(String id, Map<String, Object> data);
-
-    CompletionStage<Boolean> exists(String id);
-
-    CompletionStage<Boolean> delete(String id);
-
-    CompletionStage<List<Document>> all();
+    Document document(String id);
 
     CompletionStage<Long> count();
+
+    default <T> Optional<T> optionalCapability(Class<T> capabilityType) {
+        Objects.requireNonNull(capabilityType, "capabilityType");
+        return Optional.empty();
+    }
 }

@@ -4,12 +4,16 @@ import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.data.DocumentKey;
 import sh.harold.creative.library.data.DocumentPatch;
 import sh.harold.creative.library.data.DocumentSnapshot;
+import sh.harold.creative.library.data.DocumentStore;
+import sh.harold.creative.library.data.WriteCondition;
+import sh.harold.creative.library.data.WriteResult;
+import sh.harold.creative.library.data.core.CaffeineDocumentStore;
 
-import java.util.List;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -18,15 +22,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CaffeineDocumentStoreTest {
 
     @Test
-    void cachedReadAvoidsDelegateReload() {
+    void cachedReadAvoidsDelegateReload() throws Exception {
         CountingStore delegate = new CountingStore();
-        LocalDocumentStore store = new CaffeineDocumentStore(delegate, 100L);
-        DocumentKey key = new DocumentKey("players", "alpha");
+        DocumentStore store = new CaffeineDocumentStore(delegate, 100L, Duration.ofMinutes(1L));
+        DocumentKey key = new DocumentKey("plugin-a", "players", "alpha");
 
-        delegate.writeNow(key, Map.of("name", "Alice"));
+        await(delegate.write(key, Map.of("name", "Alice"), WriteCondition.none()));
 
-        DocumentSnapshot first = store.readSnapshot(key);
-        DocumentSnapshot second = store.readSnapshot(key);
+        DocumentSnapshot first = await(store.read(key));
+        DocumentSnapshot second = await(store.read(key));
 
         assertTrue(first.exists());
         assertEquals("Alice", first.data().get("name"));
@@ -35,16 +39,16 @@ class CaffeineDocumentStoreTest {
     }
 
     @Test
-    void writeRefreshesCacheWithoutExtraReload() {
+    void writesRefreshCacheWithoutExtraReload() throws Exception {
         CountingStore delegate = new CountingStore();
-        LocalDocumentStore store = new CaffeineDocumentStore(delegate, 100L);
-        DocumentKey key = new DocumentKey("players", "alpha");
+        DocumentStore store = new CaffeineDocumentStore(delegate, 100L, Duration.ofMinutes(1L));
+        DocumentKey key = new DocumentKey("plugin-a", "players", "alpha");
 
-        delegate.writeNow(key, Map.of("name", "Alice"));
-        store.readSnapshot(key);
+        await(delegate.write(key, Map.of("name", "Alice"), WriteCondition.none()));
+        await(store.read(key));
 
-        store.writeNow(key, Map.of("name", "Bob"));
-        DocumentSnapshot snapshot = store.readSnapshot(key);
+        await(store.write(key, Map.of("name", "Bob"), WriteCondition.none()));
+        DocumentSnapshot snapshot = await(store.read(key));
 
         assertTrue(snapshot.exists());
         assertEquals("Bob", snapshot.data().get("name"));
@@ -52,132 +56,69 @@ class CaffeineDocumentStoreTest {
     }
 
     @Test
-    void updateRefreshesCacheWithoutExtraReload() {
+    void patchRefreshesCacheToLatestSnapshot() throws Exception {
         CountingStore delegate = new CountingStore();
-        LocalDocumentStore store = new CaffeineDocumentStore(delegate, 100L);
-        DocumentKey key = new DocumentKey("players", "alpha");
+        DocumentStore store = new CaffeineDocumentStore(delegate, 100L, Duration.ofMinutes(1L));
+        DocumentKey key = new DocumentKey("plugin-a", "players", "alpha");
 
-        delegate.writeNow(key, Map.of("stats", Map.of("kills", 1)));
-        store.readSnapshot(key);
+        await(delegate.write(key, Map.of("profile", Map.of("rank", "MEMBER")), WriteCondition.none()));
+        await(store.read(key));
 
-        store.updateSnapshot(key, map -> {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> stats = (Map<String, Object>) map.get("stats");
-            stats.put("kills", 2);
-            return map;
-        });
-
-        DocumentSnapshot snapshot = store.readSnapshot(key);
-
-        assertEquals(Map.of("kills", 2), snapshot.data().get("stats"));
-        assertEquals(1, delegate.readCount());
-    }
-
-    @Test
-    void patchRefreshesCacheToLatestSnapshot() {
-        CountingStore delegate = new CountingStore();
-        LocalDocumentStore store = new CaffeineDocumentStore(delegate, 100L);
-        DocumentKey key = new DocumentKey("players", "alpha");
-
-        delegate.writeNow(key, Map.of("profile", Map.of("rank", "MEMBER")));
-        store.readSnapshot(key);
-
-        store.patchNow(key, new DocumentPatch().set("profile.rank", "ADMIN"));
-        DocumentSnapshot snapshot = store.readSnapshot(key);
+        await(store.patch(key, new DocumentPatch().set("profile.rank", "ADMIN"), WriteCondition.none()));
+        DocumentSnapshot snapshot = await(store.read(key));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> profile = (Map<String, Object>) snapshot.data().get("profile");
         assertEquals("ADMIN", profile.get("rank"));
-        assertEquals(2, delegate.readCount());
+        assertEquals(1, delegate.readCount());
     }
 
     @Test
-    void deleteInvalidatesCachedEntry() {
+    void deleteRefreshesCachedEntry() throws Exception {
         CountingStore delegate = new CountingStore();
-        LocalDocumentStore store = new CaffeineDocumentStore(delegate, 100L);
-        DocumentKey key = new DocumentKey("players", "alpha");
+        DocumentStore store = new CaffeineDocumentStore(delegate, 100L, Duration.ofMinutes(1L));
+        DocumentKey key = new DocumentKey("plugin-a", "players", "alpha");
 
-        delegate.writeNow(key, Map.of("name", "Alice"));
-        store.readSnapshot(key);
+        await(delegate.write(key, Map.of("name", "Alice"), WriteCondition.none()));
+        await(store.read(key));
         assertEquals(1, delegate.readCount());
 
-        assertTrue(store.deleteNow(key));
+        await(store.delete(key, WriteCondition.none()));
 
-        DocumentSnapshot afterDelete = store.readSnapshot(key);
+        DocumentSnapshot afterDelete = await(store.read(key));
         assertFalse(afterDelete.exists());
-        assertEquals(2, delegate.readCount());
+        assertEquals(1, delegate.readCount());
     }
 
-    private static final class CountingStore implements LocalDocumentStore {
+    private static final class CountingStore implements DocumentStore {
 
         private final InMemoryDocumentStore delegate = new InMemoryDocumentStore();
         private final AtomicInteger reads = new AtomicInteger();
 
         @Override
-        public DocumentSnapshot readSnapshot(DocumentKey key) {
-            reads.incrementAndGet();
-            return delegate.readSnapshot(key);
-        }
-
-        @Override
-        public void writeNow(DocumentKey key, Map<String, Object> data) {
-            delegate.writeNow(key, data);
-        }
-
-        @Override
-        public DocumentSnapshot updateSnapshot(DocumentKey key, UnaryOperator<Map<String, Object>> mutator) {
-            return delegate.updateSnapshot(key, mutator);
-        }
-
-        @Override
-        public void patchNow(DocumentKey key, DocumentPatch patch) {
-            delegate.patchNow(key, patch);
-        }
-
-        @Override
-        public boolean deleteNow(DocumentKey key) {
-            return delegate.deleteNow(key);
-        }
-
-        @Override
-        public List<DocumentSnapshot> allSnapshots(String collection) {
-            return delegate.allSnapshots(collection);
-        }
-
-        @Override
-        public long countNow(String collection) {
-            return delegate.countNow(collection);
-        }
-
-        @Override
         public CompletionStage<DocumentSnapshot> read(DocumentKey key) {
-            return awaitable(readSnapshot(key));
+            reads.incrementAndGet();
+            return delegate.read(key);
         }
 
         @Override
-        public CompletionStage<Void> write(DocumentKey key, Map<String, Object> data) {
-            writeNow(key, data);
-            return awaitable(null);
+        public CompletionStage<WriteResult> write(DocumentKey key, Map<String, Object> data, WriteCondition condition) {
+            return delegate.write(key, data, condition);
         }
 
         @Override
-        public CompletionStage<DocumentSnapshot> update(DocumentKey key, UnaryOperator<Map<String, Object>> mutator) {
-            return awaitable(updateSnapshot(key, mutator));
+        public CompletionStage<WriteResult> patch(DocumentKey key, DocumentPatch patch, WriteCondition condition) {
+            return delegate.patch(key, patch, condition);
         }
 
         @Override
-        public CompletionStage<Boolean> delete(DocumentKey key) {
-            return awaitable(deleteNow(key));
+        public CompletionStage<WriteResult> delete(DocumentKey key, WriteCondition condition) {
+            return delegate.delete(key, condition);
         }
 
         @Override
-        public CompletionStage<List<DocumentSnapshot>> all(String collection) {
-            return awaitable(allSnapshots(collection));
-        }
-
-        @Override
-        public CompletionStage<Long> count(String collection) {
-            return awaitable(countNow(collection));
+        public CompletionStage<Long> count(String namespace, String collection) {
+            return delegate.count(namespace, collection);
         }
 
         @Override
@@ -188,9 +129,9 @@ class CaffeineDocumentStoreTest {
         int readCount() {
             return reads.get();
         }
+    }
 
-        private static <T> CompletionStage<T> awaitable(T value) {
-            return java.util.concurrent.CompletableFuture.completedFuture(value);
-        }
+    private static <T> T await(CompletionStage<T> stage) throws Exception {
+        return stage.toCompletableFuture().get(5, TimeUnit.SECONDS);
     }
 }

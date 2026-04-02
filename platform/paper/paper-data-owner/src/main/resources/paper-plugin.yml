@@ -1,0 +1,5 @@
+name: paper-data-owner
+main: sh.harold.creative.library.data.paper.owner.PaperDataOwnerPlugin
+version: ${version}
+api-version: '1.21'
+description: Shared data owner plugin for the creative library.

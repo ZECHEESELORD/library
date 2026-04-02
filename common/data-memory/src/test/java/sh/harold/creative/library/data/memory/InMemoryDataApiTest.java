@@ -1,10 +1,13 @@
 package sh.harold.creative.library.data.memory;
 
 import org.junit.jupiter.api.Test;
+import sh.harold.creative.library.data.DataNamespace;
 import sh.harold.creative.library.data.Document;
 import sh.harold.creative.library.data.DocumentCollection;
 import sh.harold.creative.library.data.DocumentPatch;
 import sh.harold.creative.library.data.DocumentSnapshot;
+import sh.harold.creative.library.data.WriteCondition;
+import sh.harold.creative.library.data.WriteResult;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -13,7 +16,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
-import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,52 +25,47 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InMemoryDataApiTest {
 
     @Test
-    void putCreatesAndReplacesDocuments() throws Exception {
+    void writeCreatesAndReplacesDocuments() throws Exception {
         try (InMemoryDataApi api = new InMemoryDataApi()) {
-            DocumentCollection players = api.collection("players");
+            Document alpha = api.namespace("plugin-a").collection("players").document("alpha");
 
-            await(players.put("alpha", Map.of("name", "Alice")));
+            WriteResult created = await(alpha.write(Map.of("name", "Alice")));
+            WriteResult replaced = await(alpha.write(Map.of("name", "Bob")));
 
-            assertTrue(await(players.exists("alpha")));
-            assertEquals(1L, await(players.count()));
-            assertEquals(Optional.of("Alice"), await(players.load("alpha")).get("name", String.class));
-
-            await(players.put("alpha", Map.of("name", "Bob")));
-
-            assertEquals(1L, await(players.count()));
-            assertEquals(Optional.of("Bob"), await(players.load("alpha")).get("name", String.class));
+            assertTrue(created.applied());
+            assertTrue(replaced.applied());
+            assertEquals(Optional.of("Bob"), await(alpha.read()).get("name", String.class));
+            assertEquals(1L, await(api.namespace("plugin-a").collection("players").count()));
         }
     }
 
     @Test
-    void missingDocumentsStayStable() throws Exception {
+    void missingDocumentsStayStableAndUseSnapshotsForReads() throws Exception {
         try (InMemoryDataApi api = new InMemoryDataApi()) {
-            DocumentCollection players = api.collection("players");
-            Document document = await(players.load("missing"));
+            Document missing = api.namespace("plugin-a").collection("players").document("missing");
 
-            assertFalse(document.exists());
-            assertFalse(await(players.exists("missing")));
+            DocumentSnapshot before = await(missing.read());
+            WriteResult patched = await(missing.patch(new DocumentPatch().remove("legacy.name")));
+            DocumentSnapshot after = await(missing.read());
 
-            await(document.remove("profile.rank"));
-            await(document.patch(new DocumentPatch().remove("legacy.name")));
-
-            DocumentSnapshot snapshot = document.snapshot();
-            assertFalse(snapshot.exists());
-            assertTrue(snapshot.data().isEmpty());
-            assertThrows(UnsupportedOperationException.class, () -> snapshot.data().put("x", "y"));
+            assertFalse(before.exists());
+            assertTrue(patched.applied());
+            assertFalse(after.exists());
+            assertTrue(after.data().isEmpty());
+            assertThrows(UnsupportedOperationException.class, () -> after.data().put("x", "y"));
         }
     }
 
     @Test
     void snapshotsAreDeeplyImmutable() throws Exception {
         try (InMemoryDataApi api = new InMemoryDataApi()) {
-            DocumentCollection players = api.collection("players");
-            await(players.put("alpha", Map.of(
+            Document alpha = api.namespace("plugin-a").collection("players").document("alpha");
+            await(alpha.write(Map.of(
                     "profile", Map.of("rank", "ADMIN"),
                     "tags", List.of("staff", "builder")
             )));
 
-            DocumentSnapshot snapshot = await(players.load("alpha")).snapshot();
+            DocumentSnapshot snapshot = await(alpha.read());
 
             assertThrows(UnsupportedOperationException.class, () -> snapshot.data().put("name", "Bob"));
 
@@ -83,9 +80,9 @@ class InMemoryDataApiTest {
     }
 
     @Test
-    void putAndSetDefensivelyCopyMutableInputs() throws Exception {
+    void writeAndPatchDefensivelyCopyMutableInputsAndPreserveNull() throws Exception {
         try (InMemoryDataApi api = new InMemoryDataApi()) {
-            DocumentCollection players = api.collection("players");
+            Document alpha = api.namespace("plugin-a").collection("players").document("alpha");
 
             Map<String, Object> mutableRoot = new LinkedHashMap<>();
             Map<String, Object> mutableProfile = new LinkedHashMap<>();
@@ -94,75 +91,64 @@ class InMemoryDataApiTest {
             List<String> mutableTags = new ArrayList<>(List.of("staff"));
             mutableRoot.put("tags", mutableTags);
 
-            await(players.put("alpha", mutableRoot));
+            await(alpha.write(mutableRoot));
 
             mutableProfile.put("rank", "MEMBER");
             mutableTags.add("vip");
 
-            Document document = await(players.load("alpha"));
-            assertEquals(Optional.of("ADMIN"), document.get("profile.rank", String.class));
+            assertEquals(Optional.of("ADMIN"), await(alpha.read()).get("profile.rank", String.class));
 
-            Map<String, Object> newSettings = new LinkedHashMap<>();
-            newSettings.put("theme", "dark");
-            await(document.set("settings", newSettings));
-            newSettings.put("theme", "light");
-
-            assertEquals(Optional.of("dark"), document.get("settings.theme", String.class));
+            await(alpha.patch(new DocumentPatch().set("settings.theme", null)));
+            assertTrue(await(alpha.read()).contains("settings.theme"));
+            assertEquals(Optional.empty(), await(alpha.read()).get("missing.path"));
         }
     }
 
     @Test
-    void updateUsesIsolatedEditableView() throws Exception {
+    void revisionsAndConditionsBehaveCorrectly() throws Exception {
         try (InMemoryDataApi api = new InMemoryDataApi()) {
-            DocumentCollection players = api.collection("players");
-            await(players.put("alpha", Map.of(
-                    "profile", Map.of("rank", "ADMIN"),
-                    "stats", Map.of("kills", 1)
-            )));
+            Document alpha = api.namespace("plugin-a").collection("players").document("alpha");
 
-            Document document = await(players.load("alpha"));
-            @SuppressWarnings("unchecked")
-            Map<String, Object>[] leaked = new Map[1];
+            DocumentSnapshot missing = await(alpha.read());
+            assertEquals("0", missing.revision());
 
-            await(document.update(map -> {
-                leaked[0] = map;
+            WriteResult created = await(alpha.write(Map.of("rank", "MEMBER"), WriteCondition.notExists()));
+            DocumentSnapshot afterCreate = created.snapshot().orElseThrow();
+            assertEquals("1", afterCreate.revision());
 
-                @SuppressWarnings("unchecked")
-                Map<String, Object> stats = (Map<String, Object>) map.computeIfAbsent("stats", ignored -> new LinkedHashMap<>());
-                int kills = ((Number) stats.getOrDefault("kills", 0)).intValue();
-                stats.put("kills", kills + 1);
-                map.put("displayName", "Alpha");
-                return map;
-            }));
+            WriteResult staleConflict = await(alpha.write(Map.of("rank", "ADMIN"), WriteCondition.revision("0")));
+            assertFalse(staleConflict.applied());
+            assertEquals(Optional.of("MEMBER"), staleConflict.snapshot().orElseThrow().get("rank", String.class));
 
-            leaked[0].put("displayName", "Corrupted");
+            WriteResult conditionalPatch = await(alpha.patch(
+                    new DocumentPatch().set("rank", "ADMIN"),
+                    WriteCondition.revision(afterCreate.revision()).requireExists()
+            ));
+            assertTrue(conditionalPatch.applied());
+            assertEquals("2", conditionalPatch.snapshot().orElseThrow().revision());
 
-            assertEquals(Optional.of("Alpha"), document.get("displayName", String.class));
-            assertEquals(Optional.of(2), document.get("stats.kills", Integer.class));
+            WriteResult deleted = await(alpha.delete(WriteCondition.exists()));
+            assertTrue(deleted.applied());
+            assertFalse(deleted.snapshot().orElseThrow().exists());
+            assertEquals("3", deleted.snapshot().orElseThrow().revision());
         }
     }
 
     @Test
-    void patchDeleteAllAndCountBehaveCorrectly() throws Exception {
+    void namespacesAreIsolatedAndCountsStayScoped() throws Exception {
         try (InMemoryDataApi api = new InMemoryDataApi()) {
-            DocumentCollection players = api.collection("players");
-            await(players.put("alpha", Map.of("profile", Map.of("rank", "MEMBER"), "legacy", Map.of("name", "Old"))));
-            await(players.put("bravo", Map.of("profile", Map.of("rank", "ADMIN"))));
+            DataNamespace pluginA = api.namespace("plugin-a");
+            DataNamespace pluginB = api.namespace("plugin-b");
+            DocumentCollection playersA = pluginA.collection("players");
+            DocumentCollection playersB = pluginB.collection("players");
 
-            Document alpha = await(players.load("alpha"));
-            await(alpha.patch(new DocumentPatch()
-                    .set("profile.rank", "ADMIN")
-                    .remove("legacy.name")));
+            await(playersA.document("alpha").write(Map.of("name", "Alice")));
+            await(playersB.document("alpha").write(Map.of("name", "Bob")));
 
-            assertEquals(Optional.of("ADMIN"), alpha.get("profile.rank", String.class));
-            assertFalse(alpha.get("legacy.name", String.class).isPresent());
-
-            assertEquals(2L, await(players.count()));
-            assertEquals(2, await(players.all()).size());
-
-            assertTrue(await(players.delete("bravo")));
-            assertFalse(await(players.delete("bravo")));
-            assertEquals(1L, await(players.count()));
+            assertEquals(1L, await(playersA.count()));
+            assertEquals(1L, await(playersB.count()));
+            assertEquals(Optional.of("Alice"), await(playersA.document("alpha").read()).get("name", String.class));
+            assertEquals(Optional.of("Bob"), await(playersB.document("alpha").read()).get("name", String.class));
         }
     }
 

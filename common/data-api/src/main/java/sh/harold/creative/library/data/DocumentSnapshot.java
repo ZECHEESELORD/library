@@ -1,39 +1,38 @@
 package sh.harold.creative.library.data;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
-public record DocumentSnapshot(DocumentKey key, Map<String, Object> data, boolean exists) {
+public record DocumentSnapshot(DocumentKey key, Map<String, Object> data, boolean exists, String revision) {
 
     public DocumentSnapshot {
         Objects.requireNonNull(key, "key");
-        data = deepImmutableCopyMap(Objects.requireNonNullElse(data, Map.of()));
+        data = DocumentValues.deepImmutableCopyMap(Objects.requireNonNullElse(data, Map.of()));
+        revision = requireRevision(revision);
     }
 
-    private static Map<String, Object> deepImmutableCopyMap(Map<String, Object> source) {
-        Map<String, Object> copy = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : source.entrySet()) {
-            copy.put(String.valueOf(entry.getKey()), deepImmutableCopyValue(entry.getValue()));
-        }
-        return Collections.unmodifiableMap(copy);
+    public Optional<Object> get(String path) {
+        return Optional.ofNullable(DocumentValues.readPath(data, path));
     }
 
-    private static Object deepImmutableCopyValue(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> typed = (Map<String, Object>) map;
-            return deepImmutableCopyMap(typed);
+    public boolean contains(String path) {
+        return DocumentValues.containsPath(data, path);
+    }
+
+    public <T> Optional<T> get(String path, Class<T> type) {
+        Objects.requireNonNull(type, "type");
+        Object value = DocumentValues.readPath(data, path);
+        if (type.isInstance(value)) {
+            return Optional.of(type.cast(value));
         }
-        if (value instanceof List<?> list) {
-            List<Object> copy = new ArrayList<>(list.size());
-            for (Object element : list) {
-                copy.add(deepImmutableCopyValue(element));
-            }
-            return Collections.unmodifiableList(copy);
+        return Optional.empty();
+    }
+
+    private static String requireRevision(String value) {
+        Objects.requireNonNull(value, "revision");
+        if (value.isBlank()) {
+            throw new IllegalArgumentException("revision cannot be blank");
         }
         return value;
     }

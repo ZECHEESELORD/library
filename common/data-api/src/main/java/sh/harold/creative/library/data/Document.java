@@ -1,29 +1,29 @@
 package sh.harold.creative.library.data;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import java.util.function.UnaryOperator;
 
 public interface Document {
 
     DocumentKey key();
 
-    boolean exists();
+    CompletionStage<DocumentSnapshot> read();
 
-    <T> Optional<T> get(String path, Class<T> type);
+    default CompletionStage<WriteResult> write(Map<String, Object> data) {
+        return write(data, WriteCondition.none());
+    }
 
-    DocumentSnapshot snapshot();
+    CompletionStage<WriteResult> write(Map<String, Object> data, WriteCondition condition);
 
-    CompletionStage<DocumentSnapshot> snapshotAsync();
+    default CompletionStage<WriteResult> patch(DocumentPatch patch) {
+        return patch(patch, WriteCondition.none());
+    }
 
-    CompletionStage<Void> set(String path, Object value);
+    CompletionStage<WriteResult> patch(DocumentPatch patch, WriteCondition condition);
 
-    CompletionStage<Void> remove(String path);
+    default CompletionStage<WriteResult> delete() {
+        return delete(WriteCondition.none());
+    }
 
-    CompletionStage<Void> overwrite(Map<String, Object> data);
-
-    CompletionStage<Void> update(UnaryOperator<Map<String, Object>> mutator);
-
-    CompletionStage<Void> patch(DocumentPatch patch);
+    CompletionStage<WriteResult> delete(WriteCondition condition);
 }

@@ -1,37 +1,15 @@
 package sh.harold.creative.library.data.memory;
 
-import sh.harold.creative.library.data.DataApi;
-import sh.harold.creative.library.data.DocumentCollection;
+import sh.harold.creative.library.data.DocumentStore;
+import sh.harold.creative.library.data.core.StoreBackedDataApi;
 
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-
-public final class InMemoryDataApi implements DataApi {
-
-    private final LocalDocumentStore store;
-    private final Map<String, InMemoryDocumentCollection> collections = new ConcurrentHashMap<>();
+public final class InMemoryDataApi extends StoreBackedDataApi {
 
     public InMemoryDataApi() {
-        this(new CaffeineDocumentStore(new InMemoryDocumentStore()));
+        this(new InMemoryDocumentStore());
     }
 
-    public InMemoryDataApi(InMemoryDocumentStore store) {
-        this((LocalDocumentStore) store);
-    }
-
-    InMemoryDataApi(LocalDocumentStore store) {
-        this.store = Objects.requireNonNull(store, "store");
-    }
-
-    @Override
-    public DocumentCollection collection(String name) {
-        return collections.computeIfAbsent(name, ignored -> new InMemoryDocumentCollection(name, store));
-    }
-
-    @Override
-    public void close() {
-        collections.clear();
-        store.close();
+    public InMemoryDataApi(DocumentStore store) {
+        super(store);
     }
 }
