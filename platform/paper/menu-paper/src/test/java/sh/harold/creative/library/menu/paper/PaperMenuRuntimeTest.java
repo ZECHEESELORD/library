@@ -8,7 +8,6 @@ import org.bukkit.Material;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
-import org.bukkit.event.inventory.DragType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -18,10 +17,8 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.PlayerInventory;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import sh.harold.creative.library.menu.ActionVerb;
 import sh.harold.creative.library.menu.Menu;
 import sh.harold.creative.library.menu.MenuButton;
@@ -61,18 +58,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 class PaperMenuRuntimeTest {
 
     private static final Key SPECIAL_SOUND = Key.key("test", "menu/special");
-    private static final Map<Player, PlayerInventory> PLAYER_INVENTORIES = new IdentityHashMap<>();
 
     @Test
     void openClickNavigateAndCloseUsesOwnedInventoryIdentity() {
@@ -344,37 +333,18 @@ class PaperMenuRuntimeTest {
         ItemStack bottomItem = namedBukkitItem(Material.STONE, "Bottom Item", 3);
         playerInventory(player).setItem(5, bottomItem);
 
-        InventoryView view = view(player, inventory);
-        InventoryClickEvent click = mock(InventoryClickEvent.class);
-        when(click.getView()).thenReturn(view);
-        when(click.getWhoClicked()).thenReturn(player);
-        when(click.getRawSlot()).thenReturn(topSize + 5);
-        when(click.getSlot()).thenReturn(5);
-        when(click.isLeftClick()).thenReturn(true);
-        when(click.isRightClick()).thenReturn(false);
-        when(click.isShiftClick()).thenReturn(false);
-        when(click.getCurrentItem()).thenReturn(bottomItem);
-        when(click.getCursor()).thenReturn(null);
+        InventoryClickEvent click = click(player, inventory, topSize + 5, ClickType.LEFT);
         runtime.onInventoryClick(click);
 
-        verify(click).setCancelled(true);
+        assertTrue(click.isCancelled());
         assertNull(playerInventory(player).getItem(5));
         assertNull(player.getItemOnCursor());
         assertEquals("Bottom Item", slotTitle(access, inventory, 31));
 
-        InventoryClickEvent returnClick = mock(InventoryClickEvent.class);
-        when(returnClick.getView()).thenReturn(view(player, inventory));
-        when(returnClick.getWhoClicked()).thenReturn(player);
-        when(returnClick.getRawSlot()).thenReturn(31);
-        when(returnClick.getSlot()).thenReturn(31);
-        when(returnClick.isLeftClick()).thenReturn(true);
-        when(returnClick.isRightClick()).thenReturn(false);
-        when(returnClick.isShiftClick()).thenReturn(false);
-        when(returnClick.getCurrentItem()).thenReturn(access.model(inventory).items.get(31));
-        when(returnClick.getCursor()).thenReturn(null);
+        InventoryClickEvent returnClick = click(player, inventory, 31, ClickType.LEFT);
         runtime.onInventoryClick(returnClick);
 
-        verify(returnClick).setCancelled(true);
+        assertTrue(returnClick.isCancelled());
         assertEquals("Bottom Item", itemTitle(playerInventory(player).getItem(5)));
         assertEquals("Click An Inventory Stack", slotTitle(access, inventory, 31));
     }
@@ -392,49 +362,25 @@ class PaperMenuRuntimeTest {
         ItemStack sourceItem = namedBukkitItem(Material.EMERALD, "Dragged Item", 2);
         playerInventory(player).setItem(4, sourceItem);
 
-        InventoryView view = view(player, inventory);
-        InventoryClickEvent pickup = mock(InventoryClickEvent.class);
-        when(pickup.getView()).thenReturn(view);
-        when(pickup.getWhoClicked()).thenReturn(player);
-        when(pickup.getRawSlot()).thenReturn(topSize + 4);
-        when(pickup.getSlot()).thenReturn(4);
-        when(pickup.isLeftClick()).thenReturn(true);
-        when(pickup.isRightClick()).thenReturn(false);
-        when(pickup.isShiftClick()).thenReturn(false);
-        when(pickup.getCurrentItem()).thenReturn(sourceItem);
-        when(pickup.getCursor()).thenReturn(null);
+        InventoryClickEvent pickup = click(player, inventory, topSize + 4, ClickType.LEFT);
         runtime.onInventoryClick(pickup);
 
-        verify(pickup).setCancelled(true);
+        assertTrue(pickup.isCancelled());
         assertNull(playerInventory(player).getItem(4));
 
         ItemStack cursorItem = sourceItem;
-        InventoryDragEvent drag = mock(InventoryDragEvent.class);
-        when(drag.getView()).thenReturn(view(player, inventory));
-        when(drag.getWhoClicked()).thenReturn(player);
-        when(drag.getRawSlots()).thenReturn(Set.of(31));
-        when(drag.getType()).thenReturn(DragType.EVEN);
-        when(drag.getOldCursor()).thenReturn(cursorItem);
+        InventoryDragEvent drag = dragEvent(player, inventory, Set.of(31), cursorItem);
 
         runtime.onInventoryDrag(drag);
 
-        verify(drag).setCancelled(true);
+        assertTrue(drag.isCancelled());
         assertEquals("Dragged Item", slotTitle(access, inventory, 31));
 
-        InventoryClickEvent returnClick = mock(InventoryClickEvent.class);
-        when(returnClick.getView()).thenReturn(view(player, inventory));
-        when(returnClick.getWhoClicked()).thenReturn(player);
-        when(returnClick.getRawSlot()).thenReturn(31);
-        when(returnClick.getSlot()).thenReturn(31);
-        when(returnClick.isLeftClick()).thenReturn(true);
-        when(returnClick.isRightClick()).thenReturn(false);
-        when(returnClick.isShiftClick()).thenReturn(true);
-        when(returnClick.getCurrentItem()).thenReturn(access.model(inventory).items.get(31));
-        when(returnClick.getCursor()).thenReturn(null);
+        InventoryClickEvent returnClick = click(player, inventory, 31, ClickType.SHIFT_LEFT);
 
         runtime.onInventoryClick(returnClick);
 
-        verify(returnClick).setCancelled(true);
+        assertTrue(returnClick.isCancelled());
         assertEquals("Dragged Item", itemTitle(playerInventory(player).getItem(4)));
     }
 
@@ -451,51 +397,24 @@ class PaperMenuRuntimeTest {
         ItemStack sourceItem = namedBukkitItem(Material.EMERALD, "Dragged Item", 2);
         playerInventory(player).setItem(4, sourceItem);
 
-        InventoryClickEvent pickup = mock(InventoryClickEvent.class);
-        when(pickup.getView()).thenReturn(view(player, inventory));
-        when(pickup.getWhoClicked()).thenReturn(player);
-        when(pickup.getRawSlot()).thenReturn(topSize + 4);
-        when(pickup.getSlot()).thenReturn(4);
-        when(pickup.isLeftClick()).thenReturn(true);
-        when(pickup.isRightClick()).thenReturn(false);
-        when(pickup.isShiftClick()).thenReturn(false);
-        when(pickup.getCurrentItem()).thenReturn(sourceItem);
-        when(pickup.getCursor()).thenReturn(null);
+        InventoryClickEvent pickup = click(player, inventory, topSize + 4, ClickType.LEFT);
         runtime.onInventoryClick(pickup);
 
         runtime.onInventoryDrag(dragEvent(player, inventory, Set.of(31), sourceItem));
 
-        InventoryClickEvent pickupFromCenter = mock(InventoryClickEvent.class);
-        when(pickupFromCenter.getView()).thenReturn(view(player, inventory));
-        when(pickupFromCenter.getWhoClicked()).thenReturn(player);
-        when(pickupFromCenter.getRawSlot()).thenReturn(31);
-        when(pickupFromCenter.getSlot()).thenReturn(31);
-        when(pickupFromCenter.isLeftClick()).thenReturn(true);
-        when(pickupFromCenter.isRightClick()).thenReturn(false);
-        when(pickupFromCenter.isShiftClick()).thenReturn(false);
-        when(pickupFromCenter.getCurrentItem()).thenReturn(access.model(inventory).items.get(31));
-        when(pickupFromCenter.getCursor()).thenReturn(null);
+        InventoryClickEvent pickupFromCenter = click(player, inventory, 31, ClickType.LEFT);
         runtime.onInventoryClick(pickupFromCenter);
 
-        verify(pickupFromCenter).setCancelled(true);
+        assertTrue(pickupFromCenter.isCancelled());
         assertEquals("Dragged Item", itemTitle(player.getItemOnCursor()));
 
-        InventoryClickEvent placeIntoInventory = mock(InventoryClickEvent.class);
-        when(placeIntoInventory.getView()).thenReturn(view(player, inventory));
-        when(placeIntoInventory.getWhoClicked()).thenReturn(player);
-        when(placeIntoInventory.getRawSlot()).thenReturn(topSize + 8);
-        when(placeIntoInventory.getSlot()).thenReturn(8);
-        when(placeIntoInventory.isLeftClick()).thenReturn(true);
-        when(placeIntoInventory.isRightClick()).thenReturn(false);
-        when(placeIntoInventory.isShiftClick()).thenReturn(false);
-        when(placeIntoInventory.getCurrentItem()).thenReturn(null);
-        when(placeIntoInventory.getCursor()).thenReturn(player.getItemOnCursor());
+        InventoryClickEvent placeIntoInventory = click(player, inventory, topSize + 8, ClickType.LEFT);
         runtime.onInventoryClick(placeIntoInventory);
 
-        verify(placeIntoInventory).setCancelled(true);
+        assertTrue(placeIntoInventory.isCancelled());
         assertEquals("Dragged Item", itemTitle(playerInventory(player).getItem(8)));
         assertNull(player.getItemOnCursor());
-        assertNull(access.model(inventory).items.get(31));
+        assertNull(inventory.getItem(31));
     }
 
     @Test
@@ -511,20 +430,11 @@ class PaperMenuRuntimeTest {
         ItemStack sourceItem = namedBukkitItem(Material.DIAMOND, "Locked Item", 1);
         playerInventory(player).setItem(2, sourceItem);
 
-        InventoryClickEvent click = mock(InventoryClickEvent.class);
-        when(click.getView()).thenReturn(view(player, inventory));
-        when(click.getWhoClicked()).thenReturn(player);
-        when(click.getRawSlot()).thenReturn(topSize + 2);
-        when(click.getSlot()).thenReturn(2);
-        when(click.isLeftClick()).thenReturn(true);
-        when(click.isRightClick()).thenReturn(false);
-        when(click.isShiftClick()).thenReturn(false);
-        when(click.getCurrentItem()).thenReturn(sourceItem);
-        when(click.getCursor()).thenReturn(null);
+        InventoryClickEvent click = click(player, inventory, topSize + 2, ClickType.LEFT);
 
         runtime.onInventoryClick(click);
 
-        verify(click).setCancelled(true);
+        assertTrue(click.isCancelled());
         assertEquals("Locked Item", itemTitle(playerInventory(player).getItem(2)));
         assertNull(player.getItemOnCursor());
         assertEquals("Click An Inventory Stack", slotTitle(access, inventory, 31));
@@ -944,70 +854,30 @@ class PaperMenuRuntimeTest {
     }
 
     private static Player player(UUID uuid) {
-        Map<Integer, ItemStack> items = new java.util.HashMap<>();
-        AtomicReference<ItemStack> cursor = new AtomicReference<>();
-        PlayerInventory inventory = mock(PlayerInventory.class, invocation -> {
-            String method = invocation.getMethod().getName();
-            if (method.equals("getSize")) {
-                return 36;
-            }
-            if (method.equals("setItem")) {
-                items.put(invocation.getArgument(0, Integer.class), invocation.getArgument(1, ItemStack.class));
-                return null;
-            }
-            if (method.equals("getItem")) {
-                return items.get(invocation.getArgument(0, Integer.class));
-            }
-            return Mockito.RETURNS_DEFAULTS.answer(invocation);
-        });
-        Player mockedPlayer = mock(Player.class, invocation -> {
-            String method = invocation.getMethod().getName();
-            if (method.equals("getUniqueId")) {
-                return uuid;
-            }
-            if (method.equals("getInventory")) {
-                return inventory;
-            }
-            if (method.equals("setItemOnCursor")) {
-                cursor.set(invocation.getArgument(0, ItemStack.class));
-                return null;
-            }
-            if (method.equals("getItemOnCursor")) {
-                return cursor.get();
-            }
-            return Mockito.RETURNS_DEFAULTS.answer(invocation);
-        });
-        PLAYER_INVENTORIES.put(mockedPlayer, inventory);
-        return mockedPlayer;
+        return PaperMenuTestSupport.player(uuid);
     }
 
     private static ItemStack namedBukkitItem(Material material, String name, int amount) {
-        ItemStack itemStack = mock(ItemStack.class);
-        ItemMeta meta = mock(ItemMeta.class);
-        when(itemStack.getType()).thenReturn(material);
-        when(itemStack.getAmount()).thenReturn(amount);
-        when(itemStack.getItemMeta()).thenReturn(meta);
-        when(meta.displayName()).thenReturn(Component.text(name));
-        return itemStack;
+        return PaperMenuTestSupport.namedItem(material, name, amount);
     }
 
     private static InventoryClickEvent click(Player player, Inventory inventory, int rawSlot, ClickType clickType) {
-        return new InventoryClickEvent(
-                view(player, inventory),
-                InventoryType.SlotType.CONTAINER,
+        InventoryView view = view(player, inventory);
+        InventoryClickEvent event = new InventoryClickEvent(
+                view,
+                view.getSlotType(rawSlot),
                 rawSlot,
                 clickType,
                 InventoryAction.PICKUP_ALL);
+        event.setCurrentItem(view.getItem(rawSlot));
+        event.setCursor(view.getCursor());
+        return event;
     }
 
     private static InventoryDragEvent dragEvent(Player player, Inventory inventory, Set<Integer> rawSlots, ItemStack oldCursor) {
-        InventoryDragEvent drag = mock(InventoryDragEvent.class);
-        when(drag.getView()).thenReturn(view(player, inventory));
-        when(drag.getWhoClicked()).thenReturn(player);
-        when(drag.getRawSlots()).thenReturn(rawSlots);
-        when(drag.getType()).thenReturn(DragType.EVEN);
-        when(drag.getOldCursor()).thenReturn(oldCursor);
-        return drag;
+        Map<Integer, ItemStack> newItems = new java.util.HashMap<>();
+        rawSlots.forEach(rawSlot -> newItems.put(rawSlot, oldCursor));
+        return new InventoryDragEvent(view(player, inventory), oldCursor, oldCursor, false, newItems);
     }
 
     private static InventoryView view(Player player, Inventory topInventory) {
@@ -1015,16 +885,16 @@ class PaperMenuRuntimeTest {
     }
 
     private static PlayerInventory playerInventory(Player player) {
-        return PLAYER_INVENTORIES.get(player);
+        return player.getInventory();
     }
 
     private static String slotTitle(TestPaperMenuAccess access, Inventory inventory, int slot) {
-        ItemStack itemStack = access.model(inventory).items.get(slot);
+        ItemStack itemStack = inventory.getItem(slot);
         return flatten(itemStack.getItemMeta().displayName());
     }
 
     private static List<String> slotLore(TestPaperMenuAccess access, Inventory inventory, int slot) {
-        ItemStack itemStack = access.model(inventory).items.get(slot);
+        ItemStack itemStack = inventory.getItem(slot);
         List<Component> lore = itemStack.getItemMeta().lore();
         if (lore == null) {
             return List.of();
@@ -1047,15 +917,7 @@ class PaperMenuRuntimeTest {
     }
 
     private static PaperMenuSlotRenderer renderer() {
-        return slot -> {
-            ItemStack itemStack = mock(ItemStack.class);
-            ItemMeta meta = mock(ItemMeta.class);
-            when(itemStack.getItemMeta()).thenReturn(meta);
-            when(meta.displayName()).thenReturn(slot.title());
-            when(meta.lore()).thenReturn(slot.lore());
-            when(meta.getEnchantmentGlintOverride()).thenReturn(slot.glow() ? Boolean.TRUE : null);
-            return itemStack;
-        };
+        return slot -> PaperMenuTestSupport.renderedItem(slot.icon().key(), slot.amount(), slot.title(), slot.lore(), slot.glow());
     }
 
     private static void append(StringBuilder builder, Component component) {
@@ -1084,16 +946,9 @@ class PaperMenuRuntimeTest {
 
         @Override
         public Inventory createInventory(InventoryHolder holder, int size, Component title) {
-            Inventory inventory = mock(Inventory.class);
+            Inventory inventory = PaperMenuTestSupport.inventory(holder, size);
             InventoryModel model = new InventoryModel(holder, size, title);
             models.put(inventory, model);
-            when(inventory.getSize()).thenReturn(size);
-            when(inventory.getHolder(false)).thenReturn(holder);
-            doAnswer(invocation -> {
-                model.items.put(invocation.getArgument(0), invocation.getArgument(1));
-                return null;
-            }).when(inventory).setItem(anyInt(), any());
-            when(inventory.getItem(anyInt())).thenAnswer(invocation -> model.items.get(invocation.getArgument(0)));
             return inventory;
         }
 
@@ -1200,25 +1055,38 @@ class PaperMenuRuntimeTest {
 
         @Override
         public InventoryType getType() {
-            return InventoryType.CHEST;
+            return null;
         }
 
         @Override
         public void setItem(int slot, ItemStack item) {
+            Inventory inventory = getInventory(slot);
+            if (inventory == null) {
+                return;
+            }
+            inventory.setItem(convertSlot(slot), item);
         }
 
         @Override
         public ItemStack getItem(int slot) {
-            return slot < topInventory.getSize() ? topInventory.getItem(slot) : null;
+            Inventory inventory = getInventory(slot);
+            return inventory == null ? null : inventory.getItem(convertSlot(slot));
         }
 
         @Override
         public void setCursor(ItemStack item) {
+            if (player instanceof Player paperPlayer) {
+                paperPlayer.setItemOnCursor(item);
+                return;
+            }
             this.cursor = item;
         }
 
         @Override
         public ItemStack getCursor() {
+            if (player instanceof Player paperPlayer) {
+                return paperPlayer.getItemOnCursor();
+            }
             return cursor;
         }
 
@@ -1229,12 +1097,19 @@ class PaperMenuRuntimeTest {
 
         @Override
         public int convertSlot(int rawSlot) {
-            return rawSlot;
+            if (rawSlot < topInventory.getSize()) {
+                return rawSlot;
+            }
+            return rawSlot - topInventory.getSize();
         }
 
         @Override
         public InventoryType.SlotType getSlotType(int slot) {
-            return slot < topInventory.getSize() ? InventoryType.SlotType.CONTAINER : InventoryType.SlotType.QUICKBAR;
+            if (slot < topInventory.getSize()) {
+                return InventoryType.SlotType.CONTAINER;
+            }
+            int converted = convertSlot(slot);
+            return converted < 9 ? InventoryType.SlotType.QUICKBAR : InventoryType.SlotType.CONTAINER;
         }
 
         @Override
@@ -1271,7 +1146,7 @@ class PaperMenuRuntimeTest {
 
         @Override
         public org.bukkit.inventory.MenuType getMenuType() {
-            return org.bukkit.inventory.MenuType.GENERIC_9X6;
+            return null;
         }
     }
 
