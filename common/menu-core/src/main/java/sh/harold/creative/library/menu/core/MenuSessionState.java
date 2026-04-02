@@ -11,7 +11,6 @@ import sh.harold.creative.library.menu.MenuDefinition;
 import sh.harold.creative.library.menu.MenuFrame;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuInteraction;
-import sh.harold.creative.library.menu.MenuItem;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.MenuSlotAction;
 import sh.harold.creative.library.menu.MenuStack;
@@ -19,18 +18,14 @@ import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
-import sh.harold.creative.library.menu.ReactiveMenuView;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -40,7 +35,7 @@ public final class MenuSessionState {
 
     private final Map<String, Object> values = new ConcurrentHashMap<>();
     private final Deque<HistoryEntry> history = new ArrayDeque<>();
-    private final Map<ReactivePlacementKey, MenuSlot> reactivePlacementCache = new HashMap<>();
+    private final ReactivePlacementCache reactivePlacementCache = new ReactivePlacementCache();
     private final AtomicLong revision = new AtomicLong();
     private volatile SessionEntry current;
     private volatile boolean autoBackEligible;
@@ -218,48 +213,11 @@ public final class MenuSessionState {
     }
 
     private MenuSessionView buildReactiveView(ReactiveMenuDefinition menu, Object state) {
-        ReactiveMenuView rendered = MenuTrace.time("state.reactive.render", () -> menu.render(state));
-        MenuTrace.title(rendered.title());
-        MenuTrace.setCount("placementCount", rendered.placements().size());
-        boolean fillWithBlackPane = rendered.fillWithBlackPane() != null ? rendered.fillWithBlackPane() : menu.fillWithBlackPane();
-        List<MenuSlot> baseSlots = MenuTrace.time("state.reactive.baseSlots", () -> menu.baseSlots(fillWithBlackPane));
-        int size = baseSlots.size();
-        int placementCompileHits = 0;
-        int placementCompileMisses = 0;
-        if (rendered.placements().isEmpty()) {
-            MenuTrace.setCount("placementCompileHits", placementCompileHits);
-            MenuTrace.setCount("placementCompileMisses", placementCompileMisses);
-            return new MenuSessionView(rendered.title(), baseSlots, rendered.cursor());
-        }
-        List<MenuSlot> slots = new ArrayList<>(baseSlots);
-        Set<Integer> reactiveClickTargets = new HashSet<>();
-        for (Map.Entry<Integer, MenuItem> entry : rendered.placements().entrySet()) {
-            int slot = entry.getKey();
-            MenuItem item = entry.getValue();
-            if (slot < 0 || slot >= size) {
-                throw new IllegalArgumentException("Reactive view slot " + slot + " is outside a " + menu.rows() + "-row menu");
-            }
-            ReactivePlacementKey cacheKey = new ReactivePlacementKey(slot, item);
-            MenuSlot compiled = reactivePlacementCache.get(cacheKey);
-            if (compiled != null) {
-                placementCompileHits++;
-            } else {
-                placementCompileMisses++;
-                long started = System.nanoTime();
-                compiled = HouseMenuCompiler.compile(slot, item);
-                long elapsed = System.nanoTime() - started;
-                reactivePlacementCache.put(cacheKey, compiled);
-                MenuTrace.addDuration("state.reactive.compilePlacements", elapsed);
-                MenuSlot compiledSlot = compiled;
-                MenuTrace.detailIfSlow("placement-compile", elapsed,
-                        () -> "slot=" + slot + " title=" + ComponentText.flatten(compiledSlot.title()));
-            }
-            slots.set(slot, compiled);
-            reactiveClickTargets.add(slot);
-        }
-        MenuTrace.setCount("placementCompileHits", placementCompileHits);
-        MenuTrace.setCount("placementCompileMisses", placementCompileMisses);
-        return new MenuSessionView(rendered.title(), List.copyOf(slots), rendered.cursor(), reactiveClickTargets);
+        reactivePlacementCache.beginRender();
+        MenuSessionView view = menu.buildView(state, reactivePlacementCache);
+        MenuTrace.setCount("placementCompileHits", reactivePlacementCache.hits());
+        MenuTrace.setCount("placementCompileMisses", reactivePlacementCache.misses());
+        return view;
     }
 
     private void invalidate() {
@@ -314,32 +272,5 @@ public final class MenuSessionState {
     }
 
     private record HistoryEntry(SessionEntry entry, boolean autoBackEligible, Component titleSnapshot) {
-    }
-
-    private static final class ReactivePlacementKey {
-
-        private final int slot;
-        private final MenuItem item;
-
-        private ReactivePlacementKey(int slot, MenuItem item) {
-            this.slot = slot;
-            this.item = Objects.requireNonNull(item, "item");
-        }
-
-        @Override
-        public boolean equals(Object other) {
-            if (this == other) {
-                return true;
-            }
-            if (!(other instanceof ReactivePlacementKey key)) {
-                return false;
-            }
-            return slot == key.slot && item == key.item;
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * slot + System.identityHashCode(item);
-        }
     }
 }

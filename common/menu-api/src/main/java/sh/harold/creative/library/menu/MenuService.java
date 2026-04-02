@@ -9,4 +9,10 @@ public interface MenuService {
     CanvasMenuBuilder canvas();
 
     ReactiveMenuBuilder<Void> reactive();
+
+    ReactiveCanvasMenuBuilder<Void> reactiveCanvas();
+
+    ReactiveListMenuBuilder<Void> reactiveList();
+
+    ReactiveTabsMenuBuilder<Void> reactiveTabs();
 }

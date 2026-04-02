@@ -20,7 +20,10 @@ import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.MenuTraceController;
+import sh.harold.creative.library.menu.ReactiveCanvasMenuBuilder;
+import sh.harold.creative.library.menu.ReactiveListMenuBuilder;
 import sh.harold.creative.library.menu.ReactiveMenuBuilder;
+import sh.harold.creative.library.menu.ReactiveTabsMenuBuilder;
 import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.core.MenuTickScheduler;
 import sh.harold.creative.library.menu.core.StandardMenuService;
@@ -83,6 +86,18 @@ public final class MinestomMenuPlatform implements AutoCloseable {
 
     public ReactiveMenuBuilder<Void> reactive() {
         return menus.reactive();
+    }
+
+    public ReactiveCanvasMenuBuilder<Void> reactiveCanvas() {
+        return menus.reactiveCanvas();
+    }
+
+    public ReactiveListMenuBuilder<Void> reactiveList() {
+        return menus.reactiveList();
+    }
+
+    public ReactiveTabsMenuBuilder<Void> reactiveTabs() {
+        return menus.reactiveTabs();
     }
 
     public MenuButton.Builder button(Material material) {

@@ -27,11 +27,15 @@ import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
+import sh.harold.creative.library.menu.MenuTabGroup;
 import sh.harold.creative.library.menu.MenuTraceController;
+import sh.harold.creative.library.menu.ReactiveGeometryAction;
+import sh.harold.creative.library.menu.ReactiveListView;
 import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
+import sh.harold.creative.library.menu.ReactiveTabsView;
 import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.menu.core.StandardMenuService;
 import sh.harold.creative.library.menu.core.MenuTickHandle;
@@ -637,6 +641,64 @@ class MinestomMenuRuntimeTest {
         assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
     }
 
+    @Test
+    void reactiveListUsesHousePagingChrome() {
+        TestPlayer player = player();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
+
+        runtime.open(player, reactiveListMenu(0));
+        Inventory firstPage = player.lastOpenedInventory();
+
+        assertEquals("Profiles (1/2)", flatten(firstPage.getTitle()));
+        assertEquals("Item Item 0", slotTitle(firstPage, 10));
+        assertEquals("Next Page", slotTitle(firstPage, 53));
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(firstPage, player, new Click.Left(53)));
+        Inventory secondPage = player.lastOpenedInventory();
+
+        assertEquals("Profiles (2/2)", flatten(secondPage.getTitle()));
+        assertEquals("Item Item 28", slotTitle(secondPage, 10));
+        assertEquals("Previous Page", slotTitle(secondPage, 45));
+
+        drainScheduled(scheduled);
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(secondPage, player, new Click.Left(45)));
+        Inventory returnedFirstPage = player.lastOpenedInventory();
+
+        assertEquals("Profiles (1/2)", flatten(returnedFirstPage.getTitle()));
+        assertEquals("Item Item 0", slotTitle(returnedFirstPage, 10));
+        assertEquals("Next Page", slotTitle(returnedFirstPage, 53));
+    }
+
+    @Test
+    void reactiveTabsScrollVisibleStripWithoutChangingActiveTabContent() {
+        TestPlayer player = player();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
+
+        runtime.open(player, reactiveTabsMenu("tab-0", 1, 1));
+        Inventory inventory = player.lastOpenedInventory();
+
+        assertEquals("Reactive Tabs", flatten(inventory.getTitle()));
+        assertEquals("Tab 1", slotTitle(inventory, 1));
+        assertEquals("Tab 7", slotTitle(inventory, 7));
+        assertEquals("Tab 0 Item 21", slotTitle(inventory, 19));
+        assertEquals("Previous Page", slotTitle(inventory, 45));
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(0)));
+
+        assertEquals("Tab 0", slotTitle(inventory, 1));
+        assertEquals("Tab 6", slotTitle(inventory, 7));
+        assertEquals("Tab 0 Item 21", slotTitle(inventory, 19));
+
+        drainScheduled(scheduled);
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(45)));
+
+        assertEquals("Tab 0 Item 0", slotTitle(inventory, 19));
+        assertEquals("Tab 0 Item 20", slotTitle(inventory, 43));
+        assertEquals("Next Page", slotTitle(inventory, 53));
+    }
+
     private static Menu pagedMenu() {
         return new StandardMenuService().list()
                 .title("Profiles")
@@ -905,6 +967,88 @@ class MinestomMenuRuntimeTest {
                 .build();
     }
 
+    private static ReactiveMenu reactiveListMenu(int pageIndex) {
+        return new StandardMenuService().reactiveList()
+                .state(pageIndex)
+                .render(currentPage -> ReactiveListView.builder("Profiles")
+                        .page(currentPage)
+                        .addItems(sampleReactiveButtons("Item", 29))
+                        .build())
+                .reduce((currentPage, input) -> {
+                    if (!(input instanceof ReactiveMenuInput.Click click)) {
+                        return ReactiveMenuResult.stay(currentPage);
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.PreviousPage) {
+                        return ReactiveMenuResult.stay(currentPage - 1);
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.NextPage) {
+                        return ReactiveMenuResult.stay(currentPage + 1);
+                    }
+                    return ReactiveMenuResult.stay(currentPage);
+                })
+                .build();
+    }
+
+    private static ReactiveMenu reactiveTabsMenu(String activeTabId, int navStart, int pageIndex) {
+        return new StandardMenuService().reactiveTabs()
+                .state(new ReactiveTabsState(activeTabId, navStart, pageIndex))
+                .render(state -> ReactiveTabsView.builder("Reactive Tabs")
+                        .activeTab(state.activeTabId())
+                        .navStart(state.navStart())
+                        .page(state.pageIndex())
+                        .addGroup(MenuTabGroup.of("all", IntStream.range(0, 10)
+                                .mapToObj(index -> MenuTab.of(
+                                        "tab-" + index,
+                                        "Tab " + index,
+                                        MenuIcon.vanilla("stone"),
+                                        sampleReactiveButtons("Tab " + index, index == 0 ? 29 : 1)))
+                                .toList()))
+                        .build())
+                .reduce((state, input) -> {
+                    if (!(input instanceof ReactiveMenuInput.Click click)) {
+                        return ReactiveMenuResult.stay(state);
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.PreviousTabs) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                                state.activeTabId(),
+                                Math.max(0, state.navStart() - 1),
+                                state.pageIndex()));
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.NextTabs) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                                state.activeTabId(),
+                                state.navStart() + 1,
+                                state.pageIndex()));
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.PreviousPage) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                                state.activeTabId(),
+                                state.navStart(),
+                                Math.max(0, state.pageIndex() - 1)));
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.NextPage) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                                state.activeTabId(),
+                                state.navStart(),
+                                state.pageIndex() + 1));
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.SwitchTab switchTab) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(switchTab.tabId(), state.navStart(), 0));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+    }
+
+    private static List<MenuButton> sampleReactiveButtons(String prefix, int count) {
+        return IntStream.range(0, count)
+                .mapToObj(index -> MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name(prefix + " Item " + index)
+                        .action(ActionVerb.VIEW, context -> { })
+                        .build())
+                .toList();
+    }
+
     private static TestPlayer player() {
         return new TestPlayer(UUID.randomUUID());
     }
@@ -1008,6 +1152,9 @@ class MinestomMenuRuntimeTest {
             int cursorSourceSlot,
             boolean locked
     ) {
+    }
+
+    private record ReactiveTabsState(String activeTabId, int navStart, int pageIndex) {
     }
 
     private static final class RecordingSoundCueService implements SoundCueService {

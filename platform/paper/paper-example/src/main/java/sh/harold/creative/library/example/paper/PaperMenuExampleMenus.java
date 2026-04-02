@@ -15,10 +15,13 @@ import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.MenuTabGroup;
+import sh.harold.creative.library.menu.ReactiveGeometryAction;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
+import sh.harold.creative.library.menu.ReactiveListView;
+import sh.harold.creative.library.menu.ReactiveTabsView;
 import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.menu.UtilitySlot;
 import sh.harold.creative.library.menu.paper.PaperMenuPlatform;
@@ -56,6 +59,8 @@ final class PaperMenuExampleMenus {
     private final MenuDisplayItem clickLockInfoDisplay;
     private final MenuDisplayItem clickLockEmptyDisplay;
     private final MenuButton lockToggleUtilityButton;
+    private final ReactiveMenu reactiveListDemoMenu;
+    private final ReactiveMenu reactiveTabsDemoMenu;
     private final ReactiveMenu snakeDemoMenu;
     private final ReactiveMenu lockDragDemoMenu;
     private final ReactiveMenu lockClickDemoMenu;
@@ -99,6 +104,8 @@ final class PaperMenuExampleMenus {
                         "Returns the stored stack to its original slot when clicked again.")
                 .build();
         this.lockToggleUtilityButton = lockToggleButton();
+        this.reactiveListDemoMenu = buildReactiveListDemo();
+        this.reactiveTabsDemoMenu = buildReactiveTabsDemo();
         this.snakeDemoMenu = buildSnakeDemo();
         this.lockDragDemoMenu = buildLockDragDemo();
         this.lockClickDemoMenu = buildLockClickDemo();
@@ -265,17 +272,17 @@ final class PaperMenuExampleMenus {
                                         "Grouped stat and progress blocks",
                                         "Prompt-last house copy"),
                                 canvasTab("routes", FakeSkyBlockMenuTitles.normal("Demo Routes"), Material.BOOKSHELF,
-                                        "Jump between the compiled list gallery, the reactive demo gallery, and the true fixed-slot canvas gallery from one route tab.",
+                                        "Jump between the compiled list gallery, the reactive geometry gallery, and the true fixed-slot canvas gallery from one route tab.",
                                         builder -> {
                                             builder.place(TAB_CANVAS_LEFT_SLOT, openMenuButton(Material.CHEST, FakeSkyBlockMenuTitles.normal("Open List Gallery"),
                                                     "Jump into the plain paged list example.", ActionVerb.OPEN, listGalleryMenu));
                                             builder.place(TAB_CANVAS_CENTER_SLOT, openMenuButton(Material.SLIME_BALL, FakeSkyBlockMenuTitles.special("Open Reactive Gallery"),
-                                                    "Open the routed reactive demos for ticking, drag, and inventory-click testing.", ActionVerb.OPEN, reactiveGalleryMenu));
+                                                    "Open the routed reactive demos for list, tabs, canvas, drag, and inventory-click testing.", ActionVerb.OPEN, reactiveGalleryMenu));
                                             builder.place(TAB_CANVAS_RIGHT_SLOT, openMenuButton(Material.ITEM_FRAME, FakeSkyBlockMenuTitles.normal("Open True Canvas Gallery"),
                                                     "Jump into the true fixed-slot canvas example centered on row 2.", ActionVerb.OPEN, canvasGalleryMenu));
                                         },
                                         "Open paged list gallery",
-                                        "Open reactive demo gallery",
+                                        "Open reactive geometry gallery",
                                         "Open true fixed-slot canvas gallery")
                         )))
                 .build();
@@ -301,6 +308,18 @@ final class PaperMenuExampleMenus {
         return menus.list()
                 .title("Reactive Menu Gallery")
                 .addItems(List.of(
+                        reactiveLaunchButton(Material.WRITABLE_BOOK, FakeSkyBlockMenuTitles.normal("Reactive List Browser"),
+                                "Browse a live pure list where the highlighted entry changes its lore as you page and select entries.",
+                                ActionVerb.OPEN,
+                                reactiveListDemoMenu,
+                                MenuPair.of("Mode", FakeSkyBlockMenuValues.tracked("Paged lore updates")),
+                                MenuPair.of("Shape", FakeSkyBlockMenuValues.ready("Pure list geometry"))),
+                        reactiveLaunchButton(Material.CLOCK, FakeSkyBlockMenuTitles.normal("Reactive Tabs Switchboard"),
+                                "Switch grouped tabs, scroll the tab strip, and watch the active tab content re-render without rebuilding the menu.",
+                                ActionVerb.OPEN,
+                                reactiveTabsDemoMenu,
+                                MenuPair.of("Mode", FakeSkyBlockMenuValues.tracked("Strip plus page state")),
+                                MenuPair.of("Shape", FakeSkyBlockMenuValues.ready("Grouped tab geometry"))),
                         reactiveLaunchButton(Material.SLIME_BALL, FakeSkyBlockMenuTitles.special("Reactive Snake"),
                                 "Watch a one-slot snake wander the menu grid one orthogonal step at a time while the runtime patches only the slots that changed.",
                                 ActionVerb.OPEN,
@@ -322,8 +341,65 @@ final class PaperMenuExampleMenus {
                 .build();
     }
 
+    private ReactiveMenu buildReactiveListDemo() {
+        return menus.reactiveList()
+                .state(new ReactiveListState(0, 3))
+                .render(state -> ReactiveListView.builder("Reactive List Browser")
+                        .page(state.pageIndex())
+                        .addItems(reactiveListItems(state.highlightedIndex()))
+                        .build())
+                .reduce((state, input) -> reduceReactiveListState(state, input))
+                .build();
+    }
+
+    private ReactiveMenu buildReactiveTabsDemo() {
+        return menus.reactiveTabs()
+                .state(new ReactiveTabsState("overview", 0, 0, 1))
+                .render(state -> ReactiveTabsView.builder("Reactive Tabs Switchboard")
+                        .activeTab(state.activeTabId())
+                        .navStart(state.navStart())
+                        .page(state.pageIndex())
+                        .addGroup(MenuTabGroup.of("browse", List.of(
+                                menus.tab("overview", Material.BOOK)
+                                        .name(FakeSkyBlockMenuTitles.normal("Reactive Overview"))
+                                        .description("A live list tab whose item lore changes when the focused entry moves.")
+                                        .pairs(
+                                                MenuPair.of("State", FakeSkyBlockMenuValues.tracked("Paged entry focus")),
+                                                MenuPair.of("View", FakeSkyBlockMenuValues.ready("Content updates in place")))
+                                        .items(reactiveTabsOverviewItems(state))
+                                        .build(),
+                                menus.tab("signals", Material.COMPARATOR)
+                                        .name(FakeSkyBlockMenuTitles.perk("Reactive Signals"))
+                                        .description("A second list tab that keeps the tab strip honest and shows shared footer paging.")
+                                        .pairs(
+                                                MenuPair.of("State", FakeSkyBlockMenuValues.tracked("Selection echo")),
+                                                MenuPair.of("View", FakeSkyBlockMenuValues.ready("Footer-owned paging")))
+                                        .items(reactiveTabsSignalItems(state))
+                                        .build())))
+                        .addGroup(MenuTabGroup.of("workspace", List.of(
+                                menus.tab("canvas", Material.MAP)
+                                        .name(FakeSkyBlockMenuTitles.special("Reactive Canvas Board"))
+                                        .description("A live canvas tab with centered slots and a small note that shifts with state.")
+                                        .pairs(
+                                                MenuPair.of("State", FakeSkyBlockMenuValues.tracked("Canvas chrome")),
+                                                MenuPair.of("View", FakeSkyBlockMenuValues.ready("Explicit slot placement")))
+                                        .canvas(builder -> reactiveTabsCanvas(builder, state))
+                                        .build(),
+                                menus.tab("notes", Material.WRITABLE_BOOK)
+                                        .name(FakeSkyBlockMenuTitles.success("Reactive Notes"))
+                                        .description("A compact canvas-style tab that proves custom footer and tab strip ownership stay separate.")
+                                        .pairs(
+                                                MenuPair.of("State", FakeSkyBlockMenuValues.tracked("Canvas footer")),
+                                                MenuPair.of("View", FakeSkyBlockMenuValues.ready("Tab chrome stays owned")))
+                                        .canvas(builder -> reactiveTabsNotes(builder, state))
+                                        .build())))
+                        .build())
+                .reduce((state, input) -> reduceReactiveTabsState(state, input))
+                .build();
+    }
+
     private ReactiveMenu buildSnakeDemo() {
-        return menus.reactive()
+        return menus.reactiveCanvas()
                 .state(new SnakeState(0, NO_PREVIOUS_SNAKE_SLOT, 0x51A7E5L))
                 .tickEvery(4L)
                 .render(state -> ReactiveMenuView.builder("Reactive Snake")
@@ -337,7 +413,7 @@ final class PaperMenuExampleMenus {
     }
 
     private ReactiveMenu buildLockDragDemo() {
-        return menus.reactive()
+        return menus.reactiveCanvas()
                 .utility(UtilitySlot.LEFT_1, lockToggleUtilityButton)
                 .state(new DragLockState(null, NO_SOURCE_SLOT, null, NO_SOURCE_SLOT, false,
                         "Click an inventory stack to pick it up, or shift-click one to insert it directly."))
@@ -352,7 +428,7 @@ final class PaperMenuExampleMenus {
     }
 
     private ReactiveMenu buildLockClickDemo() {
-        return menus.reactive()
+        return menus.reactiveCanvas()
                 .utility(UtilitySlot.LEFT_1, lockToggleUtilityButton)
                 .state(new ClickLockState(null, NO_SOURCE_SLOT, false,
                         "Click an inventory stack to move it into the center slot."))
@@ -363,6 +439,132 @@ final class PaperMenuExampleMenus {
                         .build())
                 .reduce((state, input) -> reduceClickLockState(state, input))
                 .build();
+    }
+
+    private ReactiveMenuResult<ReactiveListState> reduceReactiveListState(ReactiveListState state, ReactiveMenuInput input) {
+        if (input instanceof ReactiveMenuInput.Click click) {
+            if (click.message() instanceof ReactiveGeometryAction.PreviousPage) {
+                return ReactiveMenuResult.stay(new ReactiveListState(Math.max(0, state.pageIndex() - 1), state.highlightedIndex()));
+            }
+            if (click.message() instanceof ReactiveGeometryAction.NextPage) {
+                return ReactiveMenuResult.stay(new ReactiveListState(state.pageIndex() + 1, state.highlightedIndex()));
+            }
+            if (click.message() instanceof String message && message.startsWith("focus:")) {
+                int index = Integer.parseInt(message.substring("focus:".length()));
+                return ReactiveMenuResult.stay(new ReactiveListState(state.pageIndex(), index));
+            }
+        }
+        return ReactiveMenuResult.stay(state);
+    }
+
+    private ReactiveMenuResult<ReactiveTabsState> reduceReactiveTabsState(ReactiveTabsState state, ReactiveMenuInput input) {
+        if (input instanceof ReactiveMenuInput.Click click) {
+            Object message = click.message();
+            if (message instanceof ReactiveGeometryAction.SwitchTab switchTab) {
+                return ReactiveMenuResult.stay(new ReactiveTabsState(switchTab.tabId(), state.navStart(), state.pageIndex(), state.focusedIndex()));
+            }
+            if (message instanceof ReactiveGeometryAction.PreviousTabs) {
+                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), Math.max(0, state.navStart() - 1), state.pageIndex(), state.focusedIndex()));
+            }
+            if (message instanceof ReactiveGeometryAction.NextTabs) {
+                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), state.navStart() + 1, state.pageIndex(), state.focusedIndex()));
+            }
+            if (message instanceof ReactiveGeometryAction.JumpToFirstTabs) {
+                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), 0, state.pageIndex(), state.focusedIndex()));
+            }
+            if (message instanceof ReactiveGeometryAction.JumpToLastTabs) {
+                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), Integer.MAX_VALUE, state.pageIndex(), state.focusedIndex()));
+            }
+            if (message instanceof ReactiveGeometryAction.PreviousPage) {
+                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), state.navStart(), Math.max(0, state.pageIndex() - 1), state.focusedIndex()));
+            }
+            if (message instanceof ReactiveGeometryAction.NextPage) {
+                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), state.navStart(), state.pageIndex() + 1, state.focusedIndex()));
+            }
+            if (message instanceof String focus && focus.startsWith("focus:")) {
+                int index = Integer.parseInt(focus.substring("focus:".length()));
+                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), state.navStart(), state.pageIndex(), index));
+            }
+        }
+        return ReactiveMenuResult.stay(state);
+    }
+
+    private List<MenuItem> reactiveListItems(int highlightedIndex) {
+        return IntStream.range(0, 35)
+                .mapToObj(index -> reactiveListEntry(index, highlightedIndex))
+                .toList();
+    }
+
+    private MenuItem reactiveListEntry(int index, int highlightedIndex) {
+        boolean highlighted = index == highlightedIndex;
+        return menus.button(Material.PAPER)
+                .name(FakeSkyBlockMenuTitles.normal("List Entry " + index))
+                .secondary(highlighted ? "Selected" : "Reactive row")
+                .description(highlighted
+                        ? "This entry is currently focused, so its lore reflects the active selection."
+                        : "Click to move the focus here and update the rendered lore.")
+                .pairs(
+                        MenuPair.of("Index", FakeSkyBlockMenuValues.tracked(String.valueOf(index))),
+                        MenuPair.of("State", FakeSkyBlockMenuValues.ready(highlighted ? "Focused" : "Idle")))
+                .emit(ActionVerb.VIEW, "focus:" + index)
+                .build();
+    }
+
+    private List<MenuItem> reactiveTabsOverviewItems(ReactiveTabsState state) {
+        return IntStream.range(0, 29)
+                .mapToObj(index -> menus.button(Material.BOOK)
+                        .name(FakeSkyBlockMenuTitles.normal("Overview Entry " + index))
+                        .secondary(index == state.focusedIndex() ? "Selected" : "Browse list")
+                        .description(index == state.focusedIndex()
+                                ? "This entry is the current focus for the reactive list tab."
+                                : "Click to move the tab's highlighted lore row here.")
+                        .emit(ActionVerb.VIEW, "focus:" + index)
+                        .build())
+                .toList();
+    }
+
+    private List<MenuItem> reactiveTabsSignalItems(ReactiveTabsState state) {
+        return IntStream.range(0, 18)
+                .mapToObj(index -> menus.button(Material.COMPASS)
+                        .name(FakeSkyBlockMenuTitles.perk("Signal " + index))
+                        .secondary(index == state.focusedIndex() ? "Selected" : "Reactive signal")
+                        .description(index == state.focusedIndex()
+                                ? "This signal row is currently highlighted in the reactive tabs demo."
+                                : "Click to retarget the highlight to this signal row.")
+                        .emit(ActionVerb.VIEW, "focus:" + index)
+                        .build())
+                .toList();
+    }
+
+    private void reactiveTabsCanvas(MenuTabContent.CanvasBuilder builder, ReactiveTabsState state) {
+        builder.place(TRUE_CANVAS_LEFT_SLOT, menus.display(Material.CHEST)
+                        .name(FakeSkyBlockMenuTitles.normal("Canvas Anchor"))
+                        .description("The canvas tab keeps its own slot math and still updates as state changes.")
+                        .build())
+                .place(TRUE_CANVAS_CENTER_SLOT, menus.display(Material.MAP)
+                        .name(FakeSkyBlockMenuTitles.special("Focused " + state.focusedIndex()))
+                        .description("This centered card reflects the reactive tab state.")
+                        .build())
+                .place(TRUE_CANVAS_RIGHT_SLOT, menus.display(Material.WRITABLE_BOOK)
+                        .name(FakeSkyBlockMenuTitles.success("Owned Footer"))
+                        .description("Tab chrome and footer ownership remain separate concerns.")
+                        .build());
+    }
+
+    private void reactiveTabsNotes(MenuTabContent.CanvasBuilder builder, ReactiveTabsState state) {
+        builder.fillWithBlackPane(false)
+                .place(29, menus.display(Material.PAPER)
+                        .name(FakeSkyBlockMenuTitles.normal("Strip Note"))
+                        .description("Canvas tabs can stay open where they need negative space.")
+                        .build())
+                .place(31, menus.display(Material.BOOK)
+                        .name(FakeSkyBlockMenuTitles.perk("Active " + state.activeTabId()))
+                        .description("The active tab id and strip position both live in reducer state.")
+                        .build())
+                .place(33, menus.display(Material.COMPARATOR)
+                        .name(FakeSkyBlockMenuTitles.reward("Nav Start " + state.navStart()))
+                        .description("Scroll state stays explicit instead of being inferred from titles.")
+                        .build());
     }
 
     private ReactiveMenuResult<DragLockState> reduceDragLockState(DragLockState state, ReactiveMenuInput input) {
@@ -939,6 +1141,12 @@ final class PaperMenuExampleMenus {
     }
 
     private record SnakeState(int slot, int previousSlot, long seed) {
+    }
+
+    private record ReactiveListState(int pageIndex, int highlightedIndex) {
+    }
+
+    private record ReactiveTabsState(String activeTabId, int navStart, int pageIndex, int focusedIndex) {
     }
 
     private record DragLockState(MenuStack stored, int storedSourceSlot, MenuStack cursor, int cursorSourceSlot,

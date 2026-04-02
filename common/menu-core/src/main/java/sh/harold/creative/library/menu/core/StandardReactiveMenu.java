@@ -19,10 +19,12 @@ import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.menu.UtilitySlot;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Supplier;
 
 final class StandardReactiveMenu<S> implements ReactiveMenuDefinition {
@@ -74,36 +76,41 @@ final class StandardReactiveMenu<S> implements ReactiveMenuDefinition {
         return stateFactory.get();
     }
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public ReactiveMenuView render(Object state) {
-        return Objects.requireNonNull(renderer.render((S) state), "renderer.render(...)");
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
     public ReactiveMenuResult<?> reduce(Object state, ReactiveMenuInput input) {
         return Objects.requireNonNull(((ReactiveMenuReducer<S>) reducer).reduce((S) state, input), "reducer.reduce(...)");
     }
 
     @Override
-    public Map<UtilitySlot, MenuItem> utilities() {
-        return utilities;
-    }
-
-    @Override
-    public boolean fillWithBlackPane() {
-        return fillWithBlackPane;
-    }
-
-    @Override
-    public List<MenuSlot> baseSlots(boolean fillWithBlackPane) {
-        return fillWithBlackPane ? filledBaseSlots : emptyBaseSlots;
-    }
-
-    @Override
     public long tickIntervalTicks() {
         return tickIntervalTicks;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public MenuSessionView buildView(Object state, ReactivePlacementCache cache) {
+        ReactiveMenuView rendered = MenuTrace.time("state.reactive.render",
+                () -> Objects.requireNonNull(renderer.render((S) state), "renderer.render(...)"));
+        MenuTrace.title(rendered.title());
+        MenuTrace.setCount("placementCount", rendered.placements().size());
+        boolean renderFilledBase = rendered.fillWithBlackPane() != null ? rendered.fillWithBlackPane() : fillWithBlackPane;
+        List<MenuSlot> baseSlots = MenuTrace.time("state.reactive.baseSlots",
+                () -> renderFilledBase ? filledBaseSlots : emptyBaseSlots);
+        int size = baseSlots.size();
+        if (rendered.placements().isEmpty()) {
+            return new MenuSessionView(rendered.title(), baseSlots, rendered.cursor());
+        }
+        List<MenuSlot> slots = new ArrayList<>(baseSlots);
+        Set<Integer> reactiveClickTargets = new HashSet<>();
+        for (Map.Entry<Integer, MenuItem> entry : rendered.placements().entrySet()) {
+            int slot = entry.getKey();
+            if (slot < 0 || slot >= size) {
+                throw new IllegalArgumentException("Reactive view slot " + slot + " is outside a " + rows + "-row menu");
+            }
+            slots.set(slot, cache.compile(slot, entry.getValue()));
+            reactiveClickTargets.add(slot);
+        }
+        return new MenuSessionView(rendered.title(), List.copyOf(slots), rendered.cursor(), reactiveClickTargets);
     }
 
     private static List<MenuSlot> buildBaseSlots(int rows, Map<UtilitySlot, MenuItem> utilities, boolean fillWithBlackPane) {

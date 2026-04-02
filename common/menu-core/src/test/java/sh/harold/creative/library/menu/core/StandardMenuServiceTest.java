@@ -15,13 +15,17 @@ import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuItem;
 import sh.harold.creative.library.menu.MenuPair;
 import sh.harold.creative.library.menu.MenuSlot;
+import sh.harold.creative.library.menu.MenuSlotAction;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.MenuTabGroup;
 import sh.harold.creative.library.menu.MenuTraceController;
+import sh.harold.creative.library.menu.ReactiveGeometryAction;
+import sh.harold.creative.library.menu.ReactiveListView;
 import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
+import sh.harold.creative.library.menu.ReactiveTabsView;
 import sh.harold.creative.library.menu.ReactiveMenuView;
 import sh.harold.creative.library.sound.SoundCueKeys;
 
@@ -355,6 +359,128 @@ class StandardMenuServiceTest {
     }
 
     @Test
+    void reactiveListUsesPureListGeometryAndDispatchesGeometryMessages() {
+        ReactiveMenu menu = menus.reactiveList()
+                .state(1)
+                .render(pageIndex -> ReactiveListView.builder("Profiles")
+                        .page(pageIndex)
+                        .addItems(sampleButtons("Item", 29))
+                        .build())
+                .reduce((pageIndex, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click click
+                            && click.message() instanceof ReactiveGeometryAction.PreviousPage) {
+                        return ReactiveMenuResult.stay(pageIndex - 1);
+                    }
+                    if (input instanceof ReactiveMenuInput.Click click
+                            && click.message() instanceof ReactiveGeometryAction.NextPage) {
+                        return ReactiveMenuResult.stay(pageIndex + 1);
+                    }
+                    return ReactiveMenuResult.stay(pageIndex);
+                })
+                .build();
+
+        assertEquals(MenuGeometry.LIST, menu.geometry());
+
+        MenuSessionState state = new MenuSessionState(menu);
+        MenuFrame secondPage = state.currentFrame();
+
+        assertEquals("Profiles (2/2)", ComponentText.flatten(secondPage.title()));
+        assertEquals("minecraft:black_stained_glass_pane", iconAt(secondPage, 9));
+        assertEquals("Item Item 28", titleAt(secondPage, 10));
+        assertEquals("minecraft:air", iconAt(secondPage, 11));
+        assertTrue(interactionAt(secondPage, 45, MenuClick.LEFT).action() instanceof MenuSlotAction.Dispatch dispatch
+                && dispatch.message() instanceof ReactiveGeometryAction.PreviousPage);
+        assertEquals("Close", titleAt(secondPage, 49));
+        assertTrue(interactionAt(secondPage, 53, MenuClick.LEFT) == null);
+
+        state.dispatchReactive(new ReactiveMenuInput.Click(45, MenuClick.LEFT, false, new ReactiveGeometryAction.PreviousPage()));
+        MenuFrame firstPage = state.currentFrame();
+
+        assertEquals("Profiles (1/2)", ComponentText.flatten(firstPage.title()));
+        assertEquals("Item Item 0", titleAt(firstPage, 10));
+        assertEquals("Item Item 27", titleAt(firstPage, 43));
+        assertTrue(interactionAt(firstPage, 53, MenuClick.LEFT).action() instanceof MenuSlotAction.Dispatch dispatch
+                && dispatch.message() instanceof ReactiveGeometryAction.NextPage);
+    }
+
+    @Test
+    void reactiveTabsKeepActiveTabIndependentFromStripScrollAndPageThroughListContent() {
+        ReactiveMenu menu = menus.reactiveTabs()
+                .state(new ReactiveTabsState("tab-0", 1, 1))
+                .render(state -> ReactiveTabsView.builder("Reactive Tabs")
+                        .activeTab(state.activeTabId())
+                        .navStart(state.navStart())
+                        .page(state.pageIndex())
+                        .addGroup(MenuTabGroup.of("all", IntStream.range(0, 10)
+                                .mapToObj(index -> MenuTab.of(
+                                        "tab-" + index,
+                                        "Tab " + index,
+                                        MenuIcon.vanilla("stone"),
+                                        sampleButtons("Tab " + index, index == 0 ? 29 : 1)))
+                                .toList()))
+                        .build())
+                .reduce((state, input) -> {
+                    if (!(input instanceof ReactiveMenuInput.Click click)) {
+                        return ReactiveMenuResult.stay(state);
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.PreviousTabs) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                                state.activeTabId(),
+                                Math.max(0, state.navStart() - 1),
+                                state.pageIndex()));
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.NextTabs) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                                state.activeTabId(),
+                                state.navStart() + 1,
+                                state.pageIndex()));
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.PreviousPage) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                                state.activeTabId(),
+                                state.navStart(),
+                                Math.max(0, state.pageIndex() - 1)));
+                    }
+                    if (click.message() instanceof ReactiveGeometryAction.SwitchTab switchTab) {
+                        return ReactiveMenuResult.stay(new ReactiveTabsState(switchTab.tabId(), state.navStart(), 0));
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+
+        assertEquals(MenuGeometry.TABS, menu.geometry());
+
+        MenuSessionState state = new MenuSessionState(menu);
+        MenuFrame secondPage = state.currentFrame();
+
+        assertEquals("Reactive Tabs", ComponentText.flatten(secondPage.title()));
+        assertEquals("Tab 1", titleAt(secondPage, 1));
+        assertEquals("Tab 7", titleAt(secondPage, 7));
+        assertEquals("Tab 0 Item 21", titleAt(secondPage, 19));
+        assertTrue(interactionAt(secondPage, 0, MenuClick.LEFT).action() instanceof MenuSlotAction.Dispatch dispatch
+                && dispatch.message() instanceof ReactiveGeometryAction.PreviousTabs);
+        assertTrue(interactionAt(secondPage, 0, MenuClick.RIGHT).action() instanceof MenuSlotAction.Dispatch dispatch
+                && dispatch.message() instanceof ReactiveGeometryAction.JumpToFirstTabs);
+        assertTrue(interactionAt(secondPage, 45, MenuClick.LEFT).action() instanceof MenuSlotAction.Dispatch dispatch
+                && dispatch.message() instanceof ReactiveGeometryAction.PreviousPage);
+
+        state.dispatchReactive(new ReactiveMenuInput.Click(0, MenuClick.LEFT, false, new ReactiveGeometryAction.PreviousTabs()));
+        MenuFrame scrolled = state.currentFrame();
+
+        assertEquals("Tab 0", titleAt(scrolled, 1));
+        assertEquals("Tab 6", titleAt(scrolled, 7));
+        assertEquals("Tab 0 Item 21", titleAt(scrolled, 19));
+
+        state.dispatchReactive(new ReactiveMenuInput.Click(45, MenuClick.LEFT, false, new ReactiveGeometryAction.PreviousPage()));
+        MenuFrame firstPage = state.currentFrame();
+
+        assertEquals("Tab 0 Item 0", titleAt(firstPage, 19));
+        assertEquals("Tab 0 Item 20", titleAt(firstPage, 43));
+        assertTrue(interactionAt(firstPage, 53, MenuClick.LEFT).action() instanceof MenuSlotAction.Dispatch dispatch
+                && dispatch.message() instanceof ReactiveGeometryAction.NextPage);
+    }
+
+    @Test
     void reactiveMenusKeepSessionStateIsolatedAndPatchRenderedSlots() {
         ReactiveMenu menu = menus.reactive()
                 .stateFactory(() -> new ToggleState(false))
@@ -563,5 +689,8 @@ class StandardMenuServiceTest {
     }
 
     private record ToggleState(boolean enabled) {
+    }
+
+    private record ReactiveTabsState(String activeTabId, int navStart, int pageIndex) {
     }
 }

@@ -20,10 +20,16 @@ import sh.harold.creative.library.menu.MenuSlotAction;
 import sh.harold.creative.library.menu.MenuTab;
 import sh.harold.creative.library.menu.MenuTabContent;
 import sh.harold.creative.library.menu.MenuTabGroup;
+import sh.harold.creative.library.menu.ReactiveCanvasMenuBuilder;
+import sh.harold.creative.library.menu.ReactiveListMenuBuilder;
+import sh.harold.creative.library.menu.ReactiveListRenderer;
 import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuBuilder;
+import sh.harold.creative.library.menu.ReactiveGeometryAction;
 import sh.harold.creative.library.menu.ReactiveMenuReducer;
 import sh.harold.creative.library.menu.ReactiveMenuRenderer;
+import sh.harold.creative.library.menu.ReactiveTabsMenuBuilder;
+import sh.harold.creative.library.menu.ReactiveTabsRenderer;
 import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.UtilitySlot;
 
@@ -40,34 +46,21 @@ import java.util.function.Supplier;
 
 public final class StandardMenuService implements MenuService {
 
-    private static final int LIST_ROWS = 6;
-    private static final List<Integer> LIST_CONTENT_SLOTS = List.of(
-            10, 11, 12, 13, 14, 15, 16,
-            19, 20, 21, 22, 23, 24, 25,
-            28, 29, 30, 31, 32, 33, 34,
-            37, 38, 39, 40, 41, 42, 43
-    );
-    private static final int LIST_CONTENT_SIZE = LIST_CONTENT_SLOTS.size();
+    static final int LIST_ROWS = 6;
 
-    private static final int TABS_CONTENT_START = 18;
-    private static final int TABS_SHARED_CONTENT_END = 44;
-    private static final int TABS_CUSTOM_CONTENT_END = 53;
-    private static final int TABS_INDICATOR_ROW_START = 9;
-    private static final int TABS_NAV_LEFT_SLOT = 0;
-    private static final int TABS_NAV_RIGHT_SLOT = 8;
-    private static final int TABS_NAV_FULL_WIDTH = 9;
-    private static final int TABS_NAV_WINDOW_WIDTH = 7;
-    private static final List<Integer> TABS_LIST_CONTENT_SLOTS = List.of(
-            19, 20, 21, 22, 23, 24, 25,
-            28, 29, 30, 31, 32, 33, 34,
-            37, 38, 39, 40, 41, 42, 43
-    );
-    private static final int TABS_LIST_CONTENT_SIZE = TABS_LIST_CONTENT_SLOTS.size();
+    static final int TABS_CONTENT_START = 18;
+    static final int TABS_SHARED_CONTENT_END = 44;
+    static final int TABS_CUSTOM_CONTENT_END = 53;
+    static final int TABS_INDICATOR_ROW_START = 9;
+    static final int TABS_NAV_LEFT_SLOT = 0;
+    static final int TABS_NAV_RIGHT_SLOT = 8;
+    static final int TABS_NAV_FULL_WIDTH = 9;
+    static final int TABS_NAV_WINDOW_WIDTH = 7;
 
-    private static final int FOOTER_PREVIOUS_OFFSET = 0;
-    private static final int FOOTER_BACK_OFFSET = 3;
-    private static final int FOOTER_CLOSE_OFFSET = 4;
-    private static final int FOOTER_NEXT_OFFSET = 8;
+    static final int FOOTER_PREVIOUS_OFFSET = 0;
+    static final int FOOTER_BACK_OFFSET = 3;
+    static final int FOOTER_CLOSE_OFFSET = 4;
+    static final int FOOTER_NEXT_OFFSET = 8;
 
     @Override
     public ListMenuBuilder list() {
@@ -86,7 +79,22 @@ public final class StandardMenuService implements MenuService {
 
     @Override
     public ReactiveMenuBuilder<Void> reactive() {
-        return new DefaultReactiveMenuBuilder<>();
+        return reactiveCanvas();
+    }
+
+    @Override
+    public ReactiveCanvasMenuBuilder<Void> reactiveCanvas() {
+        return new DefaultReactiveCanvasMenuBuilder<>();
+    }
+
+    @Override
+    public ReactiveListMenuBuilder<Void> reactiveList() {
+        return new DefaultReactiveListMenuBuilder<>();
+    }
+
+    @Override
+    public ReactiveTabsMenuBuilder<Void> reactiveTabs() {
+        return new DefaultReactiveTabsMenuBuilder<>();
     }
 
     private static final class DefaultListMenuBuilder implements ListMenuBuilder {
@@ -140,7 +148,7 @@ public final class StandardMenuService implements MenuService {
 
         @Override
         public Menu build() {
-            int totalPages = Math.max(1, (items.size() + LIST_CONTENT_SIZE - 1) / LIST_CONTENT_SIZE);
+            int totalPages = PagedListSupport.pageCount(items.size(), PagedListSupport.PURE_LIST_PAGE_SIZE);
             Set<String> frameIds = new java.util.LinkedHashSet<>();
             for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
                 frameIds.add(listFrameId(pageIndex));
@@ -377,7 +385,7 @@ public final class StandardMenuService implements MenuService {
         }
     }
 
-    private static final class DefaultReactiveMenuBuilder<S> implements ReactiveMenuBuilder<S> {
+    private static final class DefaultReactiveCanvasMenuBuilder<S> implements ReactiveCanvasMenuBuilder<S> {
 
         private int rows = 6;
         private final Map<UtilitySlot, MenuItem> utilities = new LinkedHashMap<>();
@@ -389,20 +397,20 @@ public final class StandardMenuService implements MenuService {
 
         @Override
         @SuppressWarnings("unchecked")
-        public <T> ReactiveMenuBuilder<T> state(T state) {
+        public <T> ReactiveCanvasMenuBuilder<T> state(T state) {
             this.stateFactory = () -> state;
-            return (ReactiveMenuBuilder<T>) this;
+            return (ReactiveCanvasMenuBuilder<T>) this;
         }
 
         @Override
         @SuppressWarnings("unchecked")
-        public <T> ReactiveMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory) {
+        public <T> ReactiveCanvasMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory) {
             this.stateFactory = Objects.requireNonNull(stateFactory, "stateFactory");
-            return (ReactiveMenuBuilder<T>) this;
+            return (ReactiveCanvasMenuBuilder<T>) this;
         }
 
         @Override
-        public ReactiveMenuBuilder<S> rows(int rows) {
+        public ReactiveCanvasMenuBuilder<S> rows(int rows) {
             if (rows < 1 || rows > 6) {
                 throw new IllegalArgumentException("rows must be between 1 and 6");
             }
@@ -411,19 +419,19 @@ public final class StandardMenuService implements MenuService {
         }
 
         @Override
-        public ReactiveMenuBuilder<S> utility(UtilitySlot slot, MenuItem item) {
+        public ReactiveCanvasMenuBuilder<S> utility(UtilitySlot slot, MenuItem item) {
             utilities.put(Objects.requireNonNull(slot, "slot"), Objects.requireNonNull(item, "item"));
             return this;
         }
 
         @Override
-        public ReactiveMenuBuilder<S> fillWithBlackPane(boolean fillWithBlackPane) {
+        public ReactiveCanvasMenuBuilder<S> fillWithBlackPane(boolean fillWithBlackPane) {
             this.fillWithBlackPane = fillWithBlackPane;
             return this;
         }
 
         @Override
-        public ReactiveMenuBuilder<S> tickEvery(long tickIntervalTicks) {
+        public ReactiveCanvasMenuBuilder<S> tickEvery(long tickIntervalTicks) {
             if (tickIntervalTicks <= 0L) {
                 throw new IllegalArgumentException("tickIntervalTicks must be greater than zero");
             }
@@ -432,13 +440,13 @@ public final class StandardMenuService implements MenuService {
         }
 
         @Override
-        public ReactiveMenuBuilder<S> render(ReactiveMenuRenderer<? super S> renderer) {
+        public ReactiveCanvasMenuBuilder<S> render(ReactiveMenuRenderer<? super S> renderer) {
             this.renderer = Objects.requireNonNull(renderer, "renderer");
             return this;
         }
 
         @Override
-        public ReactiveMenuBuilder<S> reduce(ReactiveMenuReducer<? super S> reducer) {
+        public ReactiveCanvasMenuBuilder<S> reduce(ReactiveMenuReducer<? super S> reducer) {
             this.reducer = Objects.requireNonNull(reducer, "reducer");
             return this;
         }
@@ -461,6 +469,148 @@ public final class StandardMenuService implements MenuService {
         }
     }
 
+    private static final class DefaultReactiveListMenuBuilder<S> implements ReactiveListMenuBuilder<S> {
+
+        private final Map<UtilitySlot, MenuItem> utilities = new LinkedHashMap<>();
+        private long tickIntervalTicks;
+        private Supplier<?> stateFactory = () -> null;
+        private ReactiveListRenderer<?> renderer;
+        private ReactiveMenuReducer<?> reducer;
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> ReactiveListMenuBuilder<T> state(T state) {
+            this.stateFactory = () -> state;
+            return (ReactiveListMenuBuilder<T>) this;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> ReactiveListMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory) {
+            this.stateFactory = Objects.requireNonNull(stateFactory, "stateFactory");
+            return (ReactiveListMenuBuilder<T>) this;
+        }
+
+        @Override
+        public ReactiveListMenuBuilder<S> utility(UtilitySlot slot, MenuItem item) {
+            utilities.put(Objects.requireNonNull(slot, "slot"), Objects.requireNonNull(item, "item"));
+            return this;
+        }
+
+        @Override
+        public ReactiveListMenuBuilder<S> tickEvery(long tickIntervalTicks) {
+            if (tickIntervalTicks <= 0L) {
+                throw new IllegalArgumentException("tickIntervalTicks must be greater than zero");
+            }
+            this.tickIntervalTicks = tickIntervalTicks;
+            return this;
+        }
+
+        @Override
+        public ReactiveListMenuBuilder<S> render(ReactiveListRenderer<? super S> renderer) {
+            this.renderer = Objects.requireNonNull(renderer, "renderer");
+            return this;
+        }
+
+        @Override
+        public ReactiveListMenuBuilder<S> reduce(ReactiveMenuReducer<? super S> reducer) {
+            this.reducer = Objects.requireNonNull(reducer, "reducer");
+            return this;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ReactiveMenu build() {
+            if (renderer == null) {
+                throw new IllegalStateException("Reactive list menu requires a renderer");
+            }
+            if (reducer == null) {
+                throw new IllegalStateException("Reactive list menu requires a reducer");
+            }
+            int footerStart = HouseMenuCompiler.footerStart(LIST_ROWS);
+            validateUtilitySlots(utilities, footerStart, reservedCanvasFooterSlots(footerStart));
+            return new StandardReactiveListMenu<>(utilities, tickIntervalTicks,
+                    (Supplier<? extends S>) stateFactory,
+                    (ReactiveListRenderer<? super S>) renderer,
+                    (ReactiveMenuReducer<? super S>) reducer);
+        }
+    }
+
+    private static final class DefaultReactiveTabsMenuBuilder<S> implements ReactiveTabsMenuBuilder<S> {
+
+        private final Map<UtilitySlot, MenuItem> utilities = new LinkedHashMap<>();
+        private boolean sharedFooter = true;
+        private long tickIntervalTicks;
+        private Supplier<?> stateFactory = () -> null;
+        private ReactiveTabsRenderer<?> renderer;
+        private ReactiveMenuReducer<?> reducer;
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> ReactiveTabsMenuBuilder<T> state(T state) {
+            this.stateFactory = () -> state;
+            return (ReactiveTabsMenuBuilder<T>) this;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> ReactiveTabsMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory) {
+            this.stateFactory = Objects.requireNonNull(stateFactory, "stateFactory");
+            return (ReactiveTabsMenuBuilder<T>) this;
+        }
+
+        @Override
+        public ReactiveTabsMenuBuilder<S> utility(UtilitySlot slot, MenuItem item) {
+            utilities.put(Objects.requireNonNull(slot, "slot"), Objects.requireNonNull(item, "item"));
+            return this;
+        }
+
+        @Override
+        public ReactiveTabsMenuBuilder<S> customFooter() {
+            this.sharedFooter = false;
+            return this;
+        }
+
+        @Override
+        public ReactiveTabsMenuBuilder<S> tickEvery(long tickIntervalTicks) {
+            if (tickIntervalTicks <= 0L) {
+                throw new IllegalArgumentException("tickIntervalTicks must be greater than zero");
+            }
+            this.tickIntervalTicks = tickIntervalTicks;
+            return this;
+        }
+
+        @Override
+        public ReactiveTabsMenuBuilder<S> render(ReactiveTabsRenderer<? super S> renderer) {
+            this.renderer = Objects.requireNonNull(renderer, "renderer");
+            return this;
+        }
+
+        @Override
+        public ReactiveTabsMenuBuilder<S> reduce(ReactiveMenuReducer<? super S> reducer) {
+            this.reducer = Objects.requireNonNull(reducer, "reducer");
+            return this;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ReactiveMenu build() {
+            if (renderer == null) {
+                throw new IllegalStateException("Reactive tabs menu requires a renderer");
+            }
+            if (reducer == null) {
+                throw new IllegalStateException("Reactive tabs menu requires a reducer");
+            }
+            if (!sharedFooter && !utilities.isEmpty()) {
+                throw new IllegalStateException("Custom-footer tabs may not use shared footer utility slots");
+            }
+            return new StandardReactiveTabsMenu<>(utilities, sharedFooter, tickIntervalTicks,
+                    (Supplier<? extends S>) stateFactory,
+                    (ReactiveTabsRenderer<? super S>) renderer,
+                    (ReactiveMenuReducer<? super S>) reducer);
+        }
+    }
+
     private static List<MenuSlot> buildListPage(
             int pageIndex,
             int totalPages,
@@ -472,11 +622,11 @@ public final class StandardMenuService implements MenuService {
         int footerStart = HouseMenuCompiler.footerStart(LIST_ROWS);
         validateUtilitySlots(utilities, footerStart,
                 reservedSharedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0, totalPages > 1 && pageIndex + 1 < totalPages));
-        int firstItem = pageIndex * LIST_CONTENT_SIZE;
-        int lastItem = Math.min(items.size(), firstItem + LIST_CONTENT_SIZE);
+        int firstItem = PagedListSupport.firstItemIndex(pageIndex, PagedListSupport.PURE_LIST_PAGE_SIZE);
+        int lastItem = PagedListSupport.lastItemExclusive(pageIndex, items.size(), PagedListSupport.PURE_LIST_PAGE_SIZE);
         int slotIndex = 0;
         for (int i = firstItem; i < lastItem; i++) {
-            int slot = LIST_CONTENT_SLOTS.get(slotIndex++);
+            int slot = PagedListSupport.PURE_LIST_CONTENT_SLOTS.get(slotIndex++);
             slots.put(slot, HouseMenuCompiler.compile(slot, items.get(i)));
         }
         applyUtilities(slots, footerStart, utilities);
@@ -487,7 +637,7 @@ public final class StandardMenuService implements MenuService {
     }
 
     private static void clearListContentArea(Map<Integer, MenuSlot> slots) {
-        for (int slot : LIST_CONTENT_SLOTS) {
+        for (int slot : PagedListSupport.PURE_LIST_CONTENT_SLOTS) {
             slots.put(slot, empty(slot));
         }
     }
@@ -524,7 +674,7 @@ public final class StandardMenuService implements MenuService {
         return orderedSlots(slots, LIST_ROWS);
     }
 
-    private static void renderTabChrome(Map<Integer, MenuSlot> slots, MenuTab activeTab, List<FlatTab> flatTabs, NavPlan navPlan,
+    static void renderTabChrome(Map<Integer, MenuSlot> slots, MenuTab activeTab, List<FlatTab> flatTabs, NavPlan navPlan,
                                         int navStart, int pageIndex) {
         NavWindow window = navPlan.window(navStart);
         List<PositionedTab> positioned = positionTabs(flatTabs, window, navPlan.overflow());
@@ -556,17 +706,17 @@ public final class StandardMenuService implements MenuService {
 
     private static void renderTabListContent(Map<Integer, MenuSlot> slots, List<MenuItem> items, int pageIndex) {
         clearTabListContentArea(slots);
-        int firstItem = pageIndex * TABS_LIST_CONTENT_SIZE;
-        int lastItem = Math.min(items.size(), firstItem + TABS_LIST_CONTENT_SIZE);
+        int firstItem = PagedListSupport.firstItemIndex(pageIndex, PagedListSupport.TAB_LIST_PAGE_SIZE);
+        int lastItem = PagedListSupport.lastItemExclusive(pageIndex, items.size(), PagedListSupport.TAB_LIST_PAGE_SIZE);
         int slotIndex = 0;
         for (int i = firstItem; i < lastItem; i++) {
-            int slot = TABS_LIST_CONTENT_SLOTS.get(slotIndex++);
+            int slot = PagedListSupport.TAB_LIST_CONTENT_SLOTS.get(slotIndex++);
             slots.put(slot, HouseMenuCompiler.compile(slot, items.get(i)));
         }
     }
 
     private static void clearTabListContentArea(Map<Integer, MenuSlot> slots) {
-        for (int slot : TABS_LIST_CONTENT_SLOTS) {
+        for (int slot : PagedListSupport.TAB_LIST_CONTENT_SLOTS) {
             slots.put(slot, empty(slot));
         }
     }
@@ -587,7 +737,7 @@ public final class StandardMenuService implements MenuService {
         }
     }
 
-    private static void applySharedFooter(
+    static void applySharedFooter(
             Map<Integer, MenuSlot> slots,
             int footerStart,
             String previousFrameId,
@@ -619,7 +769,7 @@ public final class StandardMenuService implements MenuService {
         return HouseMenuCompiler.compile(slot, tab.icon(), tab.name(), tab.secondary(), tab.blocks(), active || tab.glow(), interactions, false, 1);
     }
 
-    private static MenuSlot tabIndicator(int slot, boolean active) {
+    static MenuSlot tabIndicator(int slot, boolean active) {
         return new MenuSlot(slot,
                 MenuIcon.vanilla(active ? "lime_stained_glass_pane" : "gray_stained_glass_pane"),
                 Component.text(" "),
@@ -648,16 +798,16 @@ public final class StandardMenuService implements MenuService {
         return navigationButton(slot, title, pageNumber, MenuIcon.vanilla("arrow"), interactions);
     }
 
-    private static MenuSlot filler(int slot) {
+    static MenuSlot filler(int slot) {
         return new MenuSlot(slot, MenuIcon.vanilla("black_stained_glass_pane"), Component.text(" "),
                 List.of(), false, Map.of());
     }
 
-    private static MenuSlot empty(int slot) {
+    static MenuSlot empty(int slot) {
         return new MenuSlot(slot, MenuIcon.vanilla("air"), Component.empty(), List.of(), false, Map.of());
     }
 
-    private static MenuSlot simpleButton(int slot, String title, NamedTextColor color, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
+    static MenuSlot simpleButton(int slot, String title, NamedTextColor color, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
         return new MenuSlot(slot, icon,
                 Component.text(title, color).decoration(TextDecoration.ITALIC, false),
                 List.of(),
@@ -665,7 +815,7 @@ public final class StandardMenuService implements MenuService {
                 interactions);
     }
 
-    private static MenuSlot navigationButton(int slot, String title, int pageNumber, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
+    static MenuSlot navigationButton(int slot, String title, int pageNumber, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
         return new MenuSlot(slot, icon,
                 Component.text(title, NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false),
                 List.of(Component.text("Page " + pageNumber, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)),
@@ -673,15 +823,15 @@ public final class StandardMenuService implements MenuService {
                 interactions);
     }
 
-    private static MenuSlot chromeButton(int slot, String title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
+    static MenuSlot chromeButton(int slot, String title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
         return chromeButton(slot, title, icon, interactions, false);
     }
 
-    private static MenuSlot chromeButton(int slot, String title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions, boolean glow) {
+    static MenuSlot chromeButton(int slot, String title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions, boolean glow) {
         return chromeButton(slot, Component.text(title), icon, interactions, glow);
     }
 
-    private static MenuSlot chromeButton(int slot, Component title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions, boolean glow) {
+    static MenuSlot chromeButton(int slot, Component title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions, boolean glow) {
         return new MenuSlot(slot, icon, title.decoration(TextDecoration.ITALIC, false),
                 chromeLore(title, interactions), glow, interactions);
     }
@@ -717,14 +867,14 @@ public final class StandardMenuService implements MenuService {
         return promptLabel.endsWith("!") ? promptLabel : promptLabel + "!";
     }
 
-    private static void applyUtilities(Map<Integer, MenuSlot> slots, int footerStart, Map<UtilitySlot, MenuItem> utilities) {
+    static void applyUtilities(Map<Integer, MenuSlot> slots, int footerStart, Map<UtilitySlot, MenuItem> utilities) {
         for (Map.Entry<UtilitySlot, MenuItem> entry : utilities.entrySet()) {
             int slot = entry.getKey().resolveSlot(footerStart);
             slots.put(slot, HouseMenuCompiler.compile(slot, entry.getValue()));
         }
     }
 
-    private static Map<Integer, MenuSlot> createFilledSlots(int rows) {
+    static Map<Integer, MenuSlot> createFilledSlots(int rows) {
         Map<Integer, MenuSlot> slots = new LinkedHashMap<>();
         for (int slot = 0; slot < rows * 9; slot++) {
             slots.put(slot, filler(slot));
@@ -761,7 +911,7 @@ public final class StandardMenuService implements MenuService {
         return orderedSlots(slots, rows);
     }
 
-    private static List<MenuSlot> orderedSlots(Map<Integer, MenuSlot> slots, int rows) {
+    static List<MenuSlot> orderedSlots(Map<Integer, MenuSlot> slots, int rows) {
         List<MenuSlot> ordered = new ArrayList<>();
         for (int slot = 0; slot < rows * 9; slot++) {
             ordered.add(slots.get(slot));
@@ -769,7 +919,7 @@ public final class StandardMenuService implements MenuService {
         return List.copyOf(ordered);
     }
 
-    private static List<FlatTab> flattenTabs(List<MenuTabGroup> groups) {
+    static List<FlatTab> flattenTabs(List<MenuTabGroup> groups) {
         List<FlatTab> flattened = new ArrayList<>();
         for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
             MenuTabGroup group = groups.get(groupIndex);
@@ -780,7 +930,7 @@ public final class StandardMenuService implements MenuService {
         return List.copyOf(flattened);
     }
 
-    private static NavPlan buildNavPlan(List<FlatTab> flatTabs) {
+    static NavPlan buildNavPlan(List<FlatTab> flatTabs) {
         int totalRenderedWidth = renderedWidth(flatTabs, 0, flatTabs.size() - 1);
         if (totalRenderedWidth <= TABS_NAV_FULL_WIDTH) {
             return new NavPlan(false, List.of(new NavWindow(0, flatTabs.size() - 1, totalRenderedWidth)));
@@ -839,7 +989,7 @@ public final class StandardMenuService implements MenuService {
         throw new IllegalArgumentException("Unknown tab id: " + tabId);
     }
 
-    private static List<PositionedTab> positionTabs(List<FlatTab> flatTabs, NavWindow window, boolean overflow) {
+    static List<PositionedTab> positionTabs(List<FlatTab> flatTabs, NavWindow window, boolean overflow) {
         List<PositionedTab> positioned = new ArrayList<>();
         int availableWidth = overflow ? TABS_NAV_WINDOW_WIDTH : TABS_NAV_FULL_WIDTH;
         int startSlot = (overflow ? 1 : 0) + Math.max(0, (availableWidth - window.renderedWidth()) / 2);
@@ -865,9 +1015,9 @@ public final class StandardMenuService implements MenuService {
         return width;
     }
 
-    private static int contentPageCount(MenuTab tab) {
+    static int contentPageCount(MenuTab tab) {
         if (tab.content() instanceof MenuTabContent.ListContent list) {
-            return Math.max(1, (list.items().size() + TABS_LIST_CONTENT_SIZE - 1) / TABS_LIST_CONTENT_SIZE);
+            return PagedListSupport.pageCount(list.items().size(), PagedListSupport.TAB_LIST_PAGE_SIZE);
         }
         return 1;
     }
@@ -903,10 +1053,7 @@ public final class StandardMenuService implements MenuService {
     }
 
     private static Component listFrameTitle(Component title, int pageIndex, int totalPages) {
-        if (totalPages <= 1) {
-            return title;
-        }
-        return Component.text().append(title).append(Component.text(" (" + (pageIndex + 1) + "/" + totalPages + ")")).build();
+        return PagedListSupport.decorateTitle(title, pageIndex, totalPages);
     }
 
     private static int pageNumberFromFrameId(String frameId) {
@@ -924,7 +1071,7 @@ public final class StandardMenuService implements MenuService {
         return ComponentText.flatten(component);
     }
 
-    private static void validateUtilitySlots(Map<UtilitySlot, MenuItem> utilities, int footerStart, Set<Integer> reserved) {
+    static void validateUtilitySlots(Map<UtilitySlot, MenuItem> utilities, int footerStart, Set<Integer> reserved) {
         for (UtilitySlot slot : utilities.keySet()) {
             int resolved = slot.resolveSlot(footerStart);
             if (reserved.contains(resolved)) {
@@ -933,7 +1080,7 @@ public final class StandardMenuService implements MenuService {
         }
     }
 
-    private static Set<Integer> reservedSharedFooterSlots(int footerStart, boolean hasPrevious, boolean hasNext) {
+    static Set<Integer> reservedSharedFooterSlots(int footerStart, boolean hasPrevious, boolean hasNext) {
         Set<Integer> reserved = new HashSet<>();
         if (hasPrevious) {
             reserved.add(footerStart + FOOTER_PREVIOUS_OFFSET);
@@ -946,20 +1093,20 @@ public final class StandardMenuService implements MenuService {
         return reserved;
     }
 
-    private static Set<Integer> reservedCanvasFooterSlots(int footerStart) {
+    static Set<Integer> reservedCanvasFooterSlots(int footerStart) {
         Set<Integer> reserved = new HashSet<>();
         reserved.add(footerStart + FOOTER_BACK_OFFSET);
         reserved.add(footerStart + FOOTER_CLOSE_OFFSET);
         return reserved;
     }
 
-    private record FlatTab(MenuTab tab, int groupIndex) {
+    record FlatTab(MenuTab tab, int groupIndex) {
     }
 
-    private record NavWindow(int startIndex, int endIndex, int renderedWidth) {
+    record NavWindow(int startIndex, int endIndex, int renderedWidth) {
     }
 
-    private record NavPlan(boolean overflow, List<NavWindow> windows) {
+    record NavPlan(boolean overflow, List<NavWindow> windows) {
 
         int windowCount() {
             return windows.size();
@@ -974,7 +1121,7 @@ public final class StandardMenuService implements MenuService {
         }
     }
 
-    private record PositionedTab(FlatTab flatTab, int slot) {
+    record PositionedTab(FlatTab flatTab, int slot) {
     }
 
     private record TabFrameRef(String tabId, int navStart, int pageIndex) {
