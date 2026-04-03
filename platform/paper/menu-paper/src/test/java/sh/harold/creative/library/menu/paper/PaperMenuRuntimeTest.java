@@ -927,7 +927,7 @@ class PaperMenuRuntimeTest {
     }
 
     private static ReactiveMenu reactiveClickInsertMenu(boolean locked) {
-        return new StandardMenuService().reactive()
+        return new StandardMenuService().reactiveCanvas()
                 .state(new ClickInsertState(null, -1, locked))
                 .render(state -> ReactiveMenuView.builder("Reactive Click")
                         .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("hopper"))
@@ -964,7 +964,7 @@ class PaperMenuRuntimeTest {
     }
 
     private static ReactiveMenu reactiveDragInsertMenu(boolean locked) {
-        return new StandardMenuService().reactive()
+        return new StandardMenuService().reactiveCanvas()
                 .fillWithBlackPane(false)
                 .state(new DragInsertState(null, -1, null, -1, locked))
                 .render(state -> {
@@ -1046,7 +1046,7 @@ class PaperMenuRuntimeTest {
     }
 
     private static ReactiveMenu reactiveClickRoutingMenu() {
-        return new StandardMenuService().reactive()
+        return new StandardMenuService().reactiveCanvas()
                 .state(new StoredState(null))
                 .render(state -> ReactiveMenuView.builder("Reactive Routing")
                         .place(22, MenuDisplayItem.builder(MenuIcon.vanilla("stone"))

@@ -482,7 +482,7 @@ class StandardMenuServiceTest {
 
     @Test
     void reactiveMenusKeepSessionStateIsolatedAndPatchRenderedSlots() {
-        ReactiveMenu menu = menus.reactive()
+        ReactiveMenu menu = menus.reactiveCanvas()
                 .stateFactory(() -> new ToggleState(false))
                 .render(state -> ReactiveMenuView.builder("Reactive Toggle")
                         .place(13, MenuButton.builder(MenuIcon.vanilla("lever"))
@@ -518,7 +518,7 @@ class StandardMenuServiceTest {
                 .description("Shift-click a stack from the bottom inventory, or click one to load the reactive cursor and place it in the center slot.")
                 .build();
 
-        ReactiveMenu menu = menus.reactive()
+        ReactiveMenu menu = menus.reactiveCanvas()
                 .stateFactory(() -> new ToggleState(false))
                 .render(state -> ReactiveMenuView.builder("Reactive Cache")
                         .place(20, staticCard)
