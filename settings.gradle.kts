@@ -5,6 +5,8 @@ include(
     ":common:spatial-api",
     ":common:spatial-core",
     ":common:block-grid-api",
+    ":common:block-boundary-api",
+    ":common:block-boundary-core",
     ":common:tween-api",
     ":common:tween-core",
     ":common:curve-api",
