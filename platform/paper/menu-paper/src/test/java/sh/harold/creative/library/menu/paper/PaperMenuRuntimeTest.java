@@ -776,6 +776,29 @@ class PaperMenuRuntimeTest {
         assertEquals("Next Page", slotTitle(access, inventory, 53));
     }
 
+    @Test
+    void tabsPassCustomHeadIconsThroughToRenderer() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        AtomicReference<MenuIcon> firstTabIcon = new AtomicReference<>();
+        AtomicReference<MenuIcon> secondTabIcon = new AtomicReference<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, slot -> {
+            if (slot.slot() == 3) {
+                firstTabIcon.set(slot.icon());
+            }
+            if (slot.slot() == 4) {
+                secondTabIcon.set(slot.icon());
+            }
+            return PaperMenuTestSupport.renderedItem(slot.icon().key(), slot.amount(), slot.title(), slot.lore(), slot.glow());
+        }, new RecordingSoundCueService());
+
+        runtime.open(player, customHeadGalleryMenu());
+
+        assertEquals(MenuIcon.customHead("dG9vbC10ZXh0dXJl"), firstTabIcon.get());
+        assertEquals(MenuIcon.customHead("Y2hhbWJlci10ZXh0dXJl"), secondTabIcon.get());
+    }
+
     private static Menu pagedMenu() {
         return new StandardMenuService().list()
                 .title("Profiles")
@@ -854,6 +877,25 @@ class PaperMenuRuntimeTest {
                                 .build(),
                         MenuButton.builder(MenuIcon.vanilla("book"))
                                 .name("Museum Rewards")
+                                .action(ActionVerb.VIEW, context -> { })
+                                .build()
+                )))
+                .build();
+    }
+
+    private static Menu customHeadGalleryMenu() {
+        return new StandardMenuService().tabs()
+                .title("Custom Heads")
+                .defaultTab("tools")
+                .addTab(MenuTab.of("tools", "Tools", MenuIcon.customHead("dG9vbC10ZXh0dXJl"), List.of(
+                        MenuButton.builder(MenuIcon.vanilla("book"))
+                                .name("Tool Item")
+                                .action(ActionVerb.VIEW, context -> { })
+                                .build()
+                )))
+                .addTab(MenuTab.of("chambers", "Chambers", MenuIcon.customHead("Y2hhbWJlci10ZXh0dXJl"), List.of(
+                        MenuButton.builder(MenuIcon.vanilla("book"))
+                                .name("Chamber Item")
                                 .action(ActionVerb.VIEW, context -> { })
                                 .build()
                 )))

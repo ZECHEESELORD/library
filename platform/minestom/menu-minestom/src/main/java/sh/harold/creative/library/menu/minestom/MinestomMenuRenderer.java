@@ -3,7 +3,6 @@ package sh.harold.creative.library.menu.minestom;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.minestom.server.item.ItemStack;
-import net.minestom.server.item.Material;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.core.MenuTrace;
 
@@ -36,12 +35,7 @@ public final class MinestomMenuRenderer {
     }
 
     private static ItemStack createItem(MenuSlot slot) {
-        Material material = Material.fromKey(slot.icon().key());
-        if (material == null) {
-            throw new IllegalArgumentException("Unknown Minestom material for menu icon: " + slot.icon().key());
-        }
-
-        return ItemStack.of(material, slot.amount())
+        return MinestomMenuIcons.createItem(slot.icon(), slot.amount())
                 .withCustomName(slot.title())
                 .withLore(slot.lore())
                 .withGlowing(slot.glow())

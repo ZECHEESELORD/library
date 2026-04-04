@@ -124,6 +124,10 @@ public final class MinestomMenuPlatform implements AutoCloseable {
         return MenuStack.builder(icon(itemStack));
     }
 
+    public MenuTab.Builder tab(String id, MenuIcon icon) {
+        return MenuTab.builder(id, Objects.requireNonNull(icon, "icon"));
+    }
+
     public MenuTab.Builder tab(String id, Material material) {
         return MenuTab.builder(id, icon(material));
     }
@@ -179,8 +183,7 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     }
 
     private static MenuIcon icon(ItemStack itemStack) {
-        Objects.requireNonNull(itemStack, "itemStack");
-        return icon(itemStack.material());
+        return MinestomMenuIcons.fromItemStack(Objects.requireNonNull(itemStack, "itemStack"));
     }
 
     private static MenuTickScheduler scheduleTicks() {

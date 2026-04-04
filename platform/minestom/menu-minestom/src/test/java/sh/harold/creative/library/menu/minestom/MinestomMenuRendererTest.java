@@ -7,6 +7,8 @@ import net.kyori.adventure.text.format.TextColor;
 import net.minestom.server.component.DataComponents;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
+import net.minestom.server.network.player.GameProfile;
+import net.minestom.server.network.player.ResolvableProfile;
 import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuSlot;
@@ -48,6 +50,33 @@ class MinestomMenuRendererTest {
         assertEquals(ItemStack.of(Material.EMERALD).withoutExtraTooltip().get(DataComponents.TOOLTIP_DISPLAY),
                 rendered.get(DataComponents.TOOLTIP_DISPLAY));
         assertTrue(rendered.get(DataComponents.TOOLTIP_DISPLAY).hiddenComponents().contains(DataComponents.ATTRIBUTE_MODIFIERS));
+    }
+
+    @Test
+    void rendererAppliesCustomHeadProfiles() {
+        MenuSlot slot = new MenuSlot(
+                13,
+                MenuIcon.customHead("dGV4dHVyZS12YWx1ZQ=="),
+                Component.text("Custom Head"),
+                List.of(),
+                false,
+                Map.of());
+
+        ItemStack rendered = new MinestomMenuRenderer().render(slot);
+        ResolvableProfile profile = rendered.get(DataComponents.PROFILE);
+
+        assertEquals("minecraft:player_head", rendered.material().key().asString());
+        assertEquals("dGV4dHVyZS12YWx1ZQ==", textureValue(profile));
+    }
+
+    private static String textureValue(ResolvableProfile profile) {
+        return profile.profile()
+                .unify(GameProfile::properties, ResolvableProfile.Partial::properties)
+                .stream()
+                .filter(property -> "textures".equals(property.name()))
+                .map(GameProfile.Property::value)
+                .findFirst()
+                .orElseThrow();
     }
 
     private static String flatten(Component component) {

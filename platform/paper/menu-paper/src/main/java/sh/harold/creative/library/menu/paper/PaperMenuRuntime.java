@@ -602,7 +602,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (type == null || type == Material.AIR) {
             return null;
         }
-        MenuStack.Builder builder = MenuStack.builder(MenuIcon.vanilla(type.getKey().asString()))
+        MenuStack.Builder builder = MenuStack.builder(PaperMenuIcons.fromItemStack(itemStack))
                 .amount(Math.max(1, itemStack.getAmount()));
         ItemMeta meta = itemStack.getItemMeta();
         Component name = meta != null ? meta.displayName() : null;

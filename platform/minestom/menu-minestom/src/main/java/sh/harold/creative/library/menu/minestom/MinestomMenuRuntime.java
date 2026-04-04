@@ -535,7 +535,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (material == Material.AIR) {
             return null;
         }
-        MenuStack.Builder builder = MenuStack.builder(MenuIcon.vanilla(material.key().asString()))
+        MenuStack.Builder builder = MenuStack.builder(MinestomMenuIcons.fromItemStack(itemStack))
                 .amount(Math.max(1, itemStack.amount()));
         Component name = itemStack.get(DataComponents.CUSTOM_NAME);
         if (name != null) {

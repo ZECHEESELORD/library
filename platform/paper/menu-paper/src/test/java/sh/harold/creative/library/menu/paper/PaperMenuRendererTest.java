@@ -36,14 +36,14 @@ class PaperMenuRendererTest {
                 true,
                 Map.of());
 
-        AtomicReference<String> createdKey = new AtomicReference<>();
-        ItemStack rendered = new PaperMenuRenderer(key -> {
-            createdKey.set(key);
-            return PaperMenuTestSupport.renderedItem(key, 1, null, null, false);
+        AtomicReference<MenuIcon> createdIcon = new AtomicReference<>();
+        ItemStack rendered = new PaperMenuRenderer(icon -> {
+            createdIcon.set(icon);
+            return PaperMenuTestSupport.renderedItem(icon.key(), 1, null, null, false);
         }).render(slot);
         org.bukkit.inventory.meta.ItemMeta renderedMeta = rendered.getItemMeta();
 
-        assertEquals("minecraft:emerald", createdKey.get());
+        assertEquals(MenuIcon.vanilla("emerald"), createdIcon.get());
         assertEquals("Museum Rewards", flatten(renderedMeta.displayName()));
         assertEquals(TextColor.color(0xFFAA00), renderedMeta.displayName().color());
         assertEquals(List.of("Bits Available: 10,420", "", "CLICK to view"),
@@ -52,6 +52,27 @@ class PaperMenuRendererTest {
         assertEquals(TextColor.color(0x55FFFF), renderedMeta.lore().getFirst().children().get(1).color());
         assertTrue(Boolean.TRUE.equals(renderedMeta.getEnchantmentGlintOverride()));
         assertEquals(Set.of(ItemFlag.values()), renderedMeta.getItemFlags());
+    }
+
+    @Test
+    void rendererPassesCustomHeadIconsToFactory() {
+        MenuSlot slot = new MenuSlot(
+                13,
+                MenuIcon.customHead("dGV4dHVyZS12YWx1ZQ=="),
+                Component.text("Custom Head"),
+                List.of(),
+                false,
+                Map.of());
+
+        AtomicReference<MenuIcon> createdIcon = new AtomicReference<>();
+        new PaperMenuRenderer(icon -> {
+            createdIcon.set(icon);
+            return PaperMenuTestSupport.renderedItem(icon.key(), 1, null, null, false);
+        }).render(slot);
+
+        assertEquals(MenuIcon.customHead("dGV4dHVyZS12YWx1ZQ=="), createdIcon.get());
+        assertTrue(createdIcon.get().isCustomHead());
+        assertEquals("dGV4dHVyZS12YWx1ZQ==", createdIcon.get().textureValue());
     }
 
     private static String flatten(Component component) {

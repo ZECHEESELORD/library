@@ -12,6 +12,7 @@ import net.minestom.server.event.player.PlayerDisconnectEvent;
 import net.minestom.server.network.packet.server.SendablePacket;
 import net.minestom.server.network.player.GameProfile;
 import net.minestom.server.network.player.PlayerConnection;
+import net.minestom.server.network.player.ResolvableProfile;
 import net.minestom.server.entity.Player;
 import net.minestom.server.inventory.AbstractInventory;
 import net.minestom.server.inventory.Inventory;
@@ -699,6 +700,18 @@ class MinestomMenuRuntimeTest {
         assertEquals("Next Page", slotTitle(inventory, 53));
     }
 
+    @Test
+    void tabsRenderCustomHeadProfilesInTheStrip() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = runtime();
+
+        runtime.open(player, customHeadGalleryMenu());
+        Inventory inventory = player.lastOpenedInventory();
+
+        assertEquals("dG9vbC10ZXh0dXJl", textureValue(inventory.getItemStack(3).get(DataComponents.PROFILE)));
+        assertEquals("Y2hhbWJlci10ZXh0dXJl", textureValue(inventory.getItemStack(4).get(DataComponents.PROFILE)));
+    }
+
     private static Menu pagedMenu() {
         return new StandardMenuService().list()
                 .title("Profiles")
@@ -753,6 +766,25 @@ class MinestomMenuRuntimeTest {
                                 .build(),
                         MenuButton.builder(MenuIcon.vanilla("book"))
                                 .name("Museum Rewards")
+                                .action(ActionVerb.VIEW, context -> { })
+                                .build()
+                )))
+                .build();
+    }
+
+    private static Menu customHeadGalleryMenu() {
+        return new StandardMenuService().tabs()
+                .title("Custom Heads")
+                .defaultTab("tools")
+                .addTab(MenuTab.of("tools", "Tools", MenuIcon.customHead("dG9vbC10ZXh0dXJl"), List.of(
+                        MenuButton.builder(MenuIcon.vanilla("book"))
+                                .name("Tool Item")
+                                .action(ActionVerb.VIEW, context -> { })
+                                .build()
+                )))
+                .addTab(MenuTab.of("chambers", "Chambers", MenuIcon.customHead("Y2hhbWJlci10ZXh0dXJl"), List.of(
+                        MenuButton.builder(MenuIcon.vanilla("book"))
+                                .name("Chamber Item")
                                 .action(ActionVerb.VIEW, context -> { })
                                 .build()
                 )))
@@ -1065,6 +1097,16 @@ class MinestomMenuRuntimeTest {
 
     private static String itemTitle(ItemStack itemStack) {
         return flatten(itemStack.get(DataComponents.CUSTOM_NAME));
+    }
+
+    private static String textureValue(ResolvableProfile profile) {
+        return profile.profile()
+                .unify(GameProfile::properties, ResolvableProfile.Partial::properties)
+                .stream()
+                .filter(property -> "textures".equals(property.name()))
+                .map(GameProfile.Property::value)
+                .findFirst()
+                .orElseThrow();
     }
 
     private static List<String> slotLore(Inventory inventory, int slot) {

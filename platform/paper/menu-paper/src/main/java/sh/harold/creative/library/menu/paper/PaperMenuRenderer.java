@@ -46,7 +46,7 @@ public final class PaperMenuRenderer implements PaperMenuSlotRenderer {
     }
 
     private ItemStack createItem(MenuSlot slot) {
-        ItemStack itemStack = itemFactory.create(slot.icon().key());
+        ItemStack itemStack = itemFactory.create(slot.icon());
         itemStack.setAmount(slot.amount());
         itemStack.editMeta(meta -> applyMeta(meta, slot));
         return itemStack;
