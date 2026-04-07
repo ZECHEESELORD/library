@@ -4,6 +4,7 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.MongoClients;
+import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.ReplaceOptions;
 import com.mongodb.client.model.UpdateOptions;
@@ -112,6 +113,16 @@ public final class MongoDocumentStore implements DocumentStore {
     @Override
     public CompletionStage<Long> count(String namespace, String collection) {
         return CompletableFuture.supplyAsync(() -> collection(namespace, collection).countDocuments(), executor);
+    }
+
+    @Override
+    public CompletionStage<List<String>> listIds(String namespace, String collection) {
+        return CompletableFuture.supplyAsync(() -> collection(namespace, collection)
+                .find()
+                .projection(new Document("_id", 1))
+                .sort(Sorts.ascending("_id"))
+                .map(document -> document.getString("_id"))
+                .into(new ArrayList<>()), executor);
     }
 
     @Override

@@ -9,6 +9,7 @@ import sh.harold.creative.library.data.WriteCondition;
 import sh.harold.creative.library.data.WriteResult;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -109,6 +110,11 @@ public final class InMemoryDocumentStore implements DocumentStore {
     @Override
     public CompletionStage<Long> count(String namespace, String collection) {
         return CompletableFuture.completedFuture((long) documents(namespace, collection).size());
+    }
+
+    @Override
+    public CompletionStage<List<String>> listIds(String namespace, String collection) {
+        return CompletableFuture.completedFuture(documents(namespace, collection).keySet().stream().sorted().toList());
     }
 
     @Override

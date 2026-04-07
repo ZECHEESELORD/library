@@ -102,6 +102,10 @@ public final class MenuSessionState {
         return currentView().cursor();
     }
 
+    public void invalidateView() {
+        invalidate();
+    }
+
     public void open(MenuDefinition menu) {
         history.clear();
         this.current = newEntry(menu);

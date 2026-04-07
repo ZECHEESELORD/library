@@ -7,6 +7,7 @@ import sh.harold.creative.library.data.DocumentKey;
 import sh.harold.creative.library.data.DocumentStore;
 
 import java.util.Objects;
+import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 final class StoreBackedDocumentCollection implements DocumentCollection {
@@ -44,6 +45,11 @@ final class StoreBackedDocumentCollection implements DocumentCollection {
     @Override
     public CompletionStage<Long> count() {
         return store.count(namespace.name(), name);
+    }
+
+    @Override
+    public CompletionStage<List<String>> listIds() {
+        return store.listIds(namespace.name(), name);
     }
 
     private static String requireName(String value) {

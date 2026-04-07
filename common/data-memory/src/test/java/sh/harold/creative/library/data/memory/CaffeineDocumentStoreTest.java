@@ -10,6 +10,7 @@ import sh.harold.creative.library.data.WriteResult;
 import sh.harold.creative.library.data.core.CaffeineDocumentStore;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -119,6 +120,11 @@ class CaffeineDocumentStoreTest {
         @Override
         public CompletionStage<Long> count(String namespace, String collection) {
             return delegate.count(namespace, collection);
+        }
+
+        @Override
+        public CompletionStage<List<String>> listIds(String namespace, String collection) {
+            return delegate.listIds(namespace, collection);
         }
 
         @Override

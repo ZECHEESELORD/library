@@ -176,6 +176,22 @@ class MinestomMenuRuntimeTest {
     }
 
     @Test
+    void refreshRebuildsReactiveMenuAfterExternalStateMutation() {
+        TestPlayer player = player();
+        MinestomMenuRuntime runtime = runtime();
+        AtomicBoolean enabled = new AtomicBoolean(false);
+
+        runtime.open(player, reactiveRefreshMenu(enabled));
+        Inventory inventory = player.lastOpenedInventory();
+        assertEquals("Reactive Refresh: Off", slotTitle(inventory, 22));
+
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(22)));
+
+        assertEquals("Reactive Refresh: On", slotTitle(inventory, 22));
+        assertEquals(1, player.openCount());
+    }
+
+    @Test
     void closeAndSpoofedInventoriesDoNotRouteByTitle() {
         TestPlayer player = player();
         MinestomMenuRuntime runtime = runtime();
@@ -891,6 +907,22 @@ class MinestomMenuRuntimeTest {
                     }
                     return ReactiveMenuResult.stay(state);
                 })
+                .build();
+    }
+
+    private static ReactiveMenu reactiveRefreshMenu(AtomicBoolean enabled) {
+        return new StandardMenuService().reactiveCanvas()
+                .state(enabled)
+                .render(state -> ReactiveMenuView.builder("Reactive Refresh")
+                        .place(22, MenuButton.builder(MenuIcon.vanilla("lever"))
+                                .name(state.get() ? "Reactive Refresh: On" : "Reactive Refresh: Off")
+                                .action(ActionVerb.TOGGLE, context -> {
+                                    state.set(!state.get());
+                                    context.refresh();
+                                })
+                                .build())
+                        .build())
+                .reduce((state, input) -> ReactiveMenuResult.stay(state))
                 .build();
     }
 

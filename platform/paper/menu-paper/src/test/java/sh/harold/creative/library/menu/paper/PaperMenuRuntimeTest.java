@@ -125,6 +125,24 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
+    void refreshRebuildsReactiveMenuAfterExternalStateMutation() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+        AtomicBoolean enabled = new AtomicBoolean(false);
+
+        runtime.open(player, reactiveRefreshMenu(enabled));
+        Inventory inventory = access.lastOpenedInventory();
+        assertEquals("Reactive Refresh: Off", slotTitle(access, inventory, 22));
+
+        runtime.onInventoryClick(click(player, inventory, 22, ClickType.LEFT));
+
+        assertEquals("Reactive Refresh: On", slotTitle(access, inventory, 22));
+        assertEquals(1, access.openedInventories.size());
+    }
+
+    @Test
     void compiledMenusIgnoreDoubleAndShiftClickVariants() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
@@ -1002,6 +1020,22 @@ class PaperMenuRuntimeTest {
                     }
                     return ReactiveMenuResult.stay(state);
                 })
+                .build();
+    }
+
+    private static ReactiveMenu reactiveRefreshMenu(AtomicBoolean enabled) {
+        return new StandardMenuService().reactiveCanvas()
+                .state(enabled)
+                .render(state -> ReactiveMenuView.builder("Reactive Refresh")
+                        .place(22, MenuButton.builder(MenuIcon.vanilla("lever"))
+                                .name(state.get() ? "Reactive Refresh: On" : "Reactive Refresh: Off")
+                                .action(ActionVerb.TOGGLE, context -> {
+                                    state.set(!state.get());
+                                    context.refresh();
+                                })
+                                .build())
+                        .build())
+                .reduce((state, input) -> ReactiveMenuResult.stay(state))
                 .build();
     }
 

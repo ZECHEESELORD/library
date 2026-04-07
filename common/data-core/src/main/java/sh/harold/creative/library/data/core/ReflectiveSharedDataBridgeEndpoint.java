@@ -8,6 +8,7 @@ import sh.harold.creative.library.data.SharedDataProvider;
 import sh.harold.creative.library.data.WriteCondition;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
@@ -31,6 +32,10 @@ public final class ReflectiveSharedDataBridgeEndpoint {
 
     public CompletionStage<Long> count(String callerId, String namespace, String collection) {
         return namespace(callerId, namespace).collection(collection).count();
+    }
+
+    public CompletionStage<List<String>> listIds(String callerId, String namespace, String collection) {
+        return namespace(callerId, namespace).collection(collection).listIds();
     }
 
     public CompletionStage<Map<String, Object>> read(String callerId, String namespace, String collection, String id) {

@@ -196,6 +196,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (sessions.get(session.viewer().getUuid()) != session) {
             return;
         }
+        session.state().invalidateView();
         MenuTrace.time("session.renderCurrentView", session::renderCurrentView);
     }
 

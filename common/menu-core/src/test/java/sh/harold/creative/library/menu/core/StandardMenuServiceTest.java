@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -548,6 +549,28 @@ class StandardMenuServiceTest {
         String secondSummary = summaryLine(secondLogs, "refresh");
         assertTrue(secondSummary.contains("placementCompileHits=\"1\""));
         assertTrue(secondSummary.contains("placementCompileMisses=\"1\""));
+    }
+
+    @Test
+    void invalidateViewRebuildsReactiveMenusAfterExternalStateMutation() {
+        AtomicBoolean enabled = new AtomicBoolean(false);
+        ReactiveMenu menu = menus.reactiveCanvas()
+                .state(enabled)
+                .render(state -> ReactiveMenuView.builder("Reactive Refresh")
+                        .place(22, MenuDisplayItem.builder(MenuIcon.vanilla("lever"))
+                                .name(state.get() ? "Refresh: On" : "Refresh: Off")
+                                .build())
+                        .build())
+                .reduce((state, input) -> ReactiveMenuResult.stay(state))
+                .build();
+
+        MenuSessionState session = new MenuSessionState(menu);
+        assertEquals("Refresh: Off", titleAt(session.currentFrame(), 22));
+
+        enabled.set(true);
+        session.invalidateView();
+
+        assertEquals("Refresh: On", titleAt(session.currentFrame(), 22));
     }
 
     @Test

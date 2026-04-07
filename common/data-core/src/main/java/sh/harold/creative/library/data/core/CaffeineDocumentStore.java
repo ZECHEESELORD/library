@@ -10,6 +10,7 @@ import sh.harold.creative.library.data.WriteCondition;
 import sh.harold.creative.library.data.WriteResult;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -70,6 +71,11 @@ public final class CaffeineDocumentStore implements DocumentStore {
     @Override
     public CompletionStage<Long> count(String namespace, String collection) {
         return delegate.count(namespace, collection);
+    }
+
+    @Override
+    public CompletionStage<List<String>> listIds(String namespace, String collection) {
+        return delegate.listIds(namespace, collection);
     }
 
     @Override

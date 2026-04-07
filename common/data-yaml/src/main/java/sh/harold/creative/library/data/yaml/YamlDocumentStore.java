@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -130,6 +131,27 @@ public final class YamlDocumentStore implements DocumentStore {
                 return stream.filter(path -> path.getFileName().toString().endsWith(".yml")).count();
             } catch (IOException exception) {
                 throw new IllegalStateException("failed to count YAML documents in " + directory, exception);
+            }
+        }, executor);
+    }
+
+    @Override
+    public CompletionStage<List<String>> listIds(String namespace, String collection) {
+        return CompletableFuture.supplyAsync(() -> {
+            Path directory = collectionDirectory(namespace, collection);
+            if (!Files.isDirectory(directory)) {
+                return List.of();
+            }
+            try (var stream = Files.list(directory)) {
+                return stream
+                        .filter(path -> path.getFileName().toString().endsWith(".yml"))
+                        .map(path -> path.getFileName().toString())
+                        .map(fileName -> fileName.substring(0, fileName.length() - 4))
+                        .map(YamlDocumentStore::decodeSegment)
+                        .sorted()
+                        .toList();
+            } catch (IOException exception) {
+                throw new IllegalStateException("failed to list YAML documents in " + directory, exception);
             }
         }, executor);
     }
@@ -261,6 +283,26 @@ public final class YamlDocumentStore implements DocumentStore {
             }
             builder.append('%');
             builder.append(String.format("%04x", (int) character));
+        }
+        return builder.toString();
+    }
+
+    private static String decodeSegment(String value) {
+        Objects.requireNonNull(value, "value");
+        StringBuilder builder = new StringBuilder(value.length());
+        for (int index = 0; index < value.length(); ) {
+            char character = value.charAt(index);
+            if (character != '%') {
+                builder.append(character);
+                index++;
+                continue;
+            }
+            if (index + 5 > value.length()) {
+                throw new IllegalArgumentException("invalid encoded segment: " + value);
+            }
+            String hex = value.substring(index + 1, index + 5);
+            builder.append((char) Integer.parseInt(hex, 16));
+            index += 5;
         }
         return builder.toString();
     }

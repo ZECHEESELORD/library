@@ -134,6 +134,11 @@ public final class ReflectiveSharedDataClient {
         public CompletionStage<Long> count() {
             return endpoint.count(callerId, namespace.name(), name);
         }
+
+        @Override
+        public CompletionStage<List<String>> listIds() {
+            return endpoint.listIds(callerId, namespace.name(), name);
+        }
     }
 
     private static final class RemoteDocument implements Document {
@@ -180,6 +185,7 @@ public final class ReflectiveSharedDataClient {
         private final Method defaultNamespace;
         private final Method canAccessNamespace;
         private final Method count;
+        private final Method listIds;
         private final Method read;
         private final Method write;
         private final Method patch;
@@ -190,6 +196,7 @@ public final class ReflectiveSharedDataClient {
             this.defaultNamespace = method("defaultNamespace", String.class);
             this.canAccessNamespace = method("canAccessNamespace", String.class, String.class);
             this.count = method("count", String.class, String.class, String.class);
+            this.listIds = method("listIds", String.class, String.class, String.class);
             this.read = method("read", String.class, String.class, String.class, String.class);
             this.write = method("write", String.class, String.class, String.class, String.class, Map.class, Map.class);
             this.patch = method("patch", String.class, String.class, String.class, String.class, Map.class, Map.class);
@@ -207,6 +214,11 @@ public final class ReflectiveSharedDataClient {
         private CompletionStage<Long> count(String callerId, String namespace, String collection) {
             return invokeStage(count, callerId, namespace, collection)
                     .thenApply(value -> ((Number) value).longValue());
+        }
+
+        private CompletionStage<List<String>> listIds(String callerId, String namespace, String collection) {
+            return invokeStage(listIds, callerId, namespace, collection)
+                    .thenApply(value -> ((List<?>) value).stream().map(String::valueOf).toList());
         }
 
         private CompletionStage<DocumentSnapshot> read(String callerId, DocumentKey key) {
