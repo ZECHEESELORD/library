@@ -86,6 +86,27 @@ class HouseMenuCompilerTest {
     }
 
     @Test
+    void mutedLineRendersAsSeparateDarkGrayMetadataBlock() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("lightning_rod"))
+                .name("Lightning")
+                .secondary("Starter Pack")
+                .description("Call lightning on the active player. Damage is optional.")
+                .mutedLine("ID: TWITCH.LIGHTNING")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of(
+                "Starter Pack",
+                "",
+                "Call lightning on the active",
+                "player. Damage is optional.",
+                "",
+                "ID: TWITCH.LIGHTNING"), lore(slot));
+        assertEquals(NamedTextColor.DARK_GRAY, slot.lore().getLast().color());
+    }
+
+    @Test
     void bulletsStayOnOneLineUntilTheyReachTheBulletHardLimit() {
         MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("golden_hoe"))
                 .name("Farming XLIX")

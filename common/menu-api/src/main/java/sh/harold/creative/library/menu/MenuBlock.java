@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
-public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines, MenuBlock.ValueLines, MenuBlock.Pairs, MenuBlock.Bullets, MenuBlock.Progress {
+public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines, MenuBlock.MutedLines, MenuBlock.ValueLines, MenuBlock.Pairs, MenuBlock.Bullets, MenuBlock.Progress {
 
     enum WrapMode {
         /**
@@ -33,6 +33,13 @@ public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines
         public Lines {
             lines = immutableLines(lines, "lines");
             wrapMode = Objects.requireNonNull(wrapMode, "wrapMode");
+        }
+    }
+
+    record MutedLines(List<String> lines) implements MenuBlock {
+
+        public MutedLines {
+            lines = immutableLines(lines, "lines");
         }
     }
 

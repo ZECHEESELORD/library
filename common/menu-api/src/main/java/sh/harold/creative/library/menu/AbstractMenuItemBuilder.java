@@ -58,6 +58,19 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return lines(MenuBlock.WrapMode.SINGLE_LINE, List.of(requireText(line, "line")));
     }
 
+    public B mutedLine(String line) {
+        return mutedLines(List.of(requireText(line, "line")));
+    }
+
+    public B mutedLines(String... lines) {
+        return mutedLines(List.of(lines));
+    }
+
+    public B mutedLines(Iterable<String> lines) {
+        blocks.add(new MenuBlock.MutedLines(copyText(lines, "lines")));
+        return self();
+    }
+
     /**
      * Adds one long line that may rebalance into wrapped lore when it no longer fits cleanly
      * within the shared character-count cap.
