@@ -116,6 +116,7 @@ public final class HouseMenuCompiler {
                     .map(line -> text(line, BODY_NEUTRAL))
                     .toList();
             case MenuBlock.Lines lines -> renderLines(lines.lines(), lines.wrapMode());
+            case MenuBlock.MutedLines lines -> renderMutedLines(lines.lines());
             case MenuBlock.ValueLines valueLines -> renderValueLines(valueLines.lines(), valueLines.wrapMode());
             case MenuBlock.Pairs pairs -> renderPairs(pairs.pairs(), pairs.wrapMode());
             case MenuBlock.Bullets bullets -> renderBullets(bullets.bullets());
@@ -131,6 +132,14 @@ public final class HouseMenuCompiler {
             for (String wrappedLine : wrapped) {
                 rendered.add(text(wrappedLine, BODY_NEUTRAL));
             }
+        }
+        return rendered;
+    }
+
+    private static List<Component> renderMutedLines(List<String> lines) {
+        List<Component> rendered = new ArrayList<>();
+        for (String line : lines) {
+            rendered.add(text(line, MUTED_NEUTRAL));
         }
         return rendered;
     }
