@@ -1,5 +1,6 @@
 package sh.harold.creative.library.data.mongodb;
 
+import com.mongodb.ErrorCategory;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
@@ -30,6 +31,8 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public final class MongoDocumentStore implements DocumentStore {
 
@@ -42,6 +45,7 @@ public final class MongoDocumentStore implements DocumentStore {
     private final Executor executor;
     private final ExecutorService ownedExecutor;
     private final boolean closeClient;
+    private volatile boolean initialized;
 
     public MongoDocumentStore(String connectionString, String databaseName) {
         this(MongoClients.create(connectionString), databaseName, null, true);
@@ -70,65 +74,69 @@ public final class MongoDocumentStore implements DocumentStore {
         this.executor = executor == null ? defaultExecutor : executor;
         this.ownedExecutor = defaultExecutor;
         this.closeClient = closeClient;
-        validateConnection();
     }
 
     @Override
     public CompletionStage<DocumentSnapshot> read(DocumentKey key) {
-        return CompletableFuture.supplyAsync(() -> readSync(key).snapshot(), executor);
+        return supplyAsync(() -> readSync(key).snapshot());
     }
 
     @Override
     public CompletionStage<WriteResult> write(DocumentKey key, Map<String, Object> data, WriteCondition condition) {
-        return CompletableFuture.supplyAsync(() ->
-                mutate(key, condition, current -> MutationAction.write(DocumentValues.normalizeRoot(data))), executor);
+        return supplyAsync(() -> mutate(key, condition, current -> MutationAction.write(DocumentValues.normalizeRoot(data))));
     }
 
     @Override
     public CompletionStage<WriteResult> patch(DocumentKey key, DocumentPatch patch, WriteCondition condition) {
-        return CompletableFuture.supplyAsync(() ->
-                mutate(key, condition, current -> {
-                    Map<String, Object> working = current.exists()
-                            ? DocumentValues.deepCopyMap(current.data())
-                            : new LinkedHashMap<>();
-                    for (Map.Entry<String, Object> entry : patch.setValues().entrySet()) {
-                        DocumentValues.writePath(working, entry.getKey(), entry.getValue());
-                    }
-                    for (String path : patch.removePaths()) {
-                        DocumentValues.removePath(working, path);
-                    }
-                    if (!current.exists() && working.isEmpty()) {
-                        return MutationAction.noop();
-                    }
-                    return MutationAction.write(working);
-                }), executor);
+        return supplyAsync(() -> mutate(key, condition, current -> {
+            Map<String, Object> working = current.exists()
+                    ? DocumentValues.deepCopyMap(current.data())
+                    : new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : patch.setValues().entrySet()) {
+                DocumentValues.writePath(working, entry.getKey(), entry.getValue());
+            }
+            for (String path : patch.removePaths()) {
+                DocumentValues.removePath(working, path);
+            }
+            if (!current.exists() && working.isEmpty()) {
+                return MutationAction.noop();
+            }
+            return MutationAction.write(working);
+        }));
     }
 
     @Override
     public CompletionStage<WriteResult> delete(DocumentKey key, WriteCondition condition) {
-        return CompletableFuture.supplyAsync(() ->
-                mutate(key, condition, current -> current.exists() ? MutationAction.delete() : MutationAction.noop()), executor);
+        return supplyAsync(() -> mutate(key, condition, current -> current.exists() ? MutationAction.delete() : MutationAction.noop()));
     }
 
     @Override
     public CompletionStage<Long> count(String namespace, String collection) {
-        return CompletableFuture.supplyAsync(() -> collection(namespace, collection).countDocuments(), executor);
+        return supplyAsync(() -> collection(namespace, collection).countDocuments());
     }
 
     @Override
     public CompletionStage<List<String>> listIds(String namespace, String collection) {
-        return CompletableFuture.supplyAsync(() -> collection(namespace, collection)
+        return supplyAsync(() -> collection(namespace, collection)
                 .find()
                 .projection(new Document("_id", 1))
                 .sort(Sorts.ascending("_id"))
                 .map(document -> document.getString("_id"))
-                .into(new ArrayList<>()), executor);
+                .into(new ArrayList<>()));
     }
 
     @Override
     public void close() {
         if (ownedExecutor != null) {
-            ownedExecutor.shutdownNow();
+            ownedExecutor.shutdown();
+            try {
+                if (!ownedExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    ownedExecutor.shutdownNow();
+                }
+            } catch (InterruptedException exception) {
+                ownedExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
         if (closeClient) {
             client.close();
@@ -197,7 +205,10 @@ public final class MongoDocumentStore implements DocumentStore {
             collection(key.namespace(), key.collection()).insertOne(storedDocument(key, data, revision));
             return true;
         } catch (com.mongodb.MongoWriteException exception) {
-            return false;
+            if (isDuplicateKeyInsertFailure(exception)) {
+                return false;
+            }
+            throw exception;
         }
     }
 
@@ -303,6 +314,25 @@ public final class MongoDocumentStore implements DocumentStore {
         revisionCollection().createIndex(new Document("_id", 1));
     }
 
+    private void ensureInitialized() {
+        if (initialized) {
+            return;
+        }
+        synchronized (this) {
+            if (!initialized) {
+                validateConnection();
+                initialized = true;
+            }
+        }
+    }
+
+    private <T> CompletionStage<T> supplyAsync(Supplier<T> supplier) {
+        return CompletableFuture.supplyAsync(() -> {
+            ensureInitialized();
+            return supplier.get();
+        }, executor);
+    }
+
     private static ExecutorService createExecutor() {
         return Executors.newFixedThreadPool(4, runnable -> {
             Thread thread = new Thread(runnable, "data-mongodb");
@@ -332,6 +362,11 @@ public final class MongoDocumentStore implements DocumentStore {
             throw new IllegalArgumentException(label + " cannot be blank");
         }
         return value;
+    }
+
+    static boolean isDuplicateKeyInsertFailure(com.mongodb.MongoWriteException exception) {
+        Objects.requireNonNull(exception, "exception");
+        return exception.getError() != null && exception.getError().getCategory() == ErrorCategory.DUPLICATE_KEY;
     }
 
     private record StoredState(DocumentKey key, boolean exists, long revision, Map<String, Object> data) {

@@ -63,6 +63,32 @@ class YamlDataApiTest {
     }
 
     @Test
+    void yamlDeletedRevisionSurvivesRestart() throws Exception {
+        Path root = tempDir.resolve("yaml-store");
+
+        String deletedRevision;
+        try (YamlDataApi api = new YamlDataApi(root)) {
+            Document document = api.namespace("plugin-a").collection("players").document("alpha");
+            WriteResult created = await(document.write(Map.of("name", "Alice")));
+            WriteResult deleted = await(document.delete(WriteCondition.exists()));
+            assertTrue(created.applied());
+            assertTrue(deleted.applied());
+            deletedRevision = deleted.snapshot().orElseThrow().revision();
+        }
+
+        try (YamlDataApi api = new YamlDataApi(root)) {
+            Document document = api.namespace("plugin-a").collection("players").document("alpha");
+            DocumentSnapshot snapshot = await(document.read());
+            assertFalse(snapshot.exists());
+            assertEquals(deletedRevision, snapshot.revision());
+
+            WriteResult recreated = await(document.write(Map.of("name", "Bob"), WriteCondition.revision(deletedRevision)));
+            assertTrue(recreated.applied());
+            assertEquals("Bob", recreated.snapshot().orElseThrow().get("name", String.class).orElseThrow());
+        }
+    }
+
+    @Test
     void yamlValidatesRootDirectoryEagerly() throws Exception {
         Path file = tempDir.resolve("not-a-directory");
         Files.writeString(file, "x");
