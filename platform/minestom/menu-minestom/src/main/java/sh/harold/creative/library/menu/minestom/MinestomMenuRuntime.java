@@ -10,6 +10,7 @@ import net.minestom.server.event.Event;
 import net.minestom.server.event.EventNode;
 import net.minestom.server.event.inventory.InventoryCloseEvent;
 import net.minestom.server.event.inventory.InventoryPreClickEvent;
+import net.minestom.server.event.player.PlayerChatEvent;
 import net.minestom.server.event.player.PlayerDisconnectEvent;
 import net.minestom.server.inventory.AbstractInventory;
 import net.minestom.server.inventory.Inventory;
@@ -29,6 +30,8 @@ import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
+import sh.harold.creative.library.menu.ReactiveTextPromptMode;
+import sh.harold.creative.library.menu.ReactiveTextPromptRequest;
 import sh.harold.creative.library.menu.core.HouseMenuCompiler;
 import sh.harold.creative.library.menu.core.MenuTrace;
 import sh.harold.creative.library.menu.core.MenuSessionState;
@@ -55,6 +58,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
     private final Function<Runnable, MenuTickHandle> nextTickScheduler;
     private final MenuTraceController traceController;
     private final Consumer<String> traceSink;
+    private final Map<UUID, PendingTextPrompt> prompts = new ConcurrentHashMap<>();
 
     MinestomMenuRuntime(MinestomMenuRenderer renderer, SoundCueService sounds) {
         this(renderer, sounds, MenuTickScheduler.unsupported(), MinestomMenuRuntime::scheduleOnServerTick,
@@ -85,6 +89,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
         EventNode<Event> node = EventNode.all(name);
         node.addListener(InventoryPreClickEvent.class, this::onInventoryPreClick);
         node.addListener(InventoryCloseEvent.class, this::onInventoryClose);
+        node.addListener(PlayerChatEvent.class, this::onPlayerChat);
         node.addListener(PlayerDisconnectEvent.class, this::onPlayerDisconnect);
         return node;
     }
@@ -165,13 +170,30 @@ final class MinestomMenuRuntime implements AutoCloseable {
         }
         trace(event.getPlayer(), "close", () -> {
             MenuTrace.title(session.state().currentFrame().title());
+            if (ignorePromptDrivenClose(event.getPlayer().getUuid(), session, inventory)) {
+                return;
+            }
             if (sessions.remove(event.getPlayer().getUuid(), session)) {
                 MenuTrace.time("runtime.sessionDetach", session::detach);
             }
         });
     }
 
+    void onPlayerChat(PlayerChatEvent event) {
+        PendingTextPrompt prompt = prompts.get(event.getPlayer().getUuid());
+        if (prompt == null || prompt.session() != sessions.get(event.getPlayer().getUuid()) || prompt.mode() != ReactiveTextPromptMode.CHAT) {
+            return;
+        }
+        event.setCancelled(true);
+        String message = event.getRawMessage();
+        scheduleNextTick(MenuTrace.propagate(() -> completePrompt(prompt,
+                "cancel".equalsIgnoreCase(message.trim())
+                        ? new ReactiveMenuInput.TextPromptCancelled(prompt.request().key(), ReactiveTextPromptMode.CHAT)
+                        : new ReactiveMenuInput.TextPromptSubmitted(prompt.request().key(), message, ReactiveTextPromptMode.CHAT))));
+    }
+
     void onPlayerDisconnect(PlayerDisconnectEvent event) {
+        prompts.remove(event.getPlayer().getUuid());
         MinestomMenuSession session = sessions.remove(event.getPlayer().getUuid());
         if (session != null) {
             session.detach();
@@ -226,6 +248,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
         if (!sessions.remove(session.viewer().getUuid(), session)) {
             return;
         }
+        prompts.remove(session.viewer().getUuid());
         MenuTrace.time("runtime.close", () -> {
             session.detach();
             MenuTrace.time("runtime.inventoryClose", () -> {
@@ -427,6 +450,10 @@ final class MinestomMenuRuntime implements AutoCloseable {
                 case ReactiveMenuEffect.SetViewerInventorySlot setSlot ->
                         MenuTrace.time("runtime.viewerInventorySetSlot",
                                 () -> applyViewerInventorySlot(session.viewer(), setSlot.slot(), setSlot.stack()));
+                case ReactiveMenuEffect.RequestTextPrompt prompt -> {
+                    openTextPrompt(session, prompt.request());
+                    return true;
+                }
                 case ReactiveMenuEffect.Open open -> {
                     replace(session, open.menu());
                     return true;
@@ -481,6 +508,40 @@ final class MinestomMenuRuntime implements AutoCloseable {
             return null;
         }
         return session;
+    }
+
+    private void openTextPrompt(MinestomMenuSession session, ReactiveTextPromptRequest request) {
+        prompts.put(session.viewer().getUuid(), new PendingTextPrompt(session, request, ReactiveTextPromptMode.CHAT, true));
+        session.viewer().closeInventory();
+        session.viewer().sendMessage(Component.text(request.prompt() + " Type your response in chat or send 'cancel' to keep the current value."));
+    }
+
+    private boolean ignorePromptDrivenClose(UUID viewerId, MinestomMenuSession session, Inventory inventory) {
+        PendingTextPrompt prompt = prompts.get(viewerId);
+        if (prompt == null || prompt.session() != session || !prompt.awaitingMenuClose() || session.inventory() != inventory) {
+            return false;
+        }
+        prompt.awaitingMenuClose(false);
+        return true;
+    }
+
+    private void completePrompt(PendingTextPrompt prompt, ReactiveMenuInput input) {
+        if (!prompts.remove(prompt.session().viewer().getUuid(), prompt)) {
+            return;
+        }
+        MinestomMenuSession session = prompt.session();
+        if (sessions.get(session.viewer().getUuid()) != session) {
+            return;
+        }
+        List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.reactiveDispatch", () -> session.state().dispatchReactive(input));
+        scheduleNextTick(MenuTrace.propagate(() -> {
+            if (sessions.get(session.viewer().getUuid()) != session) {
+                return;
+            }
+            if (!MenuTrace.time("runtime.applyEffects", () -> applyEffects(session, effects))) {
+                MenuTrace.time("session.renderCurrentView", session::renderCurrentView);
+            }
+        }));
     }
 
     private static boolean isShiftClick(Click click) {
@@ -585,5 +646,41 @@ final class MinestomMenuRuntime implements AutoCloseable {
 
     private static String flatten(Component component) {
         return PLAIN_TEXT.serialize(component);
+    }
+
+    private static final class PendingTextPrompt {
+
+        private final MinestomMenuSession session;
+        private final ReactiveTextPromptRequest request;
+        private final ReactiveTextPromptMode mode;
+        private volatile boolean awaitingMenuClose;
+
+        private PendingTextPrompt(MinestomMenuSession session, ReactiveTextPromptRequest request,
+                                  ReactiveTextPromptMode mode, boolean awaitingMenuClose) {
+            this.session = session;
+            this.request = request;
+            this.mode = mode;
+            this.awaitingMenuClose = awaitingMenuClose;
+        }
+
+        private MinestomMenuSession session() {
+            return session;
+        }
+
+        private ReactiveTextPromptRequest request() {
+            return request;
+        }
+
+        private ReactiveTextPromptMode mode() {
+            return mode;
+        }
+
+        private boolean awaitingMenuClose() {
+            return awaitingMenuClose;
+        }
+
+        private void awaitingMenuClose(boolean awaitingMenuClose) {
+            this.awaitingMenuClose = awaitingMenuClose;
+        }
     }
 }

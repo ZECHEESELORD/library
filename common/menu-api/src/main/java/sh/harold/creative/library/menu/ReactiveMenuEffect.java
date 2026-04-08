@@ -3,7 +3,7 @@ package sh.harold.creative.library.menu;
 import java.util.Objects;
 
 public sealed interface ReactiveMenuEffect permits ReactiveMenuEffect.Close, ReactiveMenuEffect.Open,
-        ReactiveMenuEffect.SetViewerInventorySlot {
+        ReactiveMenuEffect.RequestTextPrompt, ReactiveMenuEffect.SetViewerInventorySlot {
 
     record Open(MenuDefinition menu) implements ReactiveMenuEffect {
 
@@ -13,6 +13,13 @@ public sealed interface ReactiveMenuEffect permits ReactiveMenuEffect.Close, Rea
     }
 
     record Close() implements ReactiveMenuEffect {
+    }
+
+    record RequestTextPrompt(ReactiveTextPromptRequest request) implements ReactiveMenuEffect {
+
+        public RequestTextPrompt {
+            request = Objects.requireNonNull(request, "request");
+        }
     }
 
     record SetViewerInventorySlot(int slot, MenuStack stack) implements ReactiveMenuEffect {

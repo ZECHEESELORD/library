@@ -3,9 +3,14 @@ package sh.harold.creative.library.menu.paper;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import io.papermc.paper.math.Position;
+import org.bukkit.Location;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.Material;
+import org.bukkit.block.sign.Side;
 import org.bukkit.entity.Player;
+import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.DragType;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -25,6 +30,8 @@ import sh.harold.creative.library.menu.MenuStack;
 import sh.harold.creative.library.menu.MenuTraceController;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
+import sh.harold.creative.library.menu.ReactiveTextPromptMode;
+import sh.harold.creative.library.menu.ReactiveTextPromptRequest;
 import sh.harold.creative.library.menu.core.HouseMenuCompiler;
 import sh.harold.creative.library.menu.core.MenuTrace;
 import sh.harold.creative.library.menu.core.MenuSessionState;
@@ -54,6 +61,7 @@ final class PaperMenuRuntime implements AutoCloseable {
     private final Function<Runnable, MenuTickHandle> nextTickScheduler;
     private final MenuTraceController traceController;
     private final Consumer<String> traceSink;
+    private final Map<UUID, PendingTextPrompt> prompts = new ConcurrentHashMap<>();
     private int inventoryInteractionDepth;
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer, SoundCueService sounds) {
@@ -255,13 +263,50 @@ final class PaperMenuRuntime implements AutoCloseable {
         }
         trace(player, "close", () -> {
             MenuTrace.title(session.state().currentFrame().title());
+            if (advancePromptAfterClose(player.getUniqueId(), session, topInventory)) {
+                return;
+            }
             if (sessions.remove(player.getUniqueId(), session)) {
                 MenuTrace.time("runtime.sessionDetach", session::detach);
             }
         });
     }
 
+    void onAsyncChat(AsyncChatEvent event) {
+        Player player = event.getPlayer();
+        PendingTextPrompt prompt = prompts.get(player.getUniqueId());
+        if (prompt == null || prompt.session() != sessions.get(player.getUniqueId())
+                || prompt.mode() != ReactiveTextPromptMode.CHAT
+                || prompt.phase() != PendingTextPromptPhase.ACTIVE) {
+            return;
+        }
+        event.setCancelled(true);
+        String message = PLAIN_TEXT.serialize(event.message());
+        scheduleNextTick(MenuTrace.propagate(() -> completePrompt(prompt,
+                "cancel".equalsIgnoreCase(message.trim())
+                        ? new ReactiveMenuInput.TextPromptCancelled(prompt.request().key(), ReactiveTextPromptMode.CHAT)
+                        : new ReactiveMenuInput.TextPromptSubmitted(prompt.request().key(), message, ReactiveTextPromptMode.CHAT))));
+    }
+
+    void onSignChange(SignChangeEvent event) {
+        Player player = event.getPlayer();
+        PendingTextPrompt prompt = prompts.get(player.getUniqueId());
+        if (prompt == null || prompt.session() != sessions.get(player.getUniqueId())
+                || prompt.mode() != ReactiveTextPromptMode.SIGN
+                || prompt.phase() != PendingTextPromptPhase.ACTIVE) {
+            return;
+        }
+        if (!sameBlock(prompt.signLocation(), event.getBlock().getLocation())) {
+            return;
+        }
+        event.setCancelled(true);
+        String[] lines = event.getLines();
+        String value = lines.length == 0 ? "" : lines[0];
+        completePrompt(prompt, new ReactiveMenuInput.TextPromptSubmitted(prompt.request().key(), value, ReactiveTextPromptMode.SIGN));
+    }
+
     void onPlayerDisconnect(Player player) {
+        prompts.remove(player.getUniqueId());
         PaperMenuSession session = sessions.remove(player.getUniqueId());
         if (session != null) {
             session.detach();
@@ -329,6 +374,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (!sessions.remove(session.viewerId(), session)) {
             return;
         }
+        prompts.remove(session.viewerId());
         MenuTrace.time("runtime.close", session::detach);
         Player player = playerLookup.apply(session.viewerId());
         if (player != null) {
@@ -500,6 +546,10 @@ final class PaperMenuRuntime implements AutoCloseable {
                 case ReactiveMenuEffect.SetViewerInventorySlot setSlot ->
                         MenuTrace.time("runtime.viewerInventorySetSlot",
                                 () -> applyViewerInventorySlot(player, setSlot.slot(), setSlot.stack()));
+                case ReactiveMenuEffect.RequestTextPrompt prompt -> {
+                    openTextPrompt(session, player, prompt.request());
+                    return true;
+                }
                 case ReactiveMenuEffect.Open open -> {
                     replace(session, open.menu());
                     return true;
@@ -561,6 +611,103 @@ final class PaperMenuRuntime implements AutoCloseable {
             return null;
         }
         return session.inventory() == inventory ? session : null;
+    }
+
+    private void openTextPrompt(PaperMenuSession session, Player player, ReactiveTextPromptRequest request) {
+        ReactiveTextPromptMode resolvedMode = request.preferredMode() == ReactiveTextPromptMode.SIGN
+                ? ReactiveTextPromptMode.SIGN
+                : ReactiveTextPromptMode.CHAT;
+        Location signLocation = player.getLocation().toBlockLocation();
+        PendingTextPrompt prompt = new PendingTextPrompt(
+                session,
+                request,
+                resolvedMode,
+                signLocation,
+                PendingTextPromptPhase.AWAITING_MENU_CLOSE);
+        prompts.put(player.getUniqueId(), prompt);
+        if (closeViewerInventoryForPrompt(session, player)) {
+            return;
+        }
+        activatePrompt(prompt, player);
+    }
+
+    private boolean advancePromptAfterClose(UUID viewerId, PaperMenuSession session, Inventory inventory) {
+        PendingTextPrompt prompt = prompts.get(viewerId);
+        if (prompt == null || prompt.session() != session
+                || prompt.phase() != PendingTextPromptPhase.AWAITING_MENU_CLOSE
+                || session.inventory() != inventory) {
+            return false;
+        }
+        prompt.phase(PendingTextPromptPhase.ACTIVE);
+        Player player = playerLookup.apply(viewerId);
+        if (player != null) {
+            scheduleNextTick(MenuTrace.propagate(() -> {
+                if (prompts.get(viewerId) == prompt && sessions.get(viewerId) == session) {
+                    activatePrompt(prompt, player);
+                }
+            }));
+        }
+        return true;
+    }
+
+    private void completePrompt(PendingTextPrompt prompt, ReactiveMenuInput input) {
+        if (!prompts.remove(prompt.session().viewerId(), prompt)) {
+            return;
+        }
+        PaperMenuSession session = prompt.session();
+        Player player = playerLookup.apply(session.viewerId());
+        if (player == null || sessions.get(session.viewerId()) != session) {
+            return;
+        }
+        List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.reactiveDispatch", () -> session.state().dispatchReactive(input));
+        scheduleNextTick(MenuTrace.propagate(() -> {
+            if (sessions.get(session.viewerId()) != session) {
+                return;
+            }
+            if (!MenuTrace.time("runtime.applyEffects", () -> applyEffects(session, player, effects))) {
+                MenuTrace.time("session.refresh", () -> session.refresh(player));
+            }
+        }));
+    }
+
+    private void activatePrompt(PendingTextPrompt prompt, Player player) {
+        switch (prompt.mode()) {
+            case SIGN -> {
+                player.sendSignChange(prompt.signLocation(), paddedSignLines(prompt.request()));
+                player.openVirtualSign(Position.block(prompt.signLocation()), Side.FRONT);
+            }
+            case CHAT -> player.sendMessage(Component.text(
+                    prompt.request().prompt() + " Type your response in chat or send 'cancel' to keep the current value."));
+            default -> throw new IllegalStateException("Unsupported prompt mode: " + prompt.mode());
+        }
+    }
+
+    private boolean closeViewerInventoryForPrompt(PaperMenuSession session, Player player) {
+        Inventory activeInventory = session.inventory();
+        if (activeInventory == null) {
+            return false;
+        }
+        if (shouldDeferInventoryTransitions()) {
+            scheduleNextTick(MenuTrace.propagate(() -> {
+                if (sessions.get(session.viewerId()) == session && access.topInventory(player) == activeInventory) {
+                    MenuTrace.time("runtime.inventoryClose", () -> access.closeInventory(player));
+                }
+            }));
+            return true;
+        }
+        MenuTrace.time("runtime.inventoryClose", () -> access.closeInventory(player));
+        return true;
+    }
+
+    private static List<Component> paddedSignLines(ReactiveTextPromptRequest request) {
+        List<String> source = request.signLines().isEmpty()
+                ? List.of(request.initialValue(), "^^^^^^", request.prompt(), "")
+                : request.signLines();
+        List<Component> lines = new ArrayList<>(4);
+        for (int index = 0; index < 4; index++) {
+            lines.add(Component.text(index < source.size() ? source.get(index) : ""));
+        }
+        return List.copyOf(lines);
     }
 
     private boolean allowInput(PaperMenuSession session, AcceptedInput input) {
@@ -645,6 +792,14 @@ final class PaperMenuRuntime implements AutoCloseable {
         return PLAIN_TEXT.serialize(component);
     }
 
+    private static boolean sameBlock(Location left, Location right) {
+        return left != null && right != null
+                && Objects.equals(left.getWorld(), right.getWorld())
+                && left.getBlockX() == right.getBlockX()
+                && left.getBlockY() == right.getBlockY()
+                && left.getBlockZ() == right.getBlockZ();
+    }
+
     private void inInventoryInteraction(Runnable action) {
         inventoryInteractionDepth++;
         try {
@@ -655,6 +810,58 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     private record ReactiveClickBinding(MenuClick button, boolean shift) {
+    }
+
+    private static final class PendingTextPrompt {
+
+        private final PaperMenuSession session;
+        private final ReactiveTextPromptRequest request;
+        private final ReactiveTextPromptMode mode;
+        private final Location signLocation;
+        private volatile PendingTextPromptPhase phase;
+
+        private PendingTextPrompt(
+                PaperMenuSession session,
+                ReactiveTextPromptRequest request,
+                ReactiveTextPromptMode mode,
+                Location signLocation,
+                PendingTextPromptPhase phase
+        ) {
+            this.session = session;
+            this.request = request;
+            this.mode = mode;
+            this.signLocation = signLocation;
+            this.phase = phase;
+        }
+
+        private PaperMenuSession session() {
+            return session;
+        }
+
+        private ReactiveTextPromptRequest request() {
+            return request;
+        }
+
+        private ReactiveTextPromptMode mode() {
+            return mode;
+        }
+
+        private Location signLocation() {
+            return signLocation;
+        }
+
+        private PendingTextPromptPhase phase() {
+            return phase;
+        }
+
+        private void phase(PendingTextPromptPhase phase) {
+            this.phase = Objects.requireNonNull(phase, "phase");
+        }
+    }
+
+    private enum PendingTextPromptPhase {
+        AWAITING_MENU_CLOSE,
+        ACTIVE
     }
 
     private sealed interface AcceptedInput permits CompiledClickInput, ReactiveDragInput,

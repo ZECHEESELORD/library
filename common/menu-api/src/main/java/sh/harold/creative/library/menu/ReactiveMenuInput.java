@@ -4,7 +4,8 @@ import java.util.List;
 import java.util.Objects;
 
 public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, ReactiveMenuInput.Closed, ReactiveMenuInput.Drag,
-        ReactiveMenuInput.DropCursor, ReactiveMenuInput.InventoryClick, ReactiveMenuInput.Opened, ReactiveMenuInput.Tick {
+        ReactiveMenuInput.DropCursor, ReactiveMenuInput.InventoryClick, ReactiveMenuInput.Opened,
+        ReactiveMenuInput.TextPromptCancelled, ReactiveMenuInput.TextPromptSubmitted, ReactiveMenuInput.Tick {
 
     record Opened() implements ReactiveMenuInput {
     }
@@ -18,6 +19,29 @@ public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, React
             if (tick < 0L) {
                 throw new IllegalArgumentException("tick cannot be negative");
             }
+        }
+    }
+
+    record TextPromptSubmitted(String key, String value, ReactiveTextPromptMode mode) implements ReactiveMenuInput {
+
+        public TextPromptSubmitted {
+            Objects.requireNonNull(key, "key");
+            if (key.isBlank()) {
+                throw new IllegalArgumentException("key cannot be blank");
+            }
+            value = value == null ? "" : value;
+            mode = Objects.requireNonNull(mode, "mode");
+        }
+    }
+
+    record TextPromptCancelled(String key, ReactiveTextPromptMode mode) implements ReactiveMenuInput {
+
+        public TextPromptCancelled {
+            Objects.requireNonNull(key, "key");
+            if (key.isBlank()) {
+                throw new IllegalArgumentException("key cannot be blank");
+            }
+            mode = Objects.requireNonNull(mode, "mode");
         }
     }
 

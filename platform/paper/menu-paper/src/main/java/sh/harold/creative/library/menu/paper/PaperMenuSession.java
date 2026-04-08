@@ -101,6 +101,9 @@ final class PaperMenuSession implements InventoryHolder, MenuContext.SessionCont
         renderedSlots = nextSlots;
         runtime.syncCursor(player, renderedCursor, nextCursor);
         renderedCursor = nextCursor;
+        if (runtime.access().topInventory(player) != current) {
+            runtime.openInventory(this, player, current);
+        }
         updateTicking();
     }
 
