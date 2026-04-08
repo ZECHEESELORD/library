@@ -4,9 +4,18 @@ import net.kyori.adventure.text.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
-public record ReactiveTabsView(Component title, List<MenuTabGroup> groups, String activeTabId, int navStart, int pageIndex) {
+public record ReactiveTabsView(
+        Component title,
+        List<MenuTabGroup> groups,
+        String activeTabId,
+        int navStart,
+        int pageIndex,
+        Map<UtilitySlot, MenuItem> utilities
+) {
 
     public ReactiveTabsView {
         title = Objects.requireNonNull(title, "title");
@@ -21,6 +30,11 @@ public record ReactiveTabsView(Component title, List<MenuTabGroup> groups, Strin
         if (pageIndex < 0) {
             throw new IllegalArgumentException("pageIndex cannot be negative");
         }
+        utilities = copyUtilities(utilities);
+    }
+
+    public ReactiveTabsView(Component title, List<MenuTabGroup> groups, String activeTabId, int navStart, int pageIndex) {
+        this(title, groups, activeTabId, navStart, pageIndex, Map.of());
     }
 
     public static Builder builder(String title) {
@@ -40,6 +54,16 @@ public record ReactiveTabsView(Component title, List<MenuTabGroup> groups, Strin
         return List.copyOf(copied);
     }
 
+    private static Map<UtilitySlot, MenuItem> copyUtilities(Map<UtilitySlot, ? extends MenuItem> utilities) {
+        Objects.requireNonNull(utilities, "utilities");
+        Map<UtilitySlot, MenuItem> copied = new LinkedHashMap<>();
+        for (Map.Entry<UtilitySlot, ? extends MenuItem> entry : utilities.entrySet()) {
+            copied.put(Objects.requireNonNull(entry.getKey(), "utility slot"),
+                    Objects.requireNonNull(entry.getValue(), "utility item"));
+        }
+        return Map.copyOf(copied);
+    }
+
     public static final class Builder {
 
         private Component title;
@@ -47,6 +71,7 @@ public record ReactiveTabsView(Component title, List<MenuTabGroup> groups, Strin
         private String activeTabId;
         private int navStart;
         private int pageIndex;
+        private final Map<UtilitySlot, MenuItem> utilities = new LinkedHashMap<>();
         private int implicitGroupCount;
 
         private Builder(Component title) {
@@ -103,6 +128,11 @@ public record ReactiveTabsView(Component title, List<MenuTabGroup> groups, Strin
             return this;
         }
 
+        public Builder utility(UtilitySlot slot, MenuItem item) {
+            utilities.put(Objects.requireNonNull(slot, "slot"), Objects.requireNonNull(item, "item"));
+            return this;
+        }
+
         public ReactiveTabsView build() {
             if (activeTabId == null) {
                 throw new IllegalStateException("activeTabId is required");
@@ -113,7 +143,7 @@ public record ReactiveTabsView(Component title, List<MenuTabGroup> groups, Strin
                     builtGroups.add(new MenuTabGroup(group.id(), group.tabs()));
                 }
             }
-            return new ReactiveTabsView(title, builtGroups, activeTabId, navStart, pageIndex);
+            return new ReactiveTabsView(title, builtGroups, activeTabId, navStart, pageIndex, utilities);
         }
 
         private record PendingTabGroup(String id, List<MenuTab> tabs, boolean implicit) {

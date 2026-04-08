@@ -10,6 +10,7 @@ import sh.harold.creative.library.menu.ActionVerb;
 import sh.harold.creative.library.menu.MenuButton;
 import sh.harold.creative.library.menu.MenuDisplayItem;
 import sh.harold.creative.library.menu.MenuIcon;
+import sh.harold.creative.library.menu.MenuOptionLine;
 import sh.harold.creative.library.menu.MenuPair;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.ui.value.UiValues;
@@ -17,6 +18,7 @@ import sh.harold.creative.library.ui.value.UiValues;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class HouseMenuCompilerTest {
 
@@ -104,6 +106,49 @@ class HouseMenuCompilerTest {
                 "",
                 "ID: TWITCH.LIGHTNING"), lore(slot));
         assertEquals(NamedTextColor.DARK_GRAY, slot.lore().getLast().color());
+    }
+
+    @Test
+    void optionLinesRenderSelectedArrowAndMuteInactiveColors() {
+        TextColor selectedColor = TextColor.color(0xFFAA00);
+        TextColor inactiveColor = TextColor.color(0x55FFFF);
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("hopper"))
+                .name("Filter")
+                .optionLines(
+                        new MenuOptionLine("All", selectedColor, true),
+                        new MenuOptionLine("Tag: pain", inactiveColor, false))
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of("→ All", "   Tag: pain"), lore(slot));
+        Component selectedLine = slot.lore().getFirst();
+        Component inactiveLine = slot.lore().get(1);
+
+        assertEquals(TextDecoration.State.TRUE, selectedLine.children().get(0).decoration(TextDecoration.BOLD));
+        assertEquals(selectedColor, selectedLine.children().get(0).color());
+        assertEquals(selectedColor, selectedLine.children().get(1).color());
+        assertNotEquals(TextDecoration.State.TRUE, inactiveLine.children().get(0).decoration(TextDecoration.BOLD));
+        assertEquals(inactiveLine.children().get(0).color(), inactiveLine.children().get(1).color());
+        assertNotEquals(inactiveColor, inactiveLine.children().get(1).color());
+        assertNotEquals(selectedColor, inactiveLine.children().get(1).color());
+    }
+
+    @Test
+    void optionLinesCanRenderSlidingWindowAroundSelection() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("comparator"))
+                .name("Sort")
+                .optionLines(3, List.of(
+                        new MenuOptionLine("A-Z", TextColor.color(0xF7E29A), false),
+                        new MenuOptionLine("Z-A", TextColor.color(0xE8BE74), false),
+                        new MenuOptionLine("Popularity", TextColor.color(0xFF8C57), true),
+                        new MenuOptionLine("Category", TextColor.color(0x73C9B7), false),
+                        new MenuOptionLine("Tags", TextColor.color(0x7DB4F5), false)))
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of("   Z-A", "→ Popularity", "   Category"), lore(slot));
     }
 
     @Test

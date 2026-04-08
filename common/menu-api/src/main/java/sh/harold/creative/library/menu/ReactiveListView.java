@@ -4,10 +4,12 @@ import net.kyori.adventure.text.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
-public record ReactiveListView(Component title, List<MenuItem> items, int pageIndex) {
+public record ReactiveListView(Component title, List<MenuItem> items, int pageIndex, Map<UtilitySlot, MenuItem> utilities) {
 
     public ReactiveListView {
         title = Objects.requireNonNull(title, "title");
@@ -15,6 +17,11 @@ public record ReactiveListView(Component title, List<MenuItem> items, int pageIn
         if (pageIndex < 0) {
             throw new IllegalArgumentException("pageIndex cannot be negative");
         }
+        utilities = copyUtilities(utilities);
+    }
+
+    public ReactiveListView(Component title, List<MenuItem> items, int pageIndex) {
+        this(title, items, pageIndex, Map.of());
     }
 
     public static Builder builder(String title) {
@@ -34,10 +41,21 @@ public record ReactiveListView(Component title, List<MenuItem> items, int pageIn
         return List.copyOf(copied);
     }
 
+    private static Map<UtilitySlot, MenuItem> copyUtilities(Map<UtilitySlot, ? extends MenuItem> utilities) {
+        Objects.requireNonNull(utilities, "utilities");
+        Map<UtilitySlot, MenuItem> copied = new LinkedHashMap<>();
+        for (Map.Entry<UtilitySlot, ? extends MenuItem> entry : utilities.entrySet()) {
+            copied.put(Objects.requireNonNull(entry.getKey(), "utility slot"),
+                    Objects.requireNonNull(entry.getValue(), "utility item"));
+        }
+        return Map.copyOf(copied);
+    }
+
     public static final class Builder {
 
         private Component title;
         private final List<MenuItem> items = new ArrayList<>();
+        private final Map<UtilitySlot, MenuItem> utilities = new LinkedHashMap<>();
         private int pageIndex;
 
         private Builder(Component title) {
@@ -84,8 +102,13 @@ public record ReactiveListView(Component title, List<MenuItem> items, int pageIn
             return this;
         }
 
+        public Builder utility(UtilitySlot slot, MenuItem item) {
+            utilities.put(Objects.requireNonNull(slot, "slot"), Objects.requireNonNull(item, "item"));
+            return this;
+        }
+
         public ReactiveListView build() {
-            return new ReactiveListView(title, items, pageIndex);
+            return new ReactiveListView(title, items, pageIndex, utilities);
         }
     }
 }

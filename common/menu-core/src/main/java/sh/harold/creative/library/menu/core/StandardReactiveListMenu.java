@@ -46,7 +46,7 @@ final class StandardReactiveListMenu<S> implements ReactiveMenuDefinition {
         this.stateFactory = Objects.requireNonNull(stateFactory, "stateFactory");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.reducer = Objects.requireNonNull(reducer, "reducer");
-        this.baseSlots = buildBaseSlots(this.utilities);
+        this.baseSlots = buildBaseSlots();
     }
 
     @Override
@@ -100,6 +100,10 @@ final class StandardReactiveListMenu<S> implements ReactiveMenuDefinition {
         }
 
         int footerStart = HouseMenuCompiler.footerStart(StandardMenuService.LIST_ROWS);
+        Map<UtilitySlot, MenuItem> utilities = mergedUtilities(rendered.utilities());
+        StandardMenuService.validateUtilitySlots(utilities, footerStart,
+                StandardMenuService.reservedSharedFooterSlots(footerStart, totalPages > 1 && pageIndex > 0,
+                        totalPages > 1 && pageIndex + 1 < totalPages));
         if (totalPages > 1 && pageIndex > 0) {
             int slot = footerStart + StandardMenuService.FOOTER_PREVIOUS_OFFSET;
             slots.set(slot, StandardMenuService.navigationButton(slot, "Previous Page", pageIndex,
@@ -116,18 +120,31 @@ final class StandardReactiveListMenu<S> implements ReactiveMenuDefinition {
                             new MenuSlotAction.Dispatch(new ReactiveGeometryAction.NextPage())))));
             touchedSlots.add(slot);
         }
+        for (Map.Entry<UtilitySlot, MenuItem> utility : utilities.entrySet()) {
+            int slot = utility.getKey().resolveSlot(footerStart);
+            slots.set(slot, cache.compile(slot, utility.getValue()));
+            touchedSlots.add(slot);
+        }
 
         MenuTrace.setCount("placementCount", touchedSlots.size());
         return new MenuSessionView(title, List.copyOf(slots), null, reactiveClickTargets);
     }
 
-    private static List<MenuSlot> buildBaseSlots(Map<UtilitySlot, MenuItem> utilities) {
+    private Map<UtilitySlot, MenuItem> mergedUtilities(Map<UtilitySlot, MenuItem> renderedUtilities) {
+        if (renderedUtilities.isEmpty()) {
+            return utilities;
+        }
+        Map<UtilitySlot, MenuItem> merged = new LinkedHashMap<>(utilities);
+        merged.putAll(renderedUtilities);
+        return Map.copyOf(merged);
+    }
+
+    private static List<MenuSlot> buildBaseSlots() {
         Map<Integer, MenuSlot> slots = StandardMenuService.createFilledSlots(StandardMenuService.LIST_ROWS);
         for (int slot : PagedListSupport.PURE_LIST_CONTENT_SLOTS) {
             slots.put(slot, StandardMenuService.empty(slot));
         }
         int footerStart = HouseMenuCompiler.footerStart(StandardMenuService.LIST_ROWS);
-        StandardMenuService.applyUtilities(slots, footerStart, utilities);
         StandardMenuService.applySharedFooter(slots, footerStart, null, null);
         return StandardMenuService.orderedSlots(slots, StandardMenuService.LIST_ROWS);
     }

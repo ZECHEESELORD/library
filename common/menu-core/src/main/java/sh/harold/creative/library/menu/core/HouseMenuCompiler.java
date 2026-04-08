@@ -9,10 +9,12 @@ import sh.harold.creative.library.menu.MenuBlock;
 import sh.harold.creative.library.menu.MenuClick;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuItem;
+import sh.harold.creative.library.menu.MenuOptionLine;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.ui.value.UiValue;
 
+import java.awt.Color;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -137,6 +139,7 @@ public final class HouseMenuCompiler {
                     .toList();
             case MenuBlock.Lines lines -> renderLines(lines.lines(), lines.wrapMode());
             case MenuBlock.MutedLines lines -> renderMutedLines(lines.lines());
+            case MenuBlock.Options options -> renderOptions(options.options(), options.windowSize());
             case MenuBlock.ValueLines valueLines -> renderValueLines(valueLines.lines(), valueLines.wrapMode());
             case MenuBlock.Pairs pairs -> renderPairs(pairs.pairs(), pairs.wrapMode());
             case MenuBlock.Bullets bullets -> renderBullets(bullets.bullets());
@@ -160,6 +163,23 @@ public final class HouseMenuCompiler {
         List<Component> rendered = new ArrayList<>();
         for (String line : lines) {
             rendered.add(text(line, MUTED_NEUTRAL));
+        }
+        return rendered;
+    }
+
+    private static List<Component> renderOptions(List<MenuOptionLine> options, int windowSize) {
+        List<MenuOptionLine> visible = visibleOptions(options, windowSize);
+        List<Component> rendered = new ArrayList<>(visible.size());
+        for (MenuOptionLine option : visible) {
+            TextColor lineColor = option.selected() ? option.color() : muted(option.color());
+            String prefix = option.selected() ? "→ " : "   ";
+            Component prefixComponent = text(prefix, lineColor, option.selected());
+            Component labelComponent = text(option.label(), lineColor);
+            rendered.add(Component.text()
+                    .append(prefixComponent)
+                    .append(labelComponent)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .build());
         }
         return rendered;
     }
@@ -296,6 +316,34 @@ public final class HouseMenuCompiler {
                 .decoration(TextDecoration.BOLD, bold)
                 .decoration(TextDecoration.STRIKETHROUGH, strikethrough)
                 .decoration(TextDecoration.ITALIC, false);
+    }
+
+    private static List<MenuOptionLine> visibleOptions(List<MenuOptionLine> options, int windowSize) {
+        if (windowSize <= 0 || windowSize >= options.size()) {
+            return options;
+        }
+        int selectedIndex = selectedIndex(options);
+        int halfWindow = windowSize / 2;
+        int start = Math.max(0, selectedIndex - halfWindow);
+        int end = Math.min(options.size(), start + windowSize);
+        start = Math.max(0, end - windowSize);
+        return options.subList(start, end);
+    }
+
+    private static int selectedIndex(List<MenuOptionLine> options) {
+        for (int index = 0; index < options.size(); index++) {
+            if (options.get(index).selected()) {
+                return index;
+            }
+        }
+        return 0;
+    }
+
+    private static TextColor muted(TextColor color) {
+        float[] hsb = Color.RGBtoHSB(color.red(), color.green(), color.blue(), null);
+        float saturation = Math.max(0.08f, hsb[1] * 0.18f);
+        float brightness = Math.min(1.0f, 0.38f + (hsb[2] * 0.42f));
+        return TextColor.color(Color.HSBtoRGB(hsb[0], saturation, brightness) & 0xFFFFFF);
     }
 
     private static List<String> softWrap(String text, int firstIndentChars, int continuationIndentChars) {

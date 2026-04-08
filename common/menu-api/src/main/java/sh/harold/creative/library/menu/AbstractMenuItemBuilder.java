@@ -71,6 +71,19 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return self();
     }
 
+    public B optionLines(MenuOptionLine... options) {
+        return optionLines(List.of(options));
+    }
+
+    public B optionLines(Iterable<MenuOptionLine> options) {
+        return optionLines(0, options);
+    }
+
+    public B optionLines(int windowSize, Iterable<MenuOptionLine> options) {
+        blocks.add(new MenuBlock.Options(copyOptions(options), windowSize));
+        return self();
+    }
+
     /**
      * Adds one long line that may rebalance into wrapped lore when it no longer fits cleanly
      * within the shared character-count cap.
@@ -340,6 +353,18 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         }
         if (copy.isEmpty()) {
             throw new IllegalArgumentException("pairs cannot be empty");
+        }
+        return List.copyOf(copy);
+    }
+
+    private static List<MenuOptionLine> copyOptions(Iterable<MenuOptionLine> options) {
+        Objects.requireNonNull(options, "options");
+        List<MenuOptionLine> copy = new ArrayList<>();
+        for (MenuOptionLine option : options) {
+            copy.add(Objects.requireNonNull(option, "option"));
+        }
+        if (copy.isEmpty()) {
+            throw new IllegalArgumentException("options cannot be empty");
         }
         return List.copyOf(copy);
     }

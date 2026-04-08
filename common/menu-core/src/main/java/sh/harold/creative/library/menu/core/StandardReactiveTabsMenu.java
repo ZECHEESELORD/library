@@ -55,7 +55,7 @@ final class StandardReactiveTabsMenu<S> implements ReactiveMenuDefinition {
         this.stateFactory = Objects.requireNonNull(stateFactory, "stateFactory");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.reducer = Objects.requireNonNull(reducer, "reducer");
-        this.sharedFooterBaseSlots = buildBaseSlots(this.utilities, true);
+        this.sharedFooterBaseSlots = buildBaseSlots(true);
         this.customFooterBaseSlots = buildBaseSlots(Map.of(), false);
     }
 
@@ -112,6 +112,9 @@ final class StandardReactiveTabsMenu<S> implements ReactiveMenuDefinition {
         List<MenuSlot> slots = new ArrayList<>(sharedFooter ? sharedFooterBaseSlots : customFooterBaseSlots);
         Set<Integer> touchedSlots = new HashSet<>();
         Set<Integer> reactiveClickTargets = new HashSet<>();
+        int listPageCount = activeTab.content() instanceof MenuTabContent.ListContent list
+                ? PagedListSupport.pageCount(list.items().size(), PagedListSupport.TAB_LIST_PAGE_SIZE)
+                : 1;
 
         renderTabChrome(slots, flatTabs, navPlan, activeTab, navStart, touchedSlots);
         if (activeTab.content() instanceof MenuTabContent.ListContent list) {
@@ -121,6 +124,20 @@ final class StandardReactiveTabsMenu<S> implements ReactiveMenuDefinition {
             }
         } else if (activeTab.content() instanceof MenuTabContent.CanvasContent canvas) {
             renderCanvasContent(slots, canvas, touchedSlots, reactiveClickTargets, cache);
+        }
+
+        if (sharedFooter) {
+            int footerStart = HouseMenuCompiler.footerStart(StandardMenuService.LIST_ROWS);
+            Map<UtilitySlot, MenuItem> utilities = mergedUtilities(rendered.utilities());
+            StandardMenuService.validateUtilitySlots(utilities, footerStart,
+                    StandardMenuService.reservedSharedFooterSlots(footerStart,
+                            listPageCount > 1 && pageIndex > 0,
+                            listPageCount > 1 && pageIndex + 1 < listPageCount));
+            for (Map.Entry<UtilitySlot, MenuItem> utility : utilities.entrySet()) {
+                int slot = utility.getKey().resolveSlot(footerStart);
+                slots.set(slot, cache.compile(slot, utility.getValue()));
+                touchedSlots.add(slot);
+            }
         }
 
         MenuTrace.setCount("placementCount", touchedSlots.size());
@@ -317,6 +334,24 @@ final class StandardReactiveTabsMenu<S> implements ReactiveMenuDefinition {
                 }
             }
         }
+    }
+
+    private Map<UtilitySlot, MenuItem> mergedUtilities(Map<UtilitySlot, MenuItem> renderedUtilities) {
+        if (renderedUtilities.isEmpty()) {
+            return utilities;
+        }
+        Map<UtilitySlot, MenuItem> merged = new LinkedHashMap<>(utilities);
+        merged.putAll(renderedUtilities);
+        return Map.copyOf(merged);
+    }
+
+    private static List<MenuSlot> buildBaseSlots(boolean sharedFooter) {
+        Map<Integer, MenuSlot> slots = StandardMenuService.createFilledSlots(StandardMenuService.LIST_ROWS);
+        if (sharedFooter) {
+            int footerStart = HouseMenuCompiler.footerStart(StandardMenuService.LIST_ROWS);
+            StandardMenuService.applySharedFooter(slots, footerStart, null, null);
+        }
+        return StandardMenuService.orderedSlots(slots, StandardMenuService.LIST_ROWS);
     }
 
     private static List<MenuSlot> buildBaseSlots(Map<UtilitySlot, MenuItem> utilities, boolean sharedFooter) {

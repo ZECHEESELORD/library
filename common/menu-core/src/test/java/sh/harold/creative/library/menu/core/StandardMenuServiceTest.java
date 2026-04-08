@@ -27,6 +27,7 @@ import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
 import sh.harold.creative.library.menu.ReactiveTabsView;
 import sh.harold.creative.library.menu.ReactiveMenuView;
+import sh.harold.creative.library.menu.UtilitySlot;
 import sh.harold.creative.library.sound.SoundCueKeys;
 
 import java.util.ArrayList;
@@ -405,6 +406,31 @@ class StandardMenuServiceTest {
     }
 
     @Test
+    void reactiveListUtilitiesRenderFromCurrentState() {
+        ReactiveMenu menu = menus.reactiveList()
+                .state(false)
+                .render(active -> ReactiveListView.builder("Profiles")
+                        .addItem(sampleButtons("Item", 1).getFirst())
+                        .utility(UtilitySlot.RIGHT_1, MenuButton.builder(MenuIcon.vanilla("oak_sign"))
+                                .name(active ? "Search: pain" : "Search")
+                                .emit(ActionVerb.BROWSE, "toggle search", ToggleUtility.INSTANCE)
+                                .build())
+                        .build())
+                .reduce((active, input) -> input instanceof ReactiveMenuInput.Click click
+                        && click.message() == ToggleUtility.INSTANCE
+                        ? ReactiveMenuResult.stay(!active)
+                        : ReactiveMenuResult.stay(active))
+                .build();
+
+        MenuSessionState state = new MenuSessionState(menu);
+        assertEquals("Search", titleAt(state.currentFrame(), 50));
+
+        state.dispatchReactive(new ReactiveMenuInput.Click(50, MenuClick.LEFT, false, ToggleUtility.INSTANCE));
+
+        assertEquals("Search: pain", titleAt(state.currentFrame(), 50));
+    }
+
+    @Test
     void reactiveTabsKeepActiveTabIndependentFromStripScrollAndPageThroughListContent() {
         ReactiveMenu menu = menus.reactiveTabs()
                 .state(new ReactiveTabsState("tab-0", 1, 1))
@@ -479,6 +505,33 @@ class StandardMenuServiceTest {
         assertEquals("Tab 0 Item 20", titleAt(firstPage, 43));
         assertTrue(interactionAt(firstPage, 53, MenuClick.LEFT).action() instanceof MenuSlotAction.Dispatch dispatch
                 && dispatch.message() instanceof ReactiveGeometryAction.NextPage);
+    }
+
+    @Test
+    void reactiveTabsSharedFooterUtilitiesRenderFromCurrentState() {
+        ReactiveMenu menu = menus.reactiveTabs()
+                .state(false)
+                .render(active -> ReactiveTabsView.builder("Reactive Tabs")
+                        .activeTab("alpha")
+                        .addTab(MenuTab.of("alpha", "Alpha", MenuIcon.vanilla("stone"), sampleButtons("Alpha", 1)))
+                        .addTab(MenuTab.of("beta", "Beta", MenuIcon.vanilla("diamond"), sampleButtons("Beta", 1)))
+                        .utility(UtilitySlot.RIGHT_1, MenuButton.builder(MenuIcon.vanilla("comparator"))
+                                .name(active ? "Sort: Popularity" : "Sort: A-Z")
+                                .emit(ActionVerb.BROWSE, "toggle sort", ToggleUtility.INSTANCE)
+                                .build())
+                        .build())
+                .reduce((active, input) -> input instanceof ReactiveMenuInput.Click click
+                        && click.message() == ToggleUtility.INSTANCE
+                        ? ReactiveMenuResult.stay(!active)
+                        : ReactiveMenuResult.stay(active))
+                .build();
+
+        MenuSessionState state = new MenuSessionState(menu);
+        assertEquals("Sort: A-Z", titleAt(state.currentFrame(), 50));
+
+        state.dispatchReactive(new ReactiveMenuInput.Click(50, MenuClick.LEFT, false, ToggleUtility.INSTANCE));
+
+        assertEquals("Sort: Popularity", titleAt(state.currentFrame(), 50));
     }
 
     @Test
@@ -715,5 +768,9 @@ class StandardMenuServiceTest {
     }
 
     private record ReactiveTabsState(String activeTabId, int navStart, int pageIndex) {
+    }
+
+    private enum ToggleUtility {
+        INSTANCE
     }
 }
