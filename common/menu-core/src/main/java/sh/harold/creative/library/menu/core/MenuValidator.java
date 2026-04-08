@@ -14,6 +14,11 @@ public final class MenuValidator {
     }
 
     public static void validate(Menu menu) {
+        validateMetadata(menu);
+        validateFrame(menu.frame(menu.initialFrameId()), menu.rows(), menu.title(), menu.initialFrameId());
+    }
+
+    static void validateMetadata(Menu menu) {
         if (menu.rows() < 1 || menu.rows() > 6) {
             throw new IllegalArgumentException("Menu rows must be between 1 and 6");
         }
@@ -23,12 +28,9 @@ public final class MenuValidator {
         if (!menu.frameIds().contains(menu.initialFrameId())) {
             throw new IllegalArgumentException("Initial frame id must exist");
         }
-        for (String frameId : menu.frameIds()) {
-            validateFrame(menu.frame(frameId), menu.rows(), menu.title(), frameId);
-        }
     }
 
-    private static void validateFrame(MenuFrame frame, int rows, Object menuTitle, String frameId) {
+    static void validateFrame(MenuFrame frame, int rows, Object menuTitle, String frameId) {
         Set<Integer> seen = new HashSet<>();
         int maxSlot = rows * 9 - 1;
         for (MenuSlot slot : frame.slots()) {

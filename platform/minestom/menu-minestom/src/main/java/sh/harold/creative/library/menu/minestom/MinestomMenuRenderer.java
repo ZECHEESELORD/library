@@ -3,39 +3,69 @@ package sh.harold.creative.library.menu.minestom;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.minestom.server.item.ItemStack;
+import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuSlot;
 import sh.harold.creative.library.menu.core.MenuTrace;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class MinestomMenuRenderer {
 
     private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
+    private static final int CACHE_LIMIT = 4_096;
 
-    private final Map<MenuSlot, ItemStack> cache = new ConcurrentHashMap<>();
+    private final MinestomMenuItemFactory itemFactory;
+    private final Map<VisualKey, ItemStack> cache = new LinkedHashMap<>(CACHE_LIMIT, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<VisualKey, ItemStack> eldest) {
+            return size() > CACHE_LIMIT;
+        }
+    };
+
+    public MinestomMenuRenderer() {
+        this(MinestomMenuIcons::createItem);
+    }
+
+    MinestomMenuRenderer(MinestomMenuItemFactory itemFactory) {
+        this.itemFactory = itemFactory;
+    }
 
     public ItemStack render(MenuSlot slot) {
-        ItemStack cached = cache.get(slot);
+        VisualKey key = VisualKey.from(slot);
+        ItemStack cached;
+        synchronized (cache) {
+            cached = cache.get(key);
+        }
         if (cached != null) {
             return cached;
         }
         long started = System.nanoTime();
         ItemStack created = createItem(slot);
         long elapsed = System.nanoTime() - started;
-        ItemStack previous = cache.putIfAbsent(slot, created);
-        if (previous != null) {
-            return previous;
+        boolean inserted = false;
+        synchronized (cache) {
+            ItemStack previous = cache.get(key);
+            if (previous == null) {
+                cache.put(key, created);
+                cached = created;
+                inserted = true;
+            } else {
+                cached = previous;
+            }
         }
-        MenuTrace.incrementCount("rendererCacheMisses");
-        MenuTrace.addDuration("renderer.cacheMissBuild", elapsed);
-        MenuTrace.detailIfSlow("renderer-cache-miss", elapsed,
-                () -> "title=" + flatten(slot.title()) + " icon=" + slot.icon().key());
-        return created;
+        if (inserted) {
+            MenuTrace.incrementCount("rendererCacheMisses");
+            MenuTrace.addDuration("renderer.cacheMissBuild", elapsed);
+            MenuTrace.detailIfSlow("renderer-cache-miss", elapsed,
+                    () -> "title=" + flatten(slot.title()) + " icon=" + slot.icon().key());
+        }
+        return cached;
     }
 
-    private static ItemStack createItem(MenuSlot slot) {
-        return MinestomMenuIcons.createItem(slot.icon(), slot.amount())
+    private ItemStack createItem(MenuSlot slot) {
+        return itemFactory.create(slot.icon(), slot.amount())
                 .withCustomName(slot.title())
                 .withLore(slot.lore())
                 .withGlowing(slot.glow())
@@ -44,5 +74,18 @@ public final class MinestomMenuRenderer {
 
     private static String flatten(Component component) {
         return PLAIN_TEXT.serialize(component);
+    }
+
+    private record VisualKey(MenuIcon icon, Component title, List<Component> lore, boolean glow, int amount) {
+
+        private VisualKey {
+            icon = java.util.Objects.requireNonNull(icon, "icon");
+            title = java.util.Objects.requireNonNull(title, "title");
+            lore = List.copyOf(lore);
+        }
+
+        static VisualKey from(MenuSlot slot) {
+            return new VisualKey(slot.icon(), slot.title(), slot.lore(), slot.glow(), slot.amount());
+        }
     }
 }

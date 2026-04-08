@@ -34,12 +34,15 @@ import sh.harold.creative.library.menu.TabsMenuBuilder;
 import sh.harold.creative.library.menu.UtilitySlot;
 
 import java.util.ArrayList;
+import java.util.AbstractSet;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -149,10 +152,7 @@ public final class StandardMenuService implements MenuService {
         @Override
         public Menu build() {
             int totalPages = PagedListSupport.pageCount(items.size(), PagedListSupport.PURE_LIST_PAGE_SIZE);
-            Set<String> frameIds = new java.util.LinkedHashSet<>();
-            for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-                frameIds.add(listFrameId(pageIndex));
-            }
+            Set<String> frameIds = new ListFrameIds(totalPages);
             Menu menu = new StandardMenu(title, MenuGeometry.LIST, LIST_ROWS, listFrameId(0), frameIds,
                     frameId -> {
                         int pageIndex = listPageIndex(frameId);
@@ -236,15 +236,7 @@ public final class StandardMenuService implements MenuService {
             for (FlatTab flatTab : flatTabs) {
                 tabsById.put(flatTab.tab().id(), flatTab);
             }
-            Set<String> frameIds = new java.util.LinkedHashSet<>();
-            for (FlatTab flatTab : flatTabs) {
-                int totalPages = contentPageCount(flatTab.tab());
-                for (int navStart = 0; navStart < navPlan.windowCount(); navStart++) {
-                    for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-                        frameIds.add(tabFrameId(flatTab.tab().id(), navStart, pageIndex));
-                    }
-                }
-            }
+            Set<String> frameIds = new TabFrameIds(tabsById, navPlan);
 
             String initialFrameId = tabFrameId(initialTabId, initialNavStart, 0);
             Menu menu = new StandardMenu(title, MenuGeometry.TABS, LIST_ROWS, initialFrameId, frameIds,
@@ -1157,6 +1149,139 @@ public final class StandardMenuService implements MenuService {
 
         List<MenuTab> tabs() {
             return tabs;
+        }
+    }
+
+    private static final class ListFrameIds extends AbstractSet<String> {
+
+        private final int totalPages;
+
+        private ListFrameIds(int totalPages) {
+            this.totalPages = totalPages;
+        }
+
+        @Override
+        public Iterator<String> iterator() {
+            return new Iterator<>() {
+                private int pageIndex;
+
+                @Override
+                public boolean hasNext() {
+                    return pageIndex < totalPages;
+                }
+
+                @Override
+                public String next() {
+                    if (!hasNext()) {
+                        throw new NoSuchElementException();
+                    }
+                    return listFrameId(pageIndex++);
+                }
+            };
+        }
+
+        @Override
+        public int size() {
+            return totalPages;
+        }
+
+        @Override
+        public boolean contains(Object object) {
+            if (!(object instanceof String frameId)) {
+                return false;
+            }
+            try {
+                int pageIndex = listPageIndex(frameId);
+                return pageIndex >= 0 && pageIndex < totalPages;
+            } catch (RuntimeException ignored) {
+                return false;
+            }
+        }
+    }
+
+    private static final class TabFrameIds extends AbstractSet<String> {
+
+        private final Map<String, FlatTab> tabsById;
+        private final NavPlan navPlan;
+        private final List<String> tabIds;
+        private final Map<String, Integer> pageCounts;
+        private final int size;
+
+        private TabFrameIds(Map<String, FlatTab> tabsById, NavPlan navPlan) {
+            this.tabsById = Map.copyOf(tabsById);
+            this.navPlan = navPlan;
+            this.tabIds = List.copyOf(tabsById.keySet());
+            Map<String, Integer> pageCounts = new LinkedHashMap<>();
+            int size = 0;
+            for (Map.Entry<String, FlatTab> entry : this.tabsById.entrySet()) {
+                int pageCount = contentPageCount(entry.getValue().tab());
+                pageCounts.put(entry.getKey(), pageCount);
+                size += pageCount * navPlan.windowCount();
+            }
+            this.pageCounts = Map.copyOf(pageCounts);
+            this.size = size;
+        }
+
+        @Override
+        public Iterator<String> iterator() {
+            return new Iterator<>() {
+                private int tabIndex;
+                private int navStart;
+                private int pageIndex;
+
+                @Override
+                public boolean hasNext() {
+                    return tabIndex < tabIds.size();
+                }
+
+                @Override
+                public String next() {
+                    if (!hasNext()) {
+                        throw new NoSuchElementException();
+                    }
+                    String tabId = tabIds.get(tabIndex);
+                    String frameId = tabFrameId(tabId, navStart, pageIndex);
+                    advance(tabId);
+                    return frameId;
+                }
+
+                private void advance(String tabId) {
+                    int totalPages = pageCounts.get(tabId);
+                    pageIndex++;
+                    if (pageIndex >= totalPages) {
+                        pageIndex = 0;
+                        navStart++;
+                        if (navStart >= navPlan.windowCount()) {
+                            navStart = 0;
+                            tabIndex++;
+                        }
+                    }
+                }
+            };
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+
+        @Override
+        public boolean contains(Object object) {
+            if (!(object instanceof String frameId)) {
+                return false;
+            }
+            try {
+                TabFrameRef ref = parseTabFrameId(frameId);
+                FlatTab flatTab = tabsById.get(ref.tabId());
+                if (flatTab == null) {
+                    return false;
+                }
+                Integer pageCount = pageCounts.get(ref.tabId());
+                return ref.navStart() >= 0 && ref.navStart() < navPlan.windowCount()
+                        && ref.pageIndex() >= 0 && ref.pageIndex() < pageCount;
+            } catch (RuntimeException ignored) {
+                return false;
+            }
         }
     }
 }

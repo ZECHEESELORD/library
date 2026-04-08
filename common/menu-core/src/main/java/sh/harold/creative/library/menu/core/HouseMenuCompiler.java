@@ -43,8 +43,8 @@ public final class HouseMenuCompiler {
     }
 
     public static MenuSlot compile(int slot, MenuItem item) {
-        return compile(slot, item.icon(), item.name(), item.secondary().orElse(null), item.blocks(), item.glow(),
-                item.interactions(), item.promptSuppressed(), item.amount());
+        CompiledMenuPresentation presentation = compilePresentation(item);
+        return presentation.toMenuSlot(slot, item.interactions());
     }
 
     public static MenuSlot compile(
@@ -58,11 +58,31 @@ public final class HouseMenuCompiler {
             boolean promptSuppressed,
             int amount
     ) {
+        CompiledMenuPresentation presentation = compilePresentation(icon, name, secondary, blocks, glow,
+                interactions, promptSuppressed, amount);
+        return presentation.toMenuSlot(slot, interactions);
+    }
+
+    static CompiledMenuPresentation compilePresentation(MenuItem item) {
+        return compilePresentation(item.icon(), item.name(), item.secondary().orElse(null), item.blocks(),
+                item.glow(), item.interactions(), item.promptSuppressed(), item.amount());
+    }
+
+    static CompiledMenuPresentation compilePresentation(
+            MenuIcon icon,
+            Component name,
+            String secondary,
+            List<MenuBlock> blocks,
+            boolean glow,
+            Map<MenuClick, MenuInteraction> interactions,
+            boolean promptSuppressed,
+            int amount
+    ) {
         List<Component> lore = new ArrayList<>();
         appendSecondary(secondary, lore);
         appendBlocks(blocks, lore);
         appendPrompt(interactions, promptSuppressed, lore);
-        return new MenuSlot(slot, icon, name, lore, glow, interactions, amount);
+        return new CompiledMenuPresentation(icon, name, lore, glow, amount);
     }
 
     static int footerStart(int rows) {
