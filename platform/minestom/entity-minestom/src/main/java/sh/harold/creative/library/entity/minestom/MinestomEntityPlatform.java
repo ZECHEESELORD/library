@@ -87,7 +87,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
     public ManagedEntity spawn(Instance instance, EntitySpec spec) {
         EntitySpecValidator.validate(spec);
         Entity entity = createEntity(spec.type());
-        entity.setInstance(instance, toPos(spec.transform())).join();
+        MinestomFutureGuard.requireCompleted(entity.setInstance(instance, toPos(spec.transform())), "entity spawn");
 
         MinestomManagedEntity managedEntity = new MinestomManagedEntity(entity, spec, () -> entities.remove(entity.getUuid()));
         entities.put(managedEntity.id(), managedEntity);
@@ -561,7 +561,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
 
         @Override
         protected void doTeleport(EntityTransform transform) {
-            entity.teleport(toPos(transform)).join();
+            MinestomFutureGuard.requireCompleted(entity.teleport(toPos(transform)), "entity teleport");
         }
 
         @Override
@@ -660,7 +660,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
             entity.setNoGravity(true);
             entity.setHasPhysics(false);
             entity.setBoundingBox(SPACER_WIDTH, SPACER_WIDTH, SPACER_WIDTH);
-            entity.setInstance(instance, anchorPosition).join();
+            MinestomFutureGuard.requireCompleted(entity.setInstance(instance, anchorPosition), "house renderer line spawn");
             return entity;
         }
 
@@ -678,7 +678,7 @@ public final class MinestomEntityPlatform implements AutoCloseable {
             entity.setNoGravity(true);
             entity.setHasPhysics(false);
             entity.setBoundingBox(SPACER_WIDTH, LINE_SPACING, SPACER_WIDTH);
-            entity.setInstance(instance, anchorPosition).join();
+            MinestomFutureGuard.requireCompleted(entity.setInstance(instance, anchorPosition), "house renderer spacer spawn");
             return entity;
         }
     }

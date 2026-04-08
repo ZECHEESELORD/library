@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class MinestomCameraMotionPlatformTest {
@@ -98,6 +99,14 @@ class MinestomCameraMotionPlatformTest {
         platform.onRemoveEntityFromInstance(new RemoveEntityFromInstanceEvent(instance, player));
 
         assertEquals(java.util.List.of(), motions.activeViewers().stream().toList());
+    }
+
+    @Test
+    void helperFailsFastForIncompleteFutures() {
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                MinestomFutureGuard.requireCompleted(new CompletableFuture<>(), "camera motion teleport")
+        );
+        assertEquals("camera motion teleport must already be complete on the Minestom owned thread; blocking is not allowed", exception.getMessage());
     }
 
     private static CameraMotion impulse(String key, double yaw, double pitch) {

@@ -283,7 +283,7 @@ public final class MinestomScreenOverlayPlatform implements AutoCloseable {
                 entity.setHasPhysics(false);
                 entity.setBoundingBox(0.001, 0.001, 0.001);
                 entity.editEntityMeta(TextDisplayMeta.class, meta -> configure(meta, face));
-                entity.setInstance(instance, facePosition(owner, face)).join();
+                MinestomFutureGuard.requireCompleted(entity.setInstance(instance, facePosition(owner, face)), "screen overlay shell spawn");
                 entity.addViewer(owner);
                 faces.add(new MinestomOverlayFace(face, entity));
             }
@@ -298,7 +298,7 @@ public final class MinestomScreenOverlayPlatform implements AutoCloseable {
             byte textOpacity = (byte) composite.alphaByte();
             for (MinestomOverlayFace face : faces) {
                 Entity entity = face.entity();
-                entity.teleport(facePosition(owner, face.face())).join();
+                MinestomFutureGuard.requireCompleted(entity.teleport(facePosition(owner, face.face())), "screen overlay shell teleport");
                 entity.editEntityMeta(TextDisplayMeta.class, meta -> {
                     meta.setBackgroundColor(backgroundColor);
                     meta.setTextOpacity(textOpacity);

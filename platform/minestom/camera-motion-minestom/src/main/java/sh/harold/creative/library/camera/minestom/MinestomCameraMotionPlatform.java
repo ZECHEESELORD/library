@@ -112,11 +112,11 @@ public final class MinestomCameraMotionPlatform implements CameraMotionService {
 
     private static void applyDelta(Player player, CameraDelta delta) {
         float pitchDelta = clampPitchDelta(player.getPosition().pitch(), delta.pitchDegrees());
-        player.teleport(
+        MinestomFutureGuard.requireCompleted(player.teleport(
                 new Pos(0.0, 0.0, 0.0, (float) delta.yawDegrees(), pitchDelta),
                 null,
                 RelativeFlags.COORD | RelativeFlags.VIEW
-        ).join();
+        ), "camera motion teleport");
     }
 
     private static float clampPitchDelta(float currentPitch, double pitchDelta) {
