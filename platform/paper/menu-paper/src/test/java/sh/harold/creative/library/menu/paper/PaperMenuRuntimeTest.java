@@ -4,9 +4,11 @@ import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -34,8 +36,10 @@ import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
+import sh.harold.creative.library.menu.ReactiveTextPromptRequest;
 import sh.harold.creative.library.menu.ReactiveTabsView;
 import sh.harold.creative.library.menu.ReactiveMenuView;
+import sh.harold.creative.library.menu.UtilitySlot;
 import sh.harold.creative.library.menu.core.MenuTickHandle;
 import sh.harold.creative.library.menu.core.StandardMenuService;
 import sh.harold.creative.library.sound.CuePlayback;
@@ -140,6 +144,51 @@ class PaperMenuRuntimeTest {
 
         assertEquals("Reactive Refresh: On", slotTitle(access, inventory, 22));
         assertEquals(1, access.openedInventories.size());
+    }
+
+    @Test
+    void signPromptClosesMenuOpensVirtualSignAndReopensReactiveMenuOnSubmit() {
+        UUID viewerId = UUID.randomUUID();
+        PaperMenuTestSupport.TrackedPlayer trackedPlayer = PaperMenuTestSupport.trackedPlayer(viewerId);
+        Player player = trackedPlayer.player();
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+
+        runtime.open(player, reactivePromptMenu(new PromptState("")));
+        Inventory inventory = access.lastOpenedInventory();
+
+        runtime.onInventoryClick(click(player, inventory, UtilitySlot.RIGHT_1.resolveSlot(45), ClickType.LEFT));
+
+        assertTrue(trackedPlayer.state().openedVirtualSigns().isEmpty());
+
+        runNextTick(scheduled);
+        runNextTick(scheduled);
+        assertNull(access.topInventory(player));
+
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+
+        assertTrue(trackedPlayer.state().openedVirtualSigns().isEmpty());
+
+        runNextTick(scheduled);
+
+        assertEquals(1, trackedPlayer.state().signChanges().size());
+        assertEquals(1, trackedPlayer.state().openedVirtualSigns().size());
+
+        Location signLocation = trackedPlayer.state().signChangeLocations().getFirst();
+        SignChangeEvent signChange = new SignChangeEvent(PaperMenuTestSupport.block(signLocation), player,
+                new String[]{"pain", "", "", ""});
+        runtime.onSignChange(signChange);
+
+        assertTrue(signChange.isCancelled());
+
+        runNextTick(scheduled);
+
+        Inventory reopened = access.lastOpenedInventory();
+        assertEquals("Search: pain", slotTitle(access, reopened, UtilitySlot.RIGHT_1.resolveSlot(45)));
+        assertEquals(reopened, access.topInventory(player));
     }
 
     @Test
@@ -864,6 +913,36 @@ class PaperMenuRuntimeTest {
                 .build();
     }
 
+    private static ReactiveMenu reactivePromptMenu(PromptState initialState) {
+        return new StandardMenuService().reactiveList()
+                .state(initialState)
+                .render(state -> ReactiveListView.builder("Reactive Prompt")
+                        .addItem(MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                                .name(state.query().isBlank() ? "No Query" : "Query: " + state.query())
+                                .build())
+                        .utility(UtilitySlot.RIGHT_1, MenuButton.builder(MenuIcon.vanilla("oak_sign"))
+                                .name(state.query().isBlank() ? "Search" : "Search: " + state.query())
+                                .emit(ActionVerb.BROWSE, "search", "open-search")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click click && "open-search".equals(click.message())) {
+                        return ReactiveMenuResult.of(state, new ReactiveMenuEffect.RequestTextPrompt(
+                                ReactiveTextPromptRequest.sign("prompt-search", "Search", state.query())));
+                    }
+                    if (input instanceof ReactiveMenuInput.TextPromptSubmitted submitted
+                            && submitted.key().equals("prompt-search")) {
+                        return ReactiveMenuResult.stay(new PromptState(submitted.value()));
+                    }
+                    if (input instanceof ReactiveMenuInput.TextPromptCancelled cancelled
+                            && cancelled.key().equals("prompt-search")) {
+                        return ReactiveMenuResult.stay(state);
+                    }
+                    return ReactiveMenuResult.stay(state);
+                })
+                .build();
+    }
+
     private static Menu launcherMenu() {
         return new StandardMenuService().list()
                 .title("Launcher")
@@ -1294,6 +1373,9 @@ class PaperMenuRuntimeTest {
             scheduled.addLast(action);
             return () -> scheduled.remove(action);
         };
+    }
+
+    private record PromptState(String query) {
     }
 
     private static void runNextTick(Deque<Runnable> scheduled) {

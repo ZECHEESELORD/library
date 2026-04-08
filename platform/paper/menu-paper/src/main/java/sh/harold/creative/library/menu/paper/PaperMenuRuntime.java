@@ -671,6 +671,7 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     private void activatePrompt(PendingTextPrompt prompt, Player player) {
+        prompt.phase(PendingTextPromptPhase.ACTIVE);
         switch (prompt.mode()) {
             case SIGN -> {
                 player.sendSignChange(prompt.signLocation(), paddedSignLines(prompt.request()));

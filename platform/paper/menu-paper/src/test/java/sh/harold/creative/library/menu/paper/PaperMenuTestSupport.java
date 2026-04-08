@@ -1,7 +1,11 @@
 package sh.harold.creative.library.menu.paper;
 
+import io.papermc.paper.math.Position;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.block.sign.Side;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemFlag;
@@ -30,17 +34,26 @@ final class PaperMenuTestSupport {
     }
 
     static Player player(UUID uuid) {
+        return trackedPlayer(uuid).player();
+    }
+
+    static TrackedPlayer trackedPlayer(UUID uuid) {
         AtomicReference<ItemStack> cursor = new AtomicReference<>();
         InventoryState inventoryState = new InventoryState(36);
-        Player player = proxy(Player.class, new PlayerHandler(uuid, inventoryState, cursor));
+        PlayerState playerState = new PlayerState(new Location(null, 0.0, 64.0, 0.0));
+        Player player = proxy(Player.class, new PlayerHandler(uuid, inventoryState, cursor, playerState));
         inventoryState.holder = player;
-        return player;
+        return new TrackedPlayer(player, playerState);
     }
 
     static Inventory inventory(InventoryHolder holder, int size) {
         InventoryState state = new InventoryState(size);
         state.holder = holder;
         return state.as(Inventory.class);
+    }
+
+    static Block block(Location location) {
+        return proxy(Block.class, new BlockHandler(location));
     }
 
     static ItemStack item(Material material, int amount, Component name, List<Component> lore, boolean glow) {
@@ -74,12 +87,19 @@ final class PaperMenuTestSupport {
         private final UUID uuid;
         private final InventoryState inventoryState;
         private final AtomicReference<ItemStack> cursor;
+        private final PlayerState playerState;
         private PlayerInventory inventory;
 
-        private PlayerHandler(UUID uuid, InventoryState inventoryState, AtomicReference<ItemStack> cursor) {
+        private PlayerHandler(
+                UUID uuid,
+                InventoryState inventoryState,
+                AtomicReference<ItemStack> cursor,
+                PlayerState playerState
+        ) {
             this.uuid = Objects.requireNonNull(uuid, "uuid");
             this.inventoryState = Objects.requireNonNull(inventoryState, "inventoryState");
             this.cursor = Objects.requireNonNull(cursor, "cursor");
+            this.playerState = Objects.requireNonNull(playerState, "playerState");
         }
 
         @Override
@@ -101,6 +121,27 @@ final class PaperMenuTestSupport {
             if (name.equals("getItemOnCursor")) {
                 return cursor.get();
             }
+            if (name.equals("getLocation")) {
+                return playerState.location();
+            }
+            if (name.equals("sendSignChange")) {
+                playerState.recordSignChange((Location) args[0], asComponentLines(args[1]));
+                return null;
+            }
+            if (name.equals("openVirtualSign")) {
+                playerState.recordVirtualSign((Position) args[0], (Side) args[1]);
+                return null;
+            }
+            if (name.equals("sendMessage")) {
+                if (args != null && args.length > 0) {
+                    if (args[0] instanceof Component component) {
+                        playerState.recordMessage(component);
+                    } else if (args[0] instanceof String string) {
+                        playerState.recordMessage(Component.text(string));
+                    }
+                }
+                return null;
+            }
             if (name.equals("isOnline")) {
                 return true;
             }
@@ -112,6 +153,104 @@ final class PaperMenuTestSupport {
             }
             if (name.equals("toString")) {
                 return "FakePlayer[" + uuid + "]";
+            }
+            return defaultValue(method.getReturnType());
+        }
+    }
+
+    static final class TrackedPlayer {
+
+        private final Player player;
+        private final PlayerState state;
+
+        private TrackedPlayer(Player player, PlayerState state) {
+            this.player = player;
+            this.state = state;
+        }
+
+        Player player() {
+            return player;
+        }
+
+        PlayerState state() {
+            return state;
+        }
+    }
+
+    static final class PlayerState {
+
+        private final Location location;
+        private final List<Location> signChangeLocations = new ArrayList<>();
+        private final List<List<Component>> signChanges = new ArrayList<>();
+        private final List<Position> openedVirtualSigns = new ArrayList<>();
+        private final List<Side> openedVirtualSignSides = new ArrayList<>();
+        private final List<Component> messages = new ArrayList<>();
+
+        private PlayerState(Location location) {
+            this.location = Objects.requireNonNull(location, "location");
+        }
+
+        private Location location() {
+            return location.clone();
+        }
+
+        private void recordSignChange(Location location, List<Component> lines) {
+            signChangeLocations.add(location == null ? null : location.clone());
+            signChanges.add(List.copyOf(lines));
+        }
+
+        private void recordVirtualSign(Position position, Side side) {
+            openedVirtualSigns.add(position);
+            openedVirtualSignSides.add(side);
+        }
+
+        private void recordMessage(Component message) {
+            messages.add(message);
+        }
+
+        List<Location> signChangeLocations() {
+            return List.copyOf(signChangeLocations);
+        }
+
+        List<List<Component>> signChanges() {
+            return List.copyOf(signChanges);
+        }
+
+        List<Position> openedVirtualSigns() {
+            return List.copyOf(openedVirtualSigns);
+        }
+
+        List<Side> openedVirtualSignSides() {
+            return List.copyOf(openedVirtualSignSides);
+        }
+
+        List<Component> messages() {
+            return List.copyOf(messages);
+        }
+    }
+
+    private static final class BlockHandler implements InvocationHandler {
+
+        private final Location location;
+
+        private BlockHandler(Location location) {
+            this.location = Objects.requireNonNull(location, "location");
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) {
+            String name = method.getName();
+            if (name.equals("getLocation")) {
+                return location.clone();
+            }
+            if (name.equals("equals")) {
+                return proxy == args[0];
+            }
+            if (name.equals("hashCode")) {
+                return System.identityHashCode(proxy);
+            }
+            if (name.equals("toString")) {
+                return "FakeBlock[" + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ() + "]";
             }
             return defaultValue(method.getReturnType());
         }
@@ -389,5 +528,29 @@ final class PaperMenuTestSupport {
 
     private static EnumSet<ItemFlag> copyFlags(Set<ItemFlag> flags) {
         return flags.isEmpty() ? EnumSet.noneOf(ItemFlag.class) : EnumSet.copyOf(flags);
+    }
+
+    private static List<Component> asComponentLines(Object rawLines) {
+        if (rawLines instanceof List<?> lines) {
+            List<Component> components = new ArrayList<>(lines.size());
+            for (Object line : lines) {
+                if (line instanceof Component component) {
+                    components.add(component);
+                } else if (line != null) {
+                    components.add(Component.text(String.valueOf(line)));
+                } else {
+                    components.add(Component.empty());
+                }
+            }
+            return List.copyOf(components);
+        }
+        if (rawLines instanceof String[] lines) {
+            List<Component> components = new ArrayList<>(lines.length);
+            for (String line : lines) {
+                components.add(line == null ? Component.empty() : Component.text(line));
+            }
+            return List.copyOf(components);
+        }
+        return List.of();
     }
 }
