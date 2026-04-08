@@ -592,15 +592,25 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     void openInventory(PaperMenuSession session, Player player, Inventory inventory) {
+        if (promptBlocksInventoryOpen(session)) {
+            return;
+        }
         if (!shouldDeferInventoryTransitions()) {
             MenuTrace.time("runtime.inventoryOpen", () -> access.openInventory(player, inventory));
             return;
         }
         scheduleNextTick(MenuTrace.propagate(() -> {
-            if (sessions.get(session.viewerId()) == session && session.inventory() == inventory) {
+            if (sessions.get(session.viewerId()) == session
+                    && session.inventory() == inventory
+                    && !promptBlocksInventoryOpen(session)) {
                 MenuTrace.time("runtime.inventoryOpen", () -> access.openInventory(player, inventory));
             }
         }));
+    }
+
+    private boolean promptBlocksInventoryOpen(PaperMenuSession session) {
+        PendingTextPrompt prompt = prompts.get(session.viewerId());
+        return prompt != null && prompt.session() == session;
     }
 
     private PaperMenuSession session(Inventory inventory) {

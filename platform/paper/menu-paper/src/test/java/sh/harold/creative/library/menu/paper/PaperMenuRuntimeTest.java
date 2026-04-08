@@ -176,6 +176,12 @@ class PaperMenuRuntimeTest {
 
         assertEquals(1, trackedPlayer.state().signChanges().size());
         assertEquals(1, trackedPlayer.state().openedVirtualSigns().size());
+        assertNull(access.topInventory(player));
+
+        PaperMenuSession session = (PaperMenuSession) inventory.getHolder(false);
+        runtime.refresh(session);
+
+        assertNull(access.topInventory(player));
 
         Location signLocation = trackedPlayer.state().signChangeLocations().getFirst();
         SignChangeEvent signChange = new SignChangeEvent(PaperMenuTestSupport.block(signLocation), player,
