@@ -5,6 +5,8 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.block.sign.Side;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -128,6 +130,14 @@ final class PaperMenuTestSupport {
                 playerState.recordSignChange((Location) args[0], asComponentLines(args[1]));
                 return null;
             }
+            if (name.equals("sendBlockChange") && args != null && args.length == 2 && args[1] instanceof BlockData blockData) {
+                playerState.recordBlockChange((Location) args[0], blockData);
+                return null;
+            }
+            if (name.equals("sendBlockUpdate")) {
+                playerState.recordBlockUpdate((Location) args[0], (TileState) args[1]);
+                return null;
+            }
             if (name.equals("openVirtualSign")) {
                 playerState.recordVirtualSign((Position) args[0], (Side) args[1]);
                 return null;
@@ -182,8 +192,13 @@ final class PaperMenuTestSupport {
         private final Location location;
         private final List<Location> signChangeLocations = new ArrayList<>();
         private final List<List<Component>> signChanges = new ArrayList<>();
+        private final List<Location> blockChangeLocations = new ArrayList<>();
+        private final List<BlockData> blockChanges = new ArrayList<>();
+        private final List<Location> blockUpdateLocations = new ArrayList<>();
+        private final List<TileState> blockUpdates = new ArrayList<>();
         private final List<Position> openedVirtualSigns = new ArrayList<>();
         private final List<Side> openedVirtualSignSides = new ArrayList<>();
+        private final List<String> signPromptActions = new ArrayList<>();
         private final List<Component> messages = new ArrayList<>();
 
         private PlayerState(Location location) {
@@ -202,6 +217,19 @@ final class PaperMenuTestSupport {
         private void recordVirtualSign(Position position, Side side) {
             openedVirtualSigns.add(position);
             openedVirtualSignSides.add(side);
+            signPromptActions.add("open-virtual-sign");
+        }
+
+        private void recordBlockChange(Location location, BlockData blockData) {
+            blockChangeLocations.add(location == null ? null : location.clone());
+            blockChanges.add(blockData);
+            signPromptActions.add("block-change");
+        }
+
+        private void recordBlockUpdate(Location location, TileState tileState) {
+            blockUpdateLocations.add(location == null ? null : location.clone());
+            blockUpdates.add(tileState);
+            signPromptActions.add("block-update");
         }
 
         private void recordMessage(Component message) {
@@ -222,6 +250,26 @@ final class PaperMenuTestSupport {
 
         List<Side> openedVirtualSignSides() {
             return List.copyOf(openedVirtualSignSides);
+        }
+
+        List<Location> blockChangeLocations() {
+            return List.copyOf(blockChangeLocations);
+        }
+
+        List<BlockData> blockChanges() {
+            return List.copyOf(blockChanges);
+        }
+
+        List<Location> blockUpdateLocations() {
+            return List.copyOf(blockUpdateLocations);
+        }
+
+        List<TileState> blockUpdates() {
+            return List.copyOf(blockUpdates);
+        }
+
+        List<String> signPromptActions() {
+            return List.copyOf(signPromptActions);
         }
 
         List<Component> messages() {

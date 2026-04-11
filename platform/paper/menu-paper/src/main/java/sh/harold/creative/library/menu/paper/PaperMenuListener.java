@@ -1,8 +1,8 @@
 package sh.harold.creative.library.menu.paper;
 
+import io.papermc.paper.event.packet.UncheckedSignChangeEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -39,8 +39,8 @@ final class PaperMenuListener implements Listener {
     }
 
     @EventHandler
-    public void onSignChange(SignChangeEvent event) {
-        runtime.onSignChange(event);
+    public void onUncheckedSignChange(UncheckedSignChangeEvent event) {
+        runtime.onUncheckedSignChange(event);
     }
 
     @EventHandler

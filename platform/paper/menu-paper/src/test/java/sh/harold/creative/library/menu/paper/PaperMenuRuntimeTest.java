@@ -1,14 +1,18 @@
 package sh.harold.creative.library.menu.paper;
 
+import io.papermc.paper.event.packet.UncheckedSignChangeEvent;
+import io.papermc.paper.math.Position;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.sign.Side;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -69,6 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class PaperMenuRuntimeTest {
 
@@ -153,9 +158,11 @@ class PaperMenuRuntimeTest {
         Player player = trackedPlayer.player();
         TestPaperMenuAccess access = new TestPaperMenuAccess();
         Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime.PaperVirtualSignSupport virtualSigns = (request, allowedEditorId) ->
+                new PaperMenuRuntime.PreparedVirtualSign(mock(BlockData.class), mock(TileState.class));
         PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
                 new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
-                queuedScheduler(scheduled));
+                queuedScheduler(scheduled), virtualSigns);
 
         runtime.open(player, reactivePromptMenu(new PromptState("")));
         Inventory inventory = access.lastOpenedInventory();
@@ -174,7 +181,9 @@ class PaperMenuRuntimeTest {
 
         runNextTick(scheduled);
 
-        assertEquals(1, trackedPlayer.state().signChanges().size());
+        assertEquals(List.of("block-change", "block-update", "open-virtual-sign"), trackedPlayer.state().signPromptActions());
+        assertEquals(1, trackedPlayer.state().blockChanges().size());
+        assertEquals(1, trackedPlayer.state().blockUpdates().size());
         assertEquals(1, trackedPlayer.state().openedVirtualSigns().size());
         assertNull(access.topInventory(player));
 
@@ -183,10 +192,13 @@ class PaperMenuRuntimeTest {
 
         assertNull(access.topInventory(player));
 
-        Location signLocation = trackedPlayer.state().signChangeLocations().getFirst();
-        SignChangeEvent signChange = new SignChangeEvent(PaperMenuTestSupport.block(signLocation), player,
-                new String[]{"pain", "", "", ""});
-        runtime.onSignChange(signChange);
+        Location signLocation = trackedPlayer.state().blockChangeLocations().getFirst();
+        UncheckedSignChangeEvent signChange = new UncheckedSignChangeEvent(
+                player,
+                Position.block(signLocation),
+                Side.FRONT,
+                List.of(Component.text("pain"), Component.empty(), Component.empty(), Component.empty()));
+        runtime.onUncheckedSignChange(signChange);
 
         assertTrue(signChange.isCancelled());
 

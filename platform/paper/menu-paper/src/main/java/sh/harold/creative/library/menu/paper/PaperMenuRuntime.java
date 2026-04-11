@@ -1,16 +1,20 @@
 package sh.harold.creative.library.menu.paper;
 
+import io.papermc.paper.event.packet.UncheckedSignChangeEvent;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import io.papermc.paper.math.Position;
 import org.bukkit.Location;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.Material;
+import org.bukkit.block.Sign;
+import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.block.sign.Side;
 import org.bukkit.entity.Player;
-import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.DragType;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -61,6 +65,7 @@ final class PaperMenuRuntime implements AutoCloseable {
     private final Function<Runnable, MenuTickHandle> nextTickScheduler;
     private final MenuTraceController traceController;
     private final Consumer<String> traceSink;
+    private final PaperVirtualSignSupport virtualSigns;
     private final Map<UUID, PendingTextPrompt> prompts = new ConcurrentHashMap<>();
     private int inventoryInteractionDepth;
 
@@ -100,6 +105,13 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler,
+                     PaperVirtualSignSupport virtualSigns) {
+        this(access, playerLookup, renderer, sounds, tickScheduler, nextTickScheduler,
+                new MenuTraceController(), message -> { }, virtualSigns);
+    }
+
+    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
                      SoundCueService sounds, MenuTickScheduler tickScheduler, Consumer<Runnable> nextTickScheduler,
                      MenuTraceController traceController, Consumer<String> traceSink) {
         this(access, playerLookup, renderer, sounds, tickScheduler,
@@ -113,6 +125,13 @@ final class PaperMenuRuntime implements AutoCloseable {
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
                      SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler,
                      MenuTraceController traceController, Consumer<String> traceSink) {
+        this(access, playerLookup, renderer, sounds, tickScheduler, nextTickScheduler,
+                traceController, traceSink, PaperVirtualSignSupport.live());
+    }
+
+    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler,
+                     MenuTraceController traceController, Consumer<String> traceSink, PaperVirtualSignSupport virtualSigns) {
         this.access = Objects.requireNonNull(access, "access");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
@@ -121,6 +140,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         this.nextTickScheduler = Objects.requireNonNull(nextTickScheduler, "nextTickScheduler");
         this.traceController = Objects.requireNonNull(traceController, "traceController");
         this.traceSink = Objects.requireNonNull(traceSink, "traceSink");
+        this.virtualSigns = Objects.requireNonNull(virtualSigns, "virtualSigns");
     }
 
     void open(Player player, MenuDefinition menu) {
@@ -288,7 +308,7 @@ final class PaperMenuRuntime implements AutoCloseable {
                         : new ReactiveMenuInput.TextPromptSubmitted(prompt.request().key(), message, ReactiveTextPromptMode.CHAT))));
     }
 
-    void onSignChange(SignChangeEvent event) {
+    void onUncheckedSignChange(UncheckedSignChangeEvent event) {
         Player player = event.getPlayer();
         PendingTextPrompt prompt = prompts.get(player.getUniqueId());
         if (prompt == null || prompt.session() != sessions.get(player.getUniqueId())
@@ -296,17 +316,20 @@ final class PaperMenuRuntime implements AutoCloseable {
                 || prompt.phase() != PendingTextPromptPhase.ACTIVE) {
             return;
         }
-        if (!sameBlock(prompt.signLocation(), event.getBlock().getLocation())) {
+        if (event.getSide() != Side.FRONT || !sameBlock(prompt.signLocation(), event.getEditedBlockPosition())) {
             return;
         }
         event.setCancelled(true);
-        String[] lines = event.getLines();
-        String value = lines.length == 0 ? "" : lines[0];
+        List<Component> lines = event.lines();
+        String value = lines.isEmpty() ? "" : flatten(lines.getFirst());
         completePrompt(prompt, new ReactiveMenuInput.TextPromptSubmitted(prompt.request().key(), value, ReactiveTextPromptMode.SIGN));
     }
 
     void onPlayerDisconnect(Player player) {
-        prompts.remove(player.getUniqueId());
+        PendingTextPrompt prompt = prompts.remove(player.getUniqueId());
+        if (prompt != null) {
+            restorePromptClientBlock(prompt, player);
+        }
         PaperMenuSession session = sessions.remove(player.getUniqueId());
         if (session != null) {
             session.detach();
@@ -374,9 +397,12 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (!sessions.remove(session.viewerId(), session)) {
             return;
         }
-        prompts.remove(session.viewerId());
-        MenuTrace.time("runtime.close", session::detach);
         Player player = playerLookup.apply(session.viewerId());
+        PendingTextPrompt prompt = prompts.remove(session.viewerId());
+        if (prompt != null && player != null) {
+            restorePromptClientBlock(prompt, player);
+        }
+        MenuTrace.time("runtime.close", session::detach);
         if (player != null) {
             if (shouldDeferInventoryTransitions()) {
                 Inventory closingInventory = session.inventory();
@@ -669,6 +695,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         if (player == null || sessions.get(session.viewerId()) != session) {
             return;
         }
+        restorePromptClientBlock(prompt, player);
         List<ReactiveMenuEffect> effects = MenuTrace.time("runtime.reactiveDispatch", () -> session.state().dispatchReactive(input));
         scheduleNextTick(MenuTrace.propagate(() -> {
             if (sessions.get(session.viewerId()) != session) {
@@ -684,12 +711,29 @@ final class PaperMenuRuntime implements AutoCloseable {
         prompt.phase(PendingTextPromptPhase.ACTIVE);
         switch (prompt.mode()) {
             case SIGN -> {
-                player.sendSignChange(prompt.signLocation(), paddedSignLines(prompt.request()));
+                PreparedVirtualSign virtualSign = virtualSigns.prepare(prompt.request(), player.getUniqueId());
+                player.sendBlockChange(prompt.signLocation(), virtualSign.blockData());
+                player.sendBlockUpdate(prompt.signLocation(), virtualSign.tileState());
                 player.openVirtualSign(Position.block(prompt.signLocation()), Side.FRONT);
             }
             case CHAT -> player.sendMessage(Component.text(
                     prompt.request().prompt() + " Type your response in chat or send 'cancel' to keep the current value."));
             default -> throw new IllegalStateException("Unsupported prompt mode: " + prompt.mode());
+        }
+    }
+
+    private void restorePromptClientBlock(PendingTextPrompt prompt, Player player) {
+        if (prompt.mode() != ReactiveTextPromptMode.SIGN) {
+            return;
+        }
+        Location signLocation = prompt.signLocation();
+        if (signLocation.getWorld() == null) {
+            return;
+        }
+        BlockData blockData = signLocation.getBlock().getBlockData();
+        player.sendBlockChange(signLocation, blockData);
+        if (signLocation.getBlock().getState() instanceof TileState tileState) {
+            player.sendBlockUpdate(signLocation, tileState);
         }
     }
 
@@ -811,6 +855,13 @@ final class PaperMenuRuntime implements AutoCloseable {
                 && left.getBlockZ() == right.getBlockZ();
     }
 
+    private static boolean sameBlock(Location left, Position right) {
+        return left != null && right != null
+                && left.getBlockX() == right.blockX()
+                && left.getBlockY() == right.blockY()
+                && left.getBlockZ() == right.blockZ();
+    }
+
     private void inInventoryInteraction(Runnable action) {
         inventoryInteractionDepth++;
         try {
@@ -821,6 +872,43 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     private record ReactiveClickBinding(MenuClick button, boolean shift) {
+    }
+
+    interface PaperVirtualSignSupport {
+
+        PreparedVirtualSign prepare(ReactiveTextPromptRequest request, UUID allowedEditorId);
+
+        static PaperVirtualSignSupport live() {
+            return LivePaperVirtualSignSupport.INSTANCE;
+        }
+    }
+
+    record PreparedVirtualSign(BlockData blockData, TileState tileState) {
+
+        PreparedVirtualSign {
+            Objects.requireNonNull(blockData, "blockData");
+            Objects.requireNonNull(tileState, "tileState");
+        }
+    }
+
+    private enum LivePaperVirtualSignSupport implements PaperVirtualSignSupport {
+        INSTANCE;
+
+        @Override
+        public PreparedVirtualSign prepare(ReactiveTextPromptRequest request, UUID allowedEditorId) {
+            BlockData blockData = Bukkit.createBlockData(Material.OAK_SIGN);
+            if (!(blockData.createBlockState() instanceof Sign sign)) {
+                throw new IllegalStateException("OAK_SIGN did not create a Sign block state");
+            }
+            List<Component> lines = paddedSignLines(request);
+            for (int index = 0; index < lines.size(); index++) {
+                sign.getSide(Side.FRONT).line(index, lines.get(index));
+            }
+            sign.setEditable(true);
+            sign.setWaxed(false);
+            sign.setAllowedEditorUniqueId(allowedEditorId);
+            return new PreparedVirtualSign(blockData, sign);
+        }
     }
 
     private static final class PendingTextPrompt {
