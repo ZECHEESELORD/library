@@ -15,7 +15,9 @@ public final class MenuButton implements MenuItem {
     private final Component name;
     private final String secondary;
     private final List<MenuBlock> blocks;
+    private final List<Component> exactLore;
     private final boolean glow;
+    private final int amount;
     private final Map<MenuClick, MenuInteraction> interactions;
     private final boolean promptSuppressed;
 
@@ -24,11 +26,16 @@ public final class MenuButton implements MenuItem {
         this.name = builder.name();
         this.secondary = builder.secondary();
         this.blocks = builder.blocks();
+        this.exactLore = builder.exactLore();
         this.glow = builder.isGlowing();
+        this.amount = builder.amount();
         this.interactions = Map.copyOf(builder.interactions);
         this.promptSuppressed = builder.promptSuppressed;
         if (interactions.isEmpty()) {
             throw new IllegalStateException("MenuButton requires at least one interaction");
+        }
+        if (amount <= 0) {
+            throw new IllegalStateException("amount must be greater than zero");
         }
     }
 
@@ -57,8 +64,18 @@ public final class MenuButton implements MenuItem {
     }
 
     @Override
+    public Optional<List<Component>> exactLore() {
+        return Optional.ofNullable(exactLore);
+    }
+
+    @Override
     public boolean glow() {
         return glow;
+    }
+
+    @Override
+    public int amount() {
+        return amount;
     }
 
     @Override
@@ -74,6 +91,7 @@ public final class MenuButton implements MenuItem {
     public static final class Builder extends AbstractMenuItemBuilder<Builder> {
 
         private final Map<MenuClick, MenuInteraction> interactions = new EnumMap<>(MenuClick.class);
+        private int amount = 1;
         private boolean promptSuppressed;
 
         private Builder(MenuIcon icon) {
@@ -174,8 +192,20 @@ public final class MenuButton implements MenuItem {
             return this;
         }
 
+        public Builder amount(int amount) {
+            if (amount <= 0) {
+                throw new IllegalArgumentException("amount must be greater than zero");
+            }
+            this.amount = amount;
+            return this;
+        }
+
         public MenuButton build() {
             return new MenuButton(this);
+        }
+
+        private int amount() {
+            return amount;
         }
 
         @Override

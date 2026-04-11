@@ -66,8 +66,16 @@ public final class HouseMenuCompiler {
     }
 
     static CompiledMenuPresentation compilePresentation(MenuItem item) {
-        return compilePresentation(item.icon(), item.name(), item.secondary().orElse(null), item.blocks(),
-                item.glow(), item.interactions(), item.promptSuppressed(), item.amount());
+        List<Component> lore = new ArrayList<>();
+        boolean exactLore = item.exactLore().isPresent();
+        if (exactLore) {
+            lore.addAll(item.exactLore().orElseThrow());
+        } else {
+            appendSecondary(item.secondary().orElse(null), lore);
+            appendBlocks(item.blocks(), lore);
+        }
+        appendPrompt(item.interactions(), item.promptSuppressed(), lore, exactLore);
+        return new CompiledMenuPresentation(item.icon(), item.name(), lore, item.glow(), item.amount());
     }
 
     static CompiledMenuPresentation compilePresentation(
@@ -83,7 +91,7 @@ public final class HouseMenuCompiler {
         List<Component> lore = new ArrayList<>();
         appendSecondary(secondary, lore);
         appendBlocks(blocks, lore);
-        appendPrompt(interactions, promptSuppressed, lore);
+        appendPrompt(interactions, promptSuppressed, lore, false);
         return new CompiledMenuPresentation(icon, name, lore, glow, amount);
     }
 
@@ -111,7 +119,12 @@ public final class HouseMenuCompiler {
         }
     }
 
-    private static void appendPrompt(Map<MenuClick, MenuInteraction> interactions, boolean promptSuppressed, List<Component> lore) {
+    private static void appendPrompt(
+            Map<MenuClick, MenuInteraction> interactions,
+            boolean promptSuppressed,
+            List<Component> lore,
+            boolean separateFromPreservedPresentation
+    ) {
         if (interactions.isEmpty() || promptSuppressed) {
             return;
         }
@@ -125,7 +138,7 @@ public final class HouseMenuCompiler {
             promptLines.add(promptLine("RIGHT CLICK", right.promptLabel(), NamedTextColor.AQUA));
         }
         if (!promptLines.isEmpty()) {
-            if (!lore.isEmpty()) {
+            if (!lore.isEmpty() || separateFromPreservedPresentation) {
                 lore.add(Component.empty());
             }
             lore.addAll(promptLines);

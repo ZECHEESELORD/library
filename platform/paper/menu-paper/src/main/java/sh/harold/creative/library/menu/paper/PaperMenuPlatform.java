@@ -5,6 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.creative.library.menu.CanvasMenuBuilder;
 import sh.harold.creative.library.menu.ListMenuBuilder;
@@ -98,7 +99,7 @@ public final class PaperMenuPlatform implements AutoCloseable {
     }
 
     public MenuButton.Builder button(ItemStack itemStack) {
-        return MenuButton.builder(icon(itemStack));
+        return applyExactPresentation(MenuButton.builder(icon(itemStack)), itemStack);
     }
 
     public MenuDisplayItem.Builder display(Material material) {
@@ -106,7 +107,7 @@ public final class PaperMenuPlatform implements AutoCloseable {
     }
 
     public MenuDisplayItem.Builder display(ItemStack itemStack) {
-        return MenuDisplayItem.builder(icon(itemStack));
+        return applyExactPresentation(MenuDisplayItem.builder(icon(itemStack)), itemStack);
     }
 
     public MenuStack.Builder stack(Material material) {
@@ -175,6 +176,62 @@ public final class PaperMenuPlatform implements AutoCloseable {
 
     private static MenuIcon icon(ItemStack itemStack) {
         return PaperMenuIcons.fromItemStack(Objects.requireNonNull(itemStack, "itemStack"));
+    }
+
+    private static MenuButton.Builder applyExactPresentation(MenuButton.Builder builder, ItemStack itemStack) {
+        ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
+        ItemMeta meta = stack.getItemMeta();
+        if (meta != null && meta.displayName() != null) {
+            builder.exactName(meta.displayName());
+        } else {
+            builder.name(fallbackName(stack.getType()));
+        }
+        builder.exactLore(meta != null && meta.lore() != null ? meta.lore() : java.util.List.of());
+        builder.glow(resolveGlow(stack, meta));
+        builder.amount(Math.max(1, stack.getAmount()));
+        return builder;
+    }
+
+    private static MenuDisplayItem.Builder applyExactPresentation(MenuDisplayItem.Builder builder, ItemStack itemStack) {
+        ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
+        ItemMeta meta = stack.getItemMeta();
+        if (meta != null && meta.displayName() != null) {
+            builder.exactName(meta.displayName());
+        } else {
+            builder.name(fallbackName(stack.getType()));
+        }
+        builder.exactLore(meta != null && meta.lore() != null ? meta.lore() : java.util.List.of());
+        builder.glow(resolveGlow(stack, meta));
+        builder.amount(Math.max(1, stack.getAmount()));
+        return builder;
+    }
+
+    private static boolean resolveGlow(ItemStack itemStack, ItemMeta meta) {
+        Boolean override = meta != null && meta.hasEnchantmentGlintOverride()
+                ? meta.getEnchantmentGlintOverride()
+                : null;
+        if (override != null) {
+            return override;
+        }
+        return !Objects.requireNonNull(itemStack, "itemStack").getEnchantments().isEmpty();
+    }
+
+    private static String fallbackName(Material material) {
+        String[] parts = Objects.requireNonNull(material, "material").name().toLowerCase(java.util.Locale.ROOT).split("_");
+        StringBuilder builder = new StringBuilder();
+        for (String part : parts) {
+            if (part.isEmpty()) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(' ');
+            }
+            builder.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) {
+                builder.append(part.substring(1));
+            }
+        }
+        return builder.toString();
     }
 
     private static MenuTickScheduler scheduleTicks(JavaPlugin plugin) {

@@ -2,6 +2,7 @@ package sh.harold.creative.library.menu.minestom;
 
 import net.kyori.adventure.text.Component;
 import net.minestom.server.MinecraftServer;
+import net.minestom.server.component.DataComponents;
 import net.minestom.server.entity.Player;
 import net.minestom.server.event.Event;
 import net.minestom.server.event.EventNode;
@@ -105,7 +106,7 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     }
 
     public MenuButton.Builder button(ItemStack itemStack) {
-        return MenuButton.builder(icon(itemStack));
+        return applyExactPresentation(MenuButton.builder(icon(itemStack)), itemStack);
     }
 
     public MenuDisplayItem.Builder display(Material material) {
@@ -113,7 +114,7 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     }
 
     public MenuDisplayItem.Builder display(ItemStack itemStack) {
-        return MenuDisplayItem.builder(icon(itemStack));
+        return applyExactPresentation(MenuDisplayItem.builder(icon(itemStack)), itemStack);
     }
 
     public MenuStack.Builder stack(Material material) {
@@ -184,6 +185,69 @@ public final class MinestomMenuPlatform implements AutoCloseable {
 
     private static MenuIcon icon(ItemStack itemStack) {
         return MinestomMenuIcons.fromItemStack(Objects.requireNonNull(itemStack, "itemStack"));
+    }
+
+    private static MenuButton.Builder applyExactPresentation(MenuButton.Builder builder, ItemStack itemStack) {
+        ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
+        Component name = stack.get(DataComponents.CUSTOM_NAME);
+        if (name == null) {
+            name = stack.get(DataComponents.ITEM_NAME);
+        }
+        if (name != null) {
+            builder.exactName(name);
+        } else {
+            builder.name(fallbackName(stack.material()));
+        }
+        java.util.List<Component> lore = stack.get(DataComponents.LORE);
+        builder.exactLore(lore == null ? java.util.List.of() : lore);
+        builder.glow(resolveGlow(stack));
+        builder.amount(Math.max(1, stack.amount()));
+        return builder;
+    }
+
+    private static MenuDisplayItem.Builder applyExactPresentation(MenuDisplayItem.Builder builder, ItemStack itemStack) {
+        ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
+        Component name = stack.get(DataComponents.CUSTOM_NAME);
+        if (name == null) {
+            name = stack.get(DataComponents.ITEM_NAME);
+        }
+        if (name != null) {
+            builder.exactName(name);
+        } else {
+            builder.name(fallbackName(stack.material()));
+        }
+        java.util.List<Component> lore = stack.get(DataComponents.LORE);
+        builder.exactLore(lore == null ? java.util.List.of() : lore);
+        builder.glow(resolveGlow(stack));
+        builder.amount(Math.max(1, stack.amount()));
+        return builder;
+    }
+
+    private static boolean resolveGlow(ItemStack itemStack) {
+        Boolean override = Objects.requireNonNull(itemStack, "itemStack").get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE);
+        if (override != null) {
+            return override;
+        }
+        var enchantments = itemStack.get(DataComponents.ENCHANTMENTS);
+        return enchantments != null && !enchantments.enchantments().isEmpty();
+    }
+
+    private static String fallbackName(Material material) {
+        String[] parts = Objects.requireNonNull(material, "material").name().toLowerCase(java.util.Locale.ROOT).split("_");
+        StringBuilder builder = new StringBuilder();
+        for (String part : parts) {
+            if (part.isEmpty()) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(' ');
+            }
+            builder.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) {
+                builder.append(part.substring(1));
+            }
+        }
+        return builder.toString();
     }
 
     private static MenuTickScheduler scheduleTicks() {

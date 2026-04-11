@@ -65,6 +65,7 @@ final class ReactivePlacementCache {
             Component title,
             String secondary,
             List<MenuBlock> blocks,
+            List<Component> exactLore,
             boolean glow,
             int amount,
             boolean promptSuppressed,
@@ -75,6 +76,7 @@ final class ReactivePlacementCache {
             icon = Objects.requireNonNull(icon, "icon");
             title = Objects.requireNonNull(title, "title");
             blocks = List.copyOf(blocks);
+            exactLore = List.copyOf(exactLore);
             prompts = Map.copyOf(prompts);
         }
 
@@ -84,6 +86,7 @@ final class ReactivePlacementCache {
                 prompts.put(entry.getKey(), entry.getValue().promptLabel());
             }
             return new MenuVisualKey(item.icon(), item.name(), item.secondary().orElse(null), item.blocks(),
+                    item.exactLore().orElse(List.of()),
                     item.glow(), item.amount(), item.promptSuppressed(), prompts);
         }
     }

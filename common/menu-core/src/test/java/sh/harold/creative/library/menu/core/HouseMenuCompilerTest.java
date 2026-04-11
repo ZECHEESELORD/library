@@ -318,6 +318,24 @@ class HouseMenuCompilerTest {
     }
 
     @Test
+    void exactLoreIsPreservedBeforePromptWithoutCompilingBodyBlocks() {
+        MenuButton button = MenuButton.builder(MenuIcon.vanilla("book"))
+                .exactName(Component.text("Exact Button"))
+                .exactLore(Component.text("First Exact Line"), Component.text("Second Exact Line"))
+                .line("Ignored body")
+                .action(ActionVerb.SELECT, "give the item", context -> {})
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, button);
+
+        assertEquals(List.of(
+                "First Exact Line",
+                "Second Exact Line",
+                "",
+                "CLICK to give the item!"), lore(slot));
+    }
+
+    @Test
     void progressUsesHouseFormattingAndAccentSegmentation() {
         MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("experience_bottle"))
                 .name("Progress")

@@ -19,6 +19,7 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
     private final List<MenuBlock> blocks = new ArrayList<>();
     private Component name;
     private String secondary;
+    private List<Component> exactLore;
     private boolean glow;
 
     AbstractMenuItemBuilder(MenuIcon icon) {
@@ -31,6 +32,26 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
 
     public B name(ComponentLike name) {
         this.name = Objects.requireNonNull(name, "name").asComponent().decoration(TextDecoration.ITALIC, false);
+        return self();
+    }
+
+    public B exactName(ComponentLike name) {
+        this.name = Objects.requireNonNull(name, "name").asComponent();
+        return self();
+    }
+
+    public B exactLore(ComponentLike... lines) {
+        Objects.requireNonNull(lines, "lines");
+        return exactLore(List.of(lines));
+    }
+
+    public B exactLore(Iterable<? extends ComponentLike> lines) {
+        Objects.requireNonNull(lines, "lines");
+        List<Component> copied = new ArrayList<>();
+        for (ComponentLike line : lines) {
+            copied.add(Objects.requireNonNull(line, "line").asComponent());
+        }
+        this.exactLore = List.copyOf(copied);
         return self();
     }
 
@@ -294,6 +315,10 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
 
     protected String secondary() {
         return secondary;
+    }
+
+    protected List<Component> exactLore() {
+        return exactLore;
     }
 
     protected List<MenuBlock> blocks() {

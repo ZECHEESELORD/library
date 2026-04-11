@@ -16,6 +16,10 @@ public sealed interface MenuItem permits MenuButton, MenuDisplayItem, MenuStack 
 
     List<MenuBlock> blocks();
 
+    default Optional<List<Component>> exactLore() {
+        return Optional.empty();
+    }
+
     boolean glow();
 
     default int amount() {
