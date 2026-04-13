@@ -7,6 +7,7 @@ import sh.harold.creative.library.sound.CueStep;
 import sh.harold.creative.library.sound.SoundCue;
 import sh.harold.creative.library.sound.SoundCueRegistry;
 import sh.harold.creative.library.sound.SoundCueService;
+import sh.harold.creative.library.sound.SoundTarget;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -49,8 +50,8 @@ public final class StandardSoundCueService implements SoundCueService {
     }
 
     @Override
-    public CuePlayback play(Audience audience, SoundCue cue) {
-        Audience target = Objects.requireNonNull(audience, "audience");
+    public CuePlayback play(SoundTarget target, SoundCue cue) {
+        SoundTarget playbackTarget = Objects.requireNonNull(target, "target");
         SoundCue soundCue = Objects.requireNonNull(cue, "cue");
         ensureOpen();
 
@@ -81,10 +82,10 @@ public final class StandardSoundCueService implements SoundCueService {
         try {
             for (Map.Entry<Long, List<Sound>> entry : delayed) {
                 List<Sound> sounds = entry.getValue();
-                ScheduledCueTask task = scheduler.schedule(entry.getKey(), () -> playback.fire(target, sounds));
+                ScheduledCueTask task = scheduler.schedule(entry.getKey(), () -> playback.fire(playbackTarget, sounds));
                 playback.addTask(task);
             }
-            playSounds(target, immediate);
+            playSounds(playbackTarget, immediate);
             return playback;
         } catch (Throwable failure) {
             playback.cancel();
@@ -149,9 +150,9 @@ public final class StandardSoundCueService implements SoundCueService {
         }
     }
 
-    private void playSounds(Audience audience, List<Sound> sounds) {
+    private void playSounds(SoundTarget target, List<Sound> sounds) {
         for (Sound sound : sounds) {
-            audience.playSound(sound);
+            target.play(sound);
         }
     }
 
@@ -190,7 +191,7 @@ public final class StandardSoundCueService implements SoundCueService {
             }
         }
 
-        void fire(Audience audience, List<Sound> sounds) {
+        void fire(SoundTarget target, List<Sound> sounds) {
             synchronized (playbackMonitor) {
                 if (finished) {
                     return;
@@ -198,7 +199,7 @@ public final class StandardSoundCueService implements SoundCueService {
             }
             boolean shouldUnregister = false;
             try {
-                playSounds(audience, sounds);
+                playSounds(target, sounds);
             } finally {
                 shouldUnregister = completeTask();
             }

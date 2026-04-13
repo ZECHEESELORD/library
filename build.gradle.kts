@@ -13,6 +13,7 @@ import org.gradle.kotlin.dsl.withType
 
 plugins {
     base
+    id("net.fabricmc.fabric-loom") apply false
 }
 
 val isJitPackBuild = System.getenv("JITPACK")?.equals("true", ignoreCase = true) == true
@@ -31,6 +32,8 @@ val unpublishedProjectPaths = setOf(
     ":platform:minestom:minestom-data-owner",
     ":platform:velocity:velocity-data-owner",
     ":platform:velocity:velocity-example",
+    ":platform:fabric:fabric-example",
+    ":platform:fabric:fabric-client-example",
 )
 
 // JitPack serves multi-module repos under com.github.<owner>.<repo>.
@@ -42,8 +45,11 @@ subprojects {
     version = rootProject.version
 
     apply<JavaLibraryPlugin>()
+    if (path.startsWith(":platform:fabric:")) {
+        apply(plugin = "net.fabricmc.fabric-loom")
+    }
 
-    val targetJava = if (path.startsWith(":platform:minestom:")) 25 else 21
+    val targetJava = if (path.startsWith(":platform:minestom:") || path.startsWith(":platform:fabric:")) 25 else 21
     val javaExtension = extensions.getByType<JavaPluginExtension>()
 
     // JitPack runs the build on one configured JDK; use --release for mixed targets there.
@@ -85,4 +91,16 @@ tasks.register("runMinestomExample") {
     group = "application"
     description = "Runs the embedded Minestom dev harness."
     dependsOn(":platform:minestom:minestom-example:run")
+}
+
+tasks.register("runFabricServerExample") {
+    group = "application"
+    description = "Runs the Fabric server example using Loom."
+    dependsOn(":platform:fabric:fabric-example:runServer")
+}
+
+tasks.register("runFabricClientExample") {
+    group = "application"
+    description = "Runs the Fabric client example using Loom."
+    dependsOn(":platform:fabric:fabric-client-example:runClient")
 }

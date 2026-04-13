@@ -30,6 +30,10 @@ public record ReactiveTextPromptRequest(
         return new ReactiveTextPromptRequest(key, ReactiveTextPromptMode.CHAT, prompt, initialValue, List.of());
     }
 
+    public static ReactiveTextPromptRequest prompt(String key, String prompt, String initialValue) {
+        return new ReactiveTextPromptRequest(key, ReactiveTextPromptMode.PROMPT, prompt, initialValue, List.of());
+    }
+
     public static ReactiveTextPromptRequest sign(String key, String prompt, String initialValue) {
         String normalizedInitialValue = initialValue == null ? "" : initialValue;
         return new ReactiveTextPromptRequest(

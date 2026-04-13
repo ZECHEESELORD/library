@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_fabric_client_example",
+  "version": "${version}",
+  "name": "Creative Library Fabric Client Example",
+  "description": "Client-side Fabric example wiring for the shared creative library.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "sh.harold.creative.library.example.fabric.client.FabricClientExampleMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.1",
+    "minecraft": "~26.1.2",
+    "fabric-api": "*"
+  }
+}

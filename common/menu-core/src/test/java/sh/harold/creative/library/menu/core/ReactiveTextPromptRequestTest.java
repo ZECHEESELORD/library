@@ -21,6 +21,14 @@ class ReactiveTextPromptRequestTest {
     }
 
     @Test
+    void promptFactoryDefaultsToPromptMode() {
+        ReactiveTextPromptRequest request = ReactiveTextPromptRequest.prompt("search", "Search effects", "pain");
+
+        assertEquals(ReactiveTextPromptMode.PROMPT, request.preferredMode());
+        assertEquals(List.of(), request.signLines());
+    }
+
+    @Test
     void requestTextPromptEffectRejectsNullRequest() {
         assertThrows(NullPointerException.class, () -> new ReactiveMenuEffect.RequestTextPrompt(null));
     }

@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.sound.CuePlayback;
 import sh.harold.creative.library.sound.SoundCue;
 import sh.harold.creative.library.sound.SoundCueKeys;
+import sh.harold.creative.library.sound.SoundTarget;
+import sh.harold.creative.library.spatial.SpaceId;
+import sh.harold.creative.library.spatial.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -97,6 +100,22 @@ class StandardSoundCueServiceTest {
         assertThrows(IllegalStateException.class, () -> service.play(new RecordingAudience(), silent()));
     }
 
+    @Test
+    void positionedTargetsUseCustomEmitter() {
+        ManualScheduler scheduler = new ManualScheduler();
+        StandardSoundCueService service = new StandardSoundCueService(scheduler);
+        RecordingEmitter emitter = new RecordingEmitter();
+        SoundTarget target = SoundTarget.positioned(
+                SpaceId.of("creative", "arena"),
+                new Vec3(10.0, 64.0, -4.0),
+                emitter
+        );
+
+        service.play(target, sound("minecraft:entity.experience_orb.pickup", 0.5f, 1.4f));
+
+        assertEquals(List.of("creative:arena@10.0,64.0,-4.0=minecraft:entity.experience_orb.pickup@0.5/1.4"), emitter.played);
+    }
+
     private static Random deterministicRandom(int fixedIndex) {
         return new Random() {
             @Override
@@ -156,6 +175,18 @@ class StandardSoundCueServiceTest {
             }
             fired = true;
             action.run();
+        }
+    }
+
+    private static final class RecordingEmitter implements SoundTarget.PositionedSoundEmitter {
+
+        private final List<String> played = new ArrayList<>();
+
+        @Override
+        public void play(SpaceId spaceId, Vec3 position, Sound sound) {
+            played.add(spaceId.key().asString() + "@"
+                    + position.x() + "," + position.y() + "," + position.z()
+                    + "=" + sound.name().asString() + "@" + sound.volume() + "/" + sound.pitch());
         }
     }
 }

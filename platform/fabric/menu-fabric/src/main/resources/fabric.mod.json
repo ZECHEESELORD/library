@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_menu_fabric",
+  "version": "${version}",
+  "name": "Creative Library Menu Fabric",
+  "description": "Server-side Fabric menu backend for the shared creative library.",
+  "environment": "*",
+  "depends": {
+    "fabricloader": ">=0.19.1",
+    "minecraft": "~26.1.2",
+    "fabric-api": "*"
+  }
+}

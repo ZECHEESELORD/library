@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_entity_fabric_client",
+  "version": "${version}",
+  "name": "Creative Library Entity Fabric Client",
+  "description": "Fabric client entity scaffolding for the shared creative library.",
+  "environment": "client",
+  "depends": {
+    "fabricloader": ">=0.19.1",
+    "minecraft": "~26.1.2",
+    "fabric-api": "*"
+  }
+}

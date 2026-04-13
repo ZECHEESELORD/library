@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_sound_fabric_client",
+  "version": "${version}",
+  "name": "Creative Library Sound Fabric Client",
+  "description": "Fabric client-side sound adapters for the shared creative library.",
+  "environment": "client",
+  "depends": {
+    "fabricloader": ">=0.19.1",
+    "minecraft": "~26.1.2",
+    "fabric-api": "*"
+  }
+}

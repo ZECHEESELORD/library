@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ReactiveListControlsTest {
 
     private static final ReactiveTextPromptRequest SEARCH_PROMPT =
-            ReactiveTextPromptRequest.chat("search", "Search effects", "");
+            ReactiveTextPromptRequest.prompt("search", "Search effects", "");
 
     @Test
     void reduceOpenSearchPromptEmitsPromptEffect() {
@@ -44,7 +44,7 @@ class ReactiveListControlsTest {
 
         ReactiveListControls.Update update = ReactiveListControls.reduce(
                 state,
-                new ReactiveMenuInput.TextPromptSubmitted("search", "  pain   bow  ", ReactiveTextPromptMode.CHAT),
+                new ReactiveMenuInput.TextPromptSubmitted("search", "  pain   bow  ", ReactiveTextPromptMode.PROMPT),
                 SEARCH_PROMPT,
                 3,
                 2);

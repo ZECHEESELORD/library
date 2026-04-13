@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_message_fabric",
+  "version": "${version}",
+  "name": "Creative Library Message Fabric",
+  "description": "Fabric server-side message adapters for the shared creative library.",
+  "environment": "*",
+  "depends": {
+    "fabricloader": ">=0.19.1",
+    "minecraft": "~26.1.2",
+    "fabric-api": "*"
+  }
+}

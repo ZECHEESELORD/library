@@ -40,6 +40,7 @@ import sh.harold.creative.library.menu.ReactiveMenu;
 import sh.harold.creative.library.menu.ReactiveMenuEffect;
 import sh.harold.creative.library.menu.ReactiveMenuInput;
 import sh.harold.creative.library.menu.ReactiveMenuResult;
+import sh.harold.creative.library.menu.ReactiveTextPromptMode;
 import sh.harold.creative.library.menu.ReactiveTextPromptRequest;
 import sh.harold.creative.library.menu.ReactiveTabsView;
 import sh.harold.creative.library.menu.ReactiveMenuView;
@@ -52,6 +53,7 @@ import sh.harold.creative.library.sound.SoundCueKeys;
 import sh.harold.creative.library.sound.SoundCuePacks;
 import sh.harold.creative.library.sound.SoundCueRegistry;
 import sh.harold.creative.library.sound.SoundCueService;
+import sh.harold.creative.library.sound.SoundTarget;
 import sh.harold.creative.library.sound.core.StandardSoundCueRegistry;
 
 import java.util.ArrayList;
@@ -207,6 +209,58 @@ class PaperMenuRuntimeTest {
         Inventory reopened = access.lastOpenedInventory();
         assertEquals("Search: pain", slotTitle(access, reopened, UtilitySlot.RIGHT_1.resolveSlot(45)));
         assertEquals(reopened, access.topInventory(player));
+    }
+
+    @Test
+    void promptPromptClosesMenuOpensDialogAndReopensReactiveMenuOnSubmit() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        AtomicInteger promptOpens = new AtomicInteger();
+        AtomicReference<ReactiveTextPromptRequest> openedRequest = new AtomicReference<>();
+        AtomicReference<java.util.function.Consumer<String>> submit = new AtomicReference<>();
+        AtomicReference<Runnable> cancel = new AtomicReference<>();
+        PaperMenuRuntime.PaperDialogPromptSupport dialogPrompts = (viewer, request, onSubmit, onCancel) -> {
+            promptOpens.incrementAndGet();
+            openedRequest.set(request);
+            submit.set(onSubmit);
+            cancel.set(onCancel);
+        };
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
+                new RecordingSoundCueService(), sh.harold.creative.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled), new MenuTraceController(), message -> { },
+                PaperMenuRuntime.PaperVirtualSignSupport.live(), dialogPrompts);
+
+        runtime.open(player, reactivePromptDialogMenu(new PromptState("")));
+        Inventory inventory = access.lastOpenedInventory();
+
+        runtime.onInventoryClick(click(player, inventory, UtilitySlot.RIGHT_1.resolveSlot(45), ClickType.LEFT));
+
+        assertEquals(0, promptOpens.get());
+
+        runNextTick(scheduled);
+        runNextTick(scheduled);
+        assertNull(access.topInventory(player));
+
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+
+        assertEquals(0, promptOpens.get());
+
+        runNextTick(scheduled);
+
+        assertEquals(1, promptOpens.get());
+        assertEquals(ReactiveTextPromptMode.PROMPT, openedRequest.get().preferredMode());
+        assertEquals("Search", openedRequest.get().prompt());
+
+        submit.get().accept("pain");
+
+        runNextTick(scheduled);
+
+        Inventory reopened = access.lastOpenedInventory();
+        assertEquals("Search: pain", slotTitle(access, reopened, UtilitySlot.RIGHT_1.resolveSlot(45)));
+        assertEquals(reopened, access.topInventory(player));
+        assertTrue(cancel.get() != null);
     }
 
     @Test
@@ -932,6 +986,19 @@ class PaperMenuRuntimeTest {
     }
 
     private static ReactiveMenu reactivePromptMenu(PromptState initialState) {
+        return reactivePromptMenu(initialState,
+                state -> ReactiveTextPromptRequest.sign("prompt-search", "Search", state.query()));
+    }
+
+    private static ReactiveMenu reactivePromptDialogMenu(PromptState initialState) {
+        return reactivePromptMenu(initialState,
+                state -> ReactiveTextPromptRequest.prompt("prompt-search", "Search", state.query()));
+    }
+
+    private static ReactiveMenu reactivePromptMenu(
+            PromptState initialState,
+            java.util.function.Function<PromptState, ReactiveTextPromptRequest> promptFactory
+    ) {
         return new StandardMenuService().reactiveList()
                 .state(initialState)
                 .render(state -> ReactiveListView.builder("Reactive Prompt")
@@ -946,7 +1013,7 @@ class PaperMenuRuntimeTest {
                 .reduce((state, input) -> {
                     if (input instanceof ReactiveMenuInput.Click click && "open-search".equals(click.message())) {
                         return ReactiveMenuResult.of(state, new ReactiveMenuEffect.RequestTextPrompt(
-                                ReactiveTextPromptRequest.sign("prompt-search", "Search", state.query())));
+                                promptFactory.apply(state)));
                     }
                     if (input instanceof ReactiveMenuInput.TextPromptSubmitted submitted
                             && submitted.key().equals("prompt-search")) {
@@ -1489,7 +1556,7 @@ class PaperMenuRuntimeTest {
         }
 
         @Override
-        public CuePlayback play(Audience audience, SoundCue cue) {
+        public CuePlayback play(SoundTarget target, SoundCue cue) {
             playedKeys.add(keysByCue.get(cue));
             return CuePlayback.noop();
         }

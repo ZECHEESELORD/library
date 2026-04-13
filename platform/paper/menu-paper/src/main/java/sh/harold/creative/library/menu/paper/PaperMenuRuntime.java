@@ -1,9 +1,17 @@
 package sh.harold.creative.library.menu.paper;
 
+import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.event.packet.UncheckedSignChangeEvent;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickCallback;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import io.papermc.paper.registry.data.dialog.ActionButton;
+import io.papermc.paper.registry.data.dialog.DialogBase;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
+import io.papermc.paper.registry.data.dialog.body.DialogBody;
+import io.papermc.paper.registry.data.dialog.input.DialogInput;
+import io.papermc.paper.registry.data.dialog.type.DialogType;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import io.papermc.paper.math.Position;
 import org.bukkit.Location;
@@ -66,6 +74,7 @@ final class PaperMenuRuntime implements AutoCloseable {
     private final MenuTraceController traceController;
     private final Consumer<String> traceSink;
     private final PaperVirtualSignSupport virtualSigns;
+    private final PaperDialogPromptSupport dialogPrompts;
     private final Map<UUID, PendingTextPrompt> prompts = new ConcurrentHashMap<>();
     private int inventoryInteractionDepth;
 
@@ -108,7 +117,7 @@ final class PaperMenuRuntime implements AutoCloseable {
                      SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler,
                      PaperVirtualSignSupport virtualSigns) {
         this(access, playerLookup, renderer, sounds, tickScheduler, nextTickScheduler,
-                new MenuTraceController(), message -> { }, virtualSigns);
+                new MenuTraceController(), message -> { }, virtualSigns, PaperDialogPromptSupport.live());
     }
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
@@ -126,12 +135,20 @@ final class PaperMenuRuntime implements AutoCloseable {
                      SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler,
                      MenuTraceController traceController, Consumer<String> traceSink) {
         this(access, playerLookup, renderer, sounds, tickScheduler, nextTickScheduler,
-                traceController, traceSink, PaperVirtualSignSupport.live());
+                traceController, traceSink, PaperVirtualSignSupport.live(), PaperDialogPromptSupport.live());
     }
 
     PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
                      SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler,
                      MenuTraceController traceController, Consumer<String> traceSink, PaperVirtualSignSupport virtualSigns) {
+        this(access, playerLookup, renderer, sounds, tickScheduler, nextTickScheduler,
+                traceController, traceSink, virtualSigns, PaperDialogPromptSupport.live());
+    }
+
+    PaperMenuRuntime(PaperMenuAccess access, Function<UUID, Player> playerLookup, PaperMenuSlotRenderer renderer,
+                     SoundCueService sounds, MenuTickScheduler tickScheduler, Function<Runnable, MenuTickHandle> nextTickScheduler,
+                     MenuTraceController traceController, Consumer<String> traceSink, PaperVirtualSignSupport virtualSigns,
+                     PaperDialogPromptSupport dialogPrompts) {
         this.access = Objects.requireNonNull(access, "access");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
@@ -141,6 +158,7 @@ final class PaperMenuRuntime implements AutoCloseable {
         this.traceController = Objects.requireNonNull(traceController, "traceController");
         this.traceSink = Objects.requireNonNull(traceSink, "traceSink");
         this.virtualSigns = Objects.requireNonNull(virtualSigns, "virtualSigns");
+        this.dialogPrompts = Objects.requireNonNull(dialogPrompts, "dialogPrompts");
     }
 
     void open(Player player, MenuDefinition menu) {
@@ -650,9 +668,7 @@ final class PaperMenuRuntime implements AutoCloseable {
     }
 
     private void openTextPrompt(PaperMenuSession session, Player player, ReactiveTextPromptRequest request) {
-        ReactiveTextPromptMode resolvedMode = request.preferredMode() == ReactiveTextPromptMode.SIGN
-                ? ReactiveTextPromptMode.SIGN
-                : ReactiveTextPromptMode.CHAT;
+        ReactiveTextPromptMode resolvedMode = resolvePromptMode(request);
         Location signLocation = player.getLocation().toBlockLocation();
         PendingTextPrompt prompt = new PendingTextPrompt(
                 session,
@@ -718,6 +734,16 @@ final class PaperMenuRuntime implements AutoCloseable {
             }
             case CHAT -> player.sendMessage(Component.text(
                     prompt.request().prompt() + " Type your response in chat or send 'cancel' to keep the current value."));
+            case PROMPT -> dialogPrompts.open(
+                    player,
+                    prompt.request(),
+                    value -> completePrompt(prompt, new ReactiveMenuInput.TextPromptSubmitted(
+                            prompt.request().key(),
+                            value,
+                            ReactiveTextPromptMode.PROMPT)),
+                    () -> completePrompt(prompt, new ReactiveMenuInput.TextPromptCancelled(
+                            prompt.request().key(),
+                            ReactiveTextPromptMode.PROMPT)));
             default -> throw new IllegalStateException("Unsupported prompt mode: " + prompt.mode());
         }
     }
@@ -763,6 +789,14 @@ final class PaperMenuRuntime implements AutoCloseable {
             lines.add(Component.text(index < source.size() ? source.get(index) : ""));
         }
         return List.copyOf(lines);
+    }
+
+    private static ReactiveTextPromptMode resolvePromptMode(ReactiveTextPromptRequest request) {
+        return switch (request.preferredMode()) {
+            case PROMPT -> ReactiveTextPromptMode.PROMPT;
+            case SIGN -> ReactiveTextPromptMode.SIGN;
+            default -> ReactiveTextPromptMode.CHAT;
+        };
     }
 
     private boolean allowInput(PaperMenuSession session, AcceptedInput input) {
@@ -883,6 +917,15 @@ final class PaperMenuRuntime implements AutoCloseable {
         }
     }
 
+    interface PaperDialogPromptSupport {
+
+        void open(Player player, ReactiveTextPromptRequest request, Consumer<String> submit, Runnable cancel);
+
+        static PaperDialogPromptSupport live() {
+            return LivePaperDialogPromptSupport.INSTANCE;
+        }
+    }
+
     record PreparedVirtualSign(BlockData blockData, TileState tileState) {
 
         PreparedVirtualSign {
@@ -908,6 +951,42 @@ final class PaperMenuRuntime implements AutoCloseable {
             sign.setWaxed(false);
             sign.setAllowedEditorUniqueId(allowedEditorId);
             return new PreparedVirtualSign(blockData, sign);
+        }
+    }
+
+    private enum LivePaperDialogPromptSupport implements PaperDialogPromptSupport {
+        INSTANCE;
+
+        private static final String INPUT_KEY = "value";
+        private static final ClickCallback.Options CALLBACK_OPTIONS = ClickCallback.Options.builder()
+                .uses(1)
+                .build();
+
+        @Override
+        public void open(Player player, ReactiveTextPromptRequest request, Consumer<String> submit, Runnable cancel) {
+            Dialog dialog = Dialog.create(factory -> factory.empty()
+                    .base(DialogBase.builder(Component.text("Menu Prompt"))
+                            .canCloseWithEscape(true)
+                            .pause(false)
+                            .afterAction(DialogBase.DialogAfterAction.CLOSE)
+                            .body(List.of(DialogBody.plainMessage(Component.text(request.prompt()))))
+                            .inputs(List.of(DialogInput.text(INPUT_KEY, Component.text("Response"))
+                                    .labelVisible(false)
+                                    .initial(request.initialValue())
+                                    .maxLength(256)
+                                    .build()))
+                            .build())
+                    .type(DialogType.multiAction(List.of(ActionButton.builder(Component.text("Submit"))
+                                    .action(DialogAction.customClick(
+                                            (response, audience) -> submit.accept(Objects.requireNonNullElse(response.getText(INPUT_KEY), "")),
+                                            CALLBACK_OPTIONS))
+                                    .build()))
+                            .exitAction(ActionButton.builder(Component.text("Cancel"))
+                                    .action(DialogAction.customClick((response, audience) -> cancel.run(), CALLBACK_OPTIONS))
+                                    .build())
+                            .columns(1)
+                            .build()));
+            player.showDialog(dialog);
         }
     }
 

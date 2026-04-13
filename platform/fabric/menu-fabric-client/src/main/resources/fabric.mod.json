@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_menu_fabric_client",
+  "version": "${version}",
+  "name": "Creative Library Menu Fabric Client",
+  "description": "Passive client companion stub for the shared Fabric menu layer.",
+  "environment": "client",
+  "depends": {
+    "fabricloader": ">=0.19.1",
+    "minecraft": "~26.1.2",
+    "fabric-api": "*"
+  }
+}

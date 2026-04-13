@@ -8,9 +8,13 @@ import java.util.Objects;
 
 public sealed interface SoundCue permits SoundCue.Layer, SoundCue.Sequence, SoundCue.Silent, SoundCue.SoundEffect, SoundCue.Variant {
 
+    default CuePlayback play(SoundTarget target, SoundCueService service) {
+        Objects.requireNonNull(target, "target");
+        return Objects.requireNonNull(service, "service").play(target, this);
+    }
+
     default CuePlayback play(Audience audience, SoundCueService service) {
-        Objects.requireNonNull(audience, "audience");
-        return Objects.requireNonNull(service, "service").play(audience, this);
+        return play(SoundTarget.audience(Objects.requireNonNull(audience, "audience")), service);
     }
 
     record SoundEffect(Sound sound) implements SoundCue {

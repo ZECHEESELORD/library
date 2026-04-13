@@ -9,15 +9,27 @@ public interface SoundCueService extends AutoCloseable {
 
     SoundCueRegistry registry();
 
-    CuePlayback play(Audience audience, SoundCue cue);
+    CuePlayback play(SoundTarget target, SoundCue cue);
+
+    default CuePlayback play(Audience audience, SoundCue cue) {
+        return play(SoundTarget.audience(Objects.requireNonNull(audience, "audience")), cue);
+    }
+
+    default CuePlayback play(SoundTarget target, Key cueKey) {
+        Objects.requireNonNull(cueKey, "cueKey");
+        return play(Objects.requireNonNull(target, "target"), registry().cue(cueKey));
+    }
 
     default CuePlayback play(Audience audience, Key cueKey) {
-        Objects.requireNonNull(cueKey, "cueKey");
-        return play(audience, registry().cue(cueKey));
+        return play(SoundTarget.audience(Objects.requireNonNull(audience, "audience")), cueKey);
+    }
+
+    default CuePlayback play(SoundTarget target, String cueKey) {
+        return play(Objects.requireNonNull(target, "target"), Key.key(Objects.requireNonNull(cueKey, "cueKey")));
     }
 
     default CuePlayback play(Audience audience, String cueKey) {
-        return play(audience, Key.key(Objects.requireNonNull(cueKey, "cueKey")));
+        return play(SoundTarget.audience(Objects.requireNonNull(audience, "audience")), cueKey);
     }
 
     @Override

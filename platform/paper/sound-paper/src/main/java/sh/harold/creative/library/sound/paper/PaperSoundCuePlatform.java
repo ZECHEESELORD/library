@@ -8,6 +8,7 @@ import sh.harold.creative.library.sound.CuePlayback;
 import sh.harold.creative.library.sound.SoundCue;
 import sh.harold.creative.library.sound.SoundCueRegistry;
 import sh.harold.creative.library.sound.SoundCueService;
+import sh.harold.creative.library.sound.SoundTarget;
 import sh.harold.creative.library.sound.core.StandardSoundCueService;
 
 import java.util.Objects;
@@ -42,8 +43,8 @@ public final class PaperSoundCuePlatform implements SoundCueService {
     }
 
     @Override
-    public CuePlayback play(Audience audience, SoundCue cue) {
-        return sounds.play(audience, cue);
+    public CuePlayback play(SoundTarget target, SoundCue cue) {
+        return sounds.play(target, cue);
     }
 
     @Override

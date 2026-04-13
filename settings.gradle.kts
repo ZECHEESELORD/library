@@ -1,3 +1,13 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven("https://maven.fabricmc.net/")
+    }
+    plugins {
+        id("net.fabricmc.fabric-loom") version "1.16.1"
+    }
+}
+
 rootProject.name = "library"
 
 include(
@@ -79,13 +89,24 @@ include(
     ":platform:velocity:data-velocity",
     ":platform:velocity:velocity-data-owner",
     ":platform:velocity:velocity-example",
+    ":platform:fabric:message-fabric",
+    ":platform:fabric:message-fabric-client",
+    ":platform:fabric:sound-fabric",
+    ":platform:fabric:sound-fabric-client",
+    ":platform:fabric:menu-fabric",
+    ":platform:fabric:menu-fabric-client",
+    ":platform:fabric:entity-fabric",
+    ":platform:fabric:entity-fabric-client",
+    ":platform:fabric:fabric-example",
+    ":platform:fabric:fabric-client-example",
 )
 
 dependencyResolutionManagement {
-    repositoriesMode.set(org.gradle.api.initialization.resolve.RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(org.gradle.api.initialization.resolve.RepositoriesMode.PREFER_PROJECT)
 
     repositories {
         mavenCentral()
+        maven("https://maven.fabricmc.net/")
         maven("https://repo.papermc.io/repository/maven-public/")
         maven("https://maven.citizensnpcs.co/repo")
         maven("https://repo.minebench.de")
