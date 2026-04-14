@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_data_fabric",
+  "version": "${version}",
+  "name": "Creative Library Data Fabric",
+  "description": "Fabric-side DataApi helpers.",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "environment": "*",
+  "entrypoints": {},
+  "depends": {
+    "fabricloader": "*",
+    "fabric-api": "*",
+    "minecraft": "*",
+    "java": ">=25"
+  }
+}
