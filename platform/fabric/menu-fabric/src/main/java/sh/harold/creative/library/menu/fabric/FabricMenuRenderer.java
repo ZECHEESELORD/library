@@ -8,6 +8,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemLore;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuSlot;
+import sh.harold.creative.library.menu.MenuTooltipBehavior;
 import sh.harold.creative.library.menu.core.MenuTrace;
 
 import java.util.LinkedHashMap;
@@ -68,6 +69,7 @@ final class FabricMenuRenderer {
                     .toList()));
         }
         itemStack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, slot.glow() ? Boolean.TRUE : null);
+        FabricMenuTooltipMetadata.apply(itemStack, slot);
         return itemStack;
     }
 
@@ -75,7 +77,15 @@ final class FabricMenuRenderer {
         return PLAIN_TEXT.serialize(component);
     }
 
-    private record VisualKey(MenuIcon icon, Component title, List<Component> lore, boolean glow, int amount) {
+    private record VisualKey(
+            MenuIcon icon,
+            Component title,
+            List<Component> lore,
+            boolean glow,
+            int amount,
+            MenuTooltipBehavior tooltipBehavior,
+            int replaceableLoreLineCount
+    ) {
 
         private VisualKey {
             icon = java.util.Objects.requireNonNull(icon, "icon");
@@ -84,7 +94,8 @@ final class FabricMenuRenderer {
         }
 
         static VisualKey from(MenuSlot slot) {
-            return new VisualKey(slot.icon(), slot.title(), slot.lore(), slot.glow(), slot.amount());
+            return new VisualKey(slot.icon(), slot.title(), slot.lore(), slot.glow(), slot.amount(),
+                    slot.tooltipBehavior(), slot.replaceableLoreLineCount());
         }
     }
 }

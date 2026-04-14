@@ -318,7 +318,7 @@ class HouseMenuCompilerTest {
     }
 
     @Test
-    void exactLoreIsPreservedBeforePromptWithoutCompilingBodyBlocks() {
+    void exactLorePreservesSourceLinesAndAppendsBodyBeforePrompt() {
         MenuButton button = MenuButton.builder(MenuIcon.vanilla("book"))
                 .exactName(Component.text("Exact Button"))
                 .exactLore(Component.text("First Exact Line"), Component.text("Second Exact Line"))
@@ -331,6 +331,8 @@ class HouseMenuCompilerTest {
         assertEquals(List.of(
                 "First Exact Line",
                 "Second Exact Line",
+                "",
+                "Ignored body",
                 "",
                 "CLICK to give the item!"), lore(slot));
     }

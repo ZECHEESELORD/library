@@ -14,11 +14,17 @@ public record MenuSlot(
         List<Component> lore,
         boolean glow,
         Map<MenuClick, MenuInteraction> interactions,
-        int amount
+        int amount,
+        MenuTooltipBehavior tooltipBehavior,
+        int replaceableLoreLineCount
 ) {
 
     public MenuSlot(int slot, MenuIcon icon, Component title, List<Component> lore, boolean glow, Map<MenuClick, MenuInteraction> interactions) {
-        this(slot, icon, title, lore, glow, interactions, 1);
+        this(slot, icon, title, lore, glow, interactions, 1, MenuTooltipBehavior.CHROME, 0);
+    }
+
+    public MenuSlot(int slot, MenuIcon icon, Component title, List<Component> lore, boolean glow, Map<MenuClick, MenuInteraction> interactions, int amount) {
+        this(slot, icon, title, lore, glow, interactions, amount, MenuTooltipBehavior.CHROME, 0);
     }
 
     public MenuSlot {
@@ -31,6 +37,10 @@ public record MenuSlot(
         interactions = copyInteractions(interactions);
         if (amount <= 0) {
             throw new IllegalArgumentException("amount must be greater than zero");
+        }
+        tooltipBehavior = Objects.requireNonNull(tooltipBehavior, "tooltipBehavior");
+        if (replaceableLoreLineCount < 0) {
+            throw new IllegalArgumentException("replaceableLoreLineCount must be >= 0");
         }
     }
 

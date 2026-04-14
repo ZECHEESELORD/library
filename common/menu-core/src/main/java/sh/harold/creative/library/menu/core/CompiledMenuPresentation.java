@@ -5,6 +5,7 @@ import sh.harold.creative.library.menu.MenuClick;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuSlot;
+import sh.harold.creative.library.menu.MenuTooltipBehavior;
 
 import java.util.List;
 import java.util.Map;
@@ -15,7 +16,9 @@ record CompiledMenuPresentation(
         Component title,
         List<Component> lore,
         boolean glow,
-        int amount
+        int amount,
+        MenuTooltipBehavior tooltipBehavior,
+        int replaceableLoreLineCount
 ) {
 
     CompiledMenuPresentation {
@@ -25,9 +28,13 @@ record CompiledMenuPresentation(
         if (amount <= 0) {
             throw new IllegalArgumentException("amount must be greater than zero");
         }
+        tooltipBehavior = Objects.requireNonNull(tooltipBehavior, "tooltipBehavior");
+        if (replaceableLoreLineCount < 0) {
+            throw new IllegalArgumentException("replaceableLoreLineCount must be >= 0");
+        }
     }
 
     MenuSlot toMenuSlot(int slot, Map<MenuClick, MenuInteraction> interactions) {
-        return new MenuSlot(slot, icon, title, lore, glow, interactions, amount);
+        return new MenuSlot(slot, icon, title, lore, glow, interactions, amount, tooltipBehavior, replaceableLoreLineCount);
     }
 }

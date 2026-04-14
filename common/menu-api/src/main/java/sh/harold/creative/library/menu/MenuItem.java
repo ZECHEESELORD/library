@@ -33,4 +33,8 @@ public sealed interface MenuItem permits MenuButton, MenuDisplayItem, MenuStack 
     default boolean promptSuppressed() {
         return false;
     }
+
+    default MenuTooltipBehavior tooltipBehavior() {
+        return MenuTooltipBehavior.CHROME;
+    }
 }

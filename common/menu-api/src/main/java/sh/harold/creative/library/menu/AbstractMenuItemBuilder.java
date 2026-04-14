@@ -21,6 +21,7 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
     private String secondary;
     private List<Component> exactLore;
     private boolean glow;
+    private MenuTooltipBehavior tooltipBehavior = MenuTooltipBehavior.CHROME;
 
     AbstractMenuItemBuilder(MenuIcon icon) {
         this.icon = Objects.requireNonNull(icon, "icon");
@@ -302,6 +303,15 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
         return glow(true);
     }
 
+    public B tooltipBehavior(MenuTooltipBehavior tooltipBehavior) {
+        this.tooltipBehavior = Objects.requireNonNull(tooltipBehavior, "tooltipBehavior");
+        return self();
+    }
+
+    public B literalItem() {
+        return tooltipBehavior(MenuTooltipBehavior.LITERAL);
+    }
+
     protected MenuIcon icon() {
         return icon;
     }
@@ -327,6 +337,10 @@ abstract class AbstractMenuItemBuilder<B extends AbstractMenuItemBuilder<B>> {
 
     protected boolean isGlowing() {
         return glow;
+    }
+
+    protected MenuTooltipBehavior tooltipBehavior() {
+        return tooltipBehavior;
     }
 
     private B lines(MenuBlock.WrapMode wrapMode, List<String> lines) {

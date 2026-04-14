@@ -107,7 +107,7 @@ public final class FabricMenuPlatform implements AutoCloseable {
     }
 
     public MenuStack.Builder stack(ItemStack itemStack) {
-        return MenuStack.builder(FabricMenuIcons.fromItemStack(itemStack));
+        return applyExactPresentation(MenuStack.builder(FabricMenuIcons.fromItemStack(itemStack)), itemStack);
     }
 
     public MenuTab.Builder tab(String id, MenuIcon icon) {
@@ -158,6 +158,7 @@ public final class FabricMenuPlatform implements AutoCloseable {
 
     private static MenuButton.Builder applyExactPresentation(MenuButton.Builder builder, ItemStack itemStack) {
         ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
+        builder.literalItem();
         if (stack.getCustomName() != null) {
             builder.exactName(FabricMenuComponents.toAdventurePlain(stack.getCustomName()));
         } else {
@@ -174,6 +175,24 @@ public final class FabricMenuPlatform implements AutoCloseable {
 
     private static MenuDisplayItem.Builder applyExactPresentation(MenuDisplayItem.Builder builder, ItemStack itemStack) {
         ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
+        builder.literalItem();
+        if (stack.getCustomName() != null) {
+            builder.exactName(FabricMenuComponents.toAdventurePlain(stack.getCustomName()));
+        } else {
+            builder.name(stack.getHoverName().getString());
+        }
+        var lore = stack.get(DataComponents.LORE);
+        builder.exactLore(lore == null ? List.of() : lore.lines().stream()
+                .map(FabricMenuComponents::toAdventurePlain)
+                .collect(Collectors.toList()));
+        builder.glow(Boolean.TRUE.equals(stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE)) || stack.isEnchanted());
+        builder.amount(Math.max(1, stack.count()));
+        return builder;
+    }
+
+    private static MenuStack.Builder applyExactPresentation(MenuStack.Builder builder, ItemStack itemStack) {
+        ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
+        builder.literalItem();
         if (stack.getCustomName() != null) {
             builder.exactName(FabricMenuComponents.toAdventurePlain(stack.getCustomName()));
         } else {

@@ -7,6 +7,7 @@ import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuInteraction;
 import sh.harold.creative.library.menu.MenuItem;
 import sh.harold.creative.library.menu.MenuSlot;
+import sh.harold.creative.library.menu.MenuTooltipBehavior;
 
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -69,6 +70,7 @@ final class ReactivePlacementCache {
             boolean glow,
             int amount,
             boolean promptSuppressed,
+            MenuTooltipBehavior tooltipBehavior,
             Map<MenuClick, String> prompts
     ) {
 
@@ -87,7 +89,7 @@ final class ReactivePlacementCache {
             }
             return new MenuVisualKey(item.icon(), item.name(), item.secondary().orElse(null), item.blocks(),
                     item.exactLore().orElse(List.of()),
-                    item.glow(), item.amount(), item.promptSuppressed(), prompts);
+                    item.glow(), item.amount(), item.promptSuppressed(), item.tooltipBehavior(), prompts);
         }
     }
 }

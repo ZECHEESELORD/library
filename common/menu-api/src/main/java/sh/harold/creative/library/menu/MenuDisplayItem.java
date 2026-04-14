@@ -14,6 +14,7 @@ public final class MenuDisplayItem implements MenuItem {
     private final List<Component> exactLore;
     private final boolean glow;
     private final int amount;
+    private final MenuTooltipBehavior tooltipBehavior;
 
     private MenuDisplayItem(Builder builder) {
         this.icon = builder.icon();
@@ -23,6 +24,7 @@ public final class MenuDisplayItem implements MenuItem {
         this.exactLore = builder.exactLore();
         this.glow = builder.isGlowing();
         this.amount = builder.amount();
+        this.tooltipBehavior = builder.tooltipBehavior();
         if (amount <= 0) {
             throw new IllegalStateException("amount must be greater than zero");
         }
@@ -65,6 +67,11 @@ public final class MenuDisplayItem implements MenuItem {
     @Override
     public int amount() {
         return amount;
+    }
+
+    @Override
+    public MenuTooltipBehavior tooltipBehavior() {
+        return tooltipBehavior;
     }
 
     public static final class Builder extends AbstractMenuItemBuilder<Builder> {

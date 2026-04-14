@@ -12,6 +12,7 @@ import sh.harold.creative.library.menu.MenuItem;
 import sh.harold.creative.library.menu.MenuOptionLine;
 import sh.harold.creative.library.menu.MenuIcon;
 import sh.harold.creative.library.menu.MenuSlot;
+import sh.harold.creative.library.menu.MenuTooltipBehavior;
 import sh.harold.creative.library.ui.value.UiValue;
 
 import java.awt.Color;
@@ -67,15 +68,24 @@ public final class HouseMenuCompiler {
 
     static CompiledMenuPresentation compilePresentation(MenuItem item) {
         List<Component> lore = new ArrayList<>();
-        boolean exactLore = item.exactLore().isPresent();
+        List<Component> exactLoreLines = item.exactLore().orElse(null);
+        boolean exactLore = exactLoreLines != null;
+        int replaceableLoreLineCount = 0;
         if (exactLore) {
-            lore.addAll(item.exactLore().orElseThrow());
-        } else {
-            appendSecondary(item.secondary().orElse(null), lore);
-            appendBlocks(item.blocks(), lore);
+            lore.addAll(exactLoreLines);
+            replaceableLoreLineCount = exactLoreLines.size();
+            if (item.secondary().isPresent()) {
+                lore.add(Component.empty());
+            }
         }
+        appendSecondary(item.secondary().orElse(null), lore);
+        appendBlocks(item.blocks(), lore);
         appendPrompt(item.interactions(), item.promptSuppressed(), lore, exactLore);
-        return new CompiledMenuPresentation(item.icon(), item.name(), lore, item.glow(), item.amount());
+        int effectiveReplaceableLoreLineCount = item.tooltipBehavior() == MenuTooltipBehavior.LITERAL
+                ? replaceableLoreLineCount
+                : 0;
+        return new CompiledMenuPresentation(item.icon(), item.name(), lore, item.glow(), item.amount(),
+                item.tooltipBehavior(), effectiveReplaceableLoreLineCount);
     }
 
     static CompiledMenuPresentation compilePresentation(
@@ -92,7 +102,7 @@ public final class HouseMenuCompiler {
         appendSecondary(secondary, lore);
         appendBlocks(blocks, lore);
         appendPrompt(interactions, promptSuppressed, lore, false);
-        return new CompiledMenuPresentation(icon, name, lore, glow, amount);
+        return new CompiledMenuPresentation(icon, name, lore, glow, amount, MenuTooltipBehavior.CHROME, 0);
     }
 
     static int footerStart(int rows) {

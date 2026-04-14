@@ -20,6 +20,7 @@ public final class MenuButton implements MenuItem {
     private final int amount;
     private final Map<MenuClick, MenuInteraction> interactions;
     private final boolean promptSuppressed;
+    private final MenuTooltipBehavior tooltipBehavior;
 
     private MenuButton(Builder builder) {
         this.icon = builder.icon();
@@ -31,6 +32,7 @@ public final class MenuButton implements MenuItem {
         this.amount = builder.amount();
         this.interactions = Map.copyOf(builder.interactions);
         this.promptSuppressed = builder.promptSuppressed;
+        this.tooltipBehavior = builder.tooltipBehavior();
         if (interactions.isEmpty()) {
             throw new IllegalStateException("MenuButton requires at least one interaction");
         }
@@ -86,6 +88,11 @@ public final class MenuButton implements MenuItem {
     @Override
     public boolean promptSuppressed() {
         return promptSuppressed;
+    }
+
+    @Override
+    public MenuTooltipBehavior tooltipBehavior() {
+        return tooltipBehavior;
     }
 
     public static final class Builder extends AbstractMenuItemBuilder<Builder> {

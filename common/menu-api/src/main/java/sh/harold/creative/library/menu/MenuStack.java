@@ -11,16 +11,20 @@ public final class MenuStack implements MenuItem {
     private final Component name;
     private final String secondary;
     private final List<MenuBlock> blocks;
+    private final List<Component> exactLore;
     private final boolean glow;
     private final int amount;
+    private final MenuTooltipBehavior tooltipBehavior;
 
     private MenuStack(Builder builder) {
         this.icon = builder.icon();
         this.name = builder.name();
         this.secondary = builder.secondary();
         this.blocks = builder.blocks();
+        this.exactLore = builder.exactLore();
         this.glow = builder.isGlowing();
         this.amount = builder.amount;
+        this.tooltipBehavior = builder.tooltipBehavior();
         if (amount <= 0) {
             throw new IllegalStateException("amount must be greater than zero");
         }
@@ -51,6 +55,11 @@ public final class MenuStack implements MenuItem {
     }
 
     @Override
+    public Optional<List<Component>> exactLore() {
+        return Optional.ofNullable(exactLore);
+    }
+
+    @Override
     public boolean glow() {
         return glow;
     }
@@ -60,12 +69,18 @@ public final class MenuStack implements MenuItem {
         return amount;
     }
 
+    @Override
+    public MenuTooltipBehavior tooltipBehavior() {
+        return tooltipBehavior;
+    }
+
     public static final class Builder extends AbstractMenuItemBuilder<Builder> {
 
         private int amount = 1;
 
         private Builder(MenuIcon icon) {
             super(icon);
+            literalItem();
         }
 
         public Builder amount(int amount) {
