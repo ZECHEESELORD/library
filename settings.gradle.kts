@@ -91,6 +91,7 @@ include(
     ":platform:velocity:velocity-example",
     ":platform:fabric:message-fabric",
     ":platform:fabric:message-fabric-client",
+    ":platform:fabric:data-fabric",
     ":platform:fabric:sound-fabric",
     ":platform:fabric:sound-fabric-client",
     ":platform:fabric:menu-fabric",
