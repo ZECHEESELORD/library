@@ -61,6 +61,7 @@ dependencies {
 ### Fabric 1.21.11 Notes
 
 - The repo now has a versioned legacy adapter lane starting with `message-fabric-1_21_11`.
+- `data-fabric-1_21_11` follows the same pattern.
 - The `1.21.11` lane targets Java `21` and uses the remap Loom plugin id `net.fabricmc.fabric-loom-remap`.
 - Keep legacy Fabric modules version-suffixed so the `26.1.2` lane remains unchanged and publishable.
 
