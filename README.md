@@ -58,6 +58,12 @@ dependencies {
 - Fabric jars are built with the normal `jar` task; do not wire release flow around `remapJar`.
 - IntelliJ IDEA `2025.3` or newer is recommended for Java 25 support when working on the Fabric modules.
 
+### Fabric 1.21.11 Notes
+
+- The repo now has a versioned legacy adapter lane starting with `message-fabric-1_21_11`.
+- The `1.21.11` lane targets Java `21` and uses the remap Loom plugin id `net.fabricmc.fabric-loom-remap`.
+- Keep legacy Fabric modules version-suffixed so the `26.1.2` lane remains unchanged and publishable.
+
 ### Published Modules
 
 Published:

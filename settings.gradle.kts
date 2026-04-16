@@ -5,6 +5,7 @@ pluginManagement {
     }
     plugins {
         id("net.fabricmc.fabric-loom") version "1.16.1"
+        id("net.fabricmc.fabric-loom-remap") version "1.16.1"
     }
 }
 
@@ -90,6 +91,7 @@ include(
     ":platform:velocity:velocity-data-owner",
     ":platform:velocity:velocity-example",
     ":platform:fabric:message-fabric",
+    ":platform:fabric:message-fabric-1_21_11",
     ":platform:fabric:message-fabric-client",
     ":platform:fabric:data-fabric",
     ":platform:fabric:sound-fabric",

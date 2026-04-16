@@ -14,6 +14,7 @@ import org.gradle.kotlin.dsl.withType
 plugins {
     base
     id("net.fabricmc.fabric-loom") apply false
+    id("net.fabricmc.fabric-loom-remap") apply false
 }
 
 val isJitPackBuild = System.getenv("JITPACK")?.equals("true", ignoreCase = true) == true
@@ -45,11 +46,18 @@ subprojects {
     version = rootProject.version
 
     apply<JavaLibraryPlugin>()
-    if (path.startsWith(":platform:fabric:")) {
+    val isLegacyFabric12111 = path.startsWith(":platform:fabric:") && name.endsWith("-1_21_11")
+    if (isLegacyFabric12111) {
+        apply(plugin = "net.fabricmc.fabric-loom-remap")
+    } else if (path.startsWith(":platform:fabric:")) {
         apply(plugin = "net.fabricmc.fabric-loom")
     }
 
-    val targetJava = if (path.startsWith(":platform:minestom:") || path.startsWith(":platform:fabric:")) 25 else 21
+    val targetJava = when {
+        isLegacyFabric12111 -> 21
+        path.startsWith(":platform:minestom:") || path.startsWith(":platform:fabric:") -> 25
+        else -> 21
+    }
     val javaExtension = extensions.getByType<JavaPluginExtension>()
 
     // JitPack runs the build on one configured JDK; use --release for mixed targets there.
