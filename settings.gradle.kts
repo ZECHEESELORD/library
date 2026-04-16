@@ -94,6 +94,7 @@ include(
     ":platform:fabric:message-fabric-1_21_11",
     ":platform:fabric:message-fabric-client",
     ":platform:fabric:data-fabric",
+    ":platform:fabric:data-fabric-1_21_11",
     ":platform:fabric:sound-fabric",
     ":platform:fabric:sound-fabric-client",
     ":platform:fabric:menu-fabric",
