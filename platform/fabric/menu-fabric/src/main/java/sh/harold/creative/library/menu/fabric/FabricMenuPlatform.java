@@ -27,7 +27,6 @@ import sh.harold.creative.library.sound.fabric.FabricServerSoundCuePlatform;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 public final class FabricMenuPlatform implements AutoCloseable {
 
@@ -158,52 +157,47 @@ public final class FabricMenuPlatform implements AutoCloseable {
 
     private static MenuButton.Builder applyExactPresentation(MenuButton.Builder builder, ItemStack itemStack) {
         ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
-        builder.literalItem();
-        if (stack.getCustomName() != null) {
-            builder.exactName(FabricMenuComponents.toAdventurePlain(stack.getCustomName()));
-        } else {
-            builder.name(stack.getHoverName().getString());
-        }
-        var lore = stack.get(DataComponents.LORE);
-        builder.exactLore(lore == null ? List.of() : lore.lines().stream()
-                .map(FabricMenuComponents::toAdventurePlain)
-                .collect(Collectors.toList()));
-        builder.glow(Boolean.TRUE.equals(stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE)) || stack.isEnchanted());
+        builder.exactName(exactName(stack));
+        builder.exactLore(exactLore(stack));
+        builder.glow(resolveGlow(stack));
         builder.amount(Math.max(1, stack.count()));
         return builder;
     }
 
     private static MenuDisplayItem.Builder applyExactPresentation(MenuDisplayItem.Builder builder, ItemStack itemStack) {
         ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
-        builder.literalItem();
-        if (stack.getCustomName() != null) {
-            builder.exactName(FabricMenuComponents.toAdventurePlain(stack.getCustomName()));
-        } else {
-            builder.name(stack.getHoverName().getString());
-        }
-        var lore = stack.get(DataComponents.LORE);
-        builder.exactLore(lore == null ? List.of() : lore.lines().stream()
-                .map(FabricMenuComponents::toAdventurePlain)
-                .collect(Collectors.toList()));
-        builder.glow(Boolean.TRUE.equals(stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE)) || stack.isEnchanted());
+        builder.exactName(exactName(stack));
+        builder.exactLore(exactLore(stack));
+        builder.glow(resolveGlow(stack));
         builder.amount(Math.max(1, stack.count()));
         return builder;
     }
 
     private static MenuStack.Builder applyExactPresentation(MenuStack.Builder builder, ItemStack itemStack) {
         ItemStack stack = Objects.requireNonNull(itemStack, "itemStack");
-        builder.literalItem();
-        if (stack.getCustomName() != null) {
-            builder.exactName(FabricMenuComponents.toAdventurePlain(stack.getCustomName()));
-        } else {
-            builder.name(stack.getHoverName().getString());
-        }
-        var lore = stack.get(DataComponents.LORE);
-        builder.exactLore(lore == null ? List.of() : lore.lines().stream()
-                .map(FabricMenuComponents::toAdventurePlain)
-                .collect(Collectors.toList()));
-        builder.glow(Boolean.TRUE.equals(stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE)) || stack.isEnchanted());
+        builder.exactName(exactName(stack));
+        builder.exactLore(exactLore(stack));
+        builder.glow(resolveGlow(stack));
         builder.amount(Math.max(1, stack.count()));
         return builder;
+    }
+
+    private static Component exactName(ItemStack itemStack) {
+        net.minecraft.network.chat.Component name = itemStack.getCustomName();
+        if (name == null) {
+            name = itemStack.getItemName();
+        }
+        return FabricMenuComponents.toAdventure(Objects.requireNonNull(name, "item name"));
+    }
+
+    private static List<Component> exactLore(ItemStack itemStack) {
+        var lore = itemStack.get(DataComponents.LORE);
+        return lore == null ? List.of() : lore.lines().stream()
+                .map(FabricMenuComponents::toAdventure)
+                .toList();
+    }
+
+    private static boolean resolveGlow(ItemStack itemStack) {
+        return Boolean.TRUE.equals(itemStack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE)) || itemStack.isEnchanted();
     }
 }

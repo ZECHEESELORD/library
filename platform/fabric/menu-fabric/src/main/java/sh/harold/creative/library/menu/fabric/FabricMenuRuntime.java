@@ -625,17 +625,13 @@ final class FabricMenuRuntime implements AutoCloseable {
             name = itemStack.getItemName();
         }
         if (name != null) {
-            if (itemStack.getCustomName() != null) {
-                builder.exactName(FabricMenuComponents.toAdventurePlain(name));
-            } else {
-                builder.name(FabricMenuComponents.toAdventurePlain(name));
-            }
+            builder.exactName(FabricMenuComponents.toAdventure(name));
         } else {
             builder.name(fallbackName(itemStack.getItem()));
         }
         var lore = itemStack.get(DataComponents.LORE);
         builder.exactLore(lore == null ? List.of() : lore.lines().stream()
-                .map(FabricMenuComponents::toAdventurePlain)
+                .map(FabricMenuComponents::toAdventure)
                 .toList());
         builder.glow(Boolean.TRUE.equals(itemStack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE)) || itemStack.isEnchanted());
         return builder.build();
