@@ -15,19 +15,29 @@ import java.util.Objects;
 public final class FabricMessageSender {
 
     public void send(CommandSourceStack source, InlineMessage message) {
+        ServerPlayer player = source.getPlayer();
+        if (player != null) {
+            player.sendSystemMessage(toNative(FabricMessageComponents.renderChat(message), player.level().registryAccess()), false);
+            return;
+        }
         source.sendSystemMessage(toNative(FabricMessageComponents.renderChat(message), source.getServer().registryAccess()));
     }
 
     public void send(ServerPlayer player, InlineMessage message) {
-        player.sendSystemMessage(toNative(FabricMessageComponents.renderChat(message), player.level().registryAccess()));
+        player.sendSystemMessage(toNative(FabricMessageComponents.renderChat(message), player.level().registryAccess()), false);
     }
 
     public void send(CommandSourceStack source, MessageBlock block) {
+        ServerPlayer player = source.getPlayer();
+        if (player != null) {
+            player.sendSystemMessage(toNative(FabricMessageComponents.renderChat(block), player.level().registryAccess()), false);
+            return;
+        }
         source.sendSystemMessage(toNative(FabricMessageComponents.renderChat(block), source.getServer().registryAccess()));
     }
 
     public void send(ServerPlayer player, MessageBlock block) {
-        player.sendSystemMessage(toNative(FabricMessageComponents.renderChat(block), player.level().registryAccess()));
+        player.sendSystemMessage(toNative(FabricMessageComponents.renderChat(block), player.level().registryAccess()), false);
     }
 
     public void sendActionBar(CommandSourceStack source, InlineMessage message) {
