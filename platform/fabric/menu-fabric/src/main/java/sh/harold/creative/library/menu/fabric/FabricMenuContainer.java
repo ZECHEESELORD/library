@@ -102,18 +102,17 @@ final class FabricMenuContainer extends ChestMenu {
         if (!isValidSlotIndex(slotId)) {
             return;
         }
-        MenuClick menuClick = toMenuClick(button);
-        if (menuClick == null) {
+        ClickBinding click = resolveClick(input, button);
+        if (click == null) {
             return;
         }
         Slot slot = getSlot(slotId);
-        boolean shift = input == ContainerInput.QUICK_MOVE;
         if (slot.container == topContainer) {
-            runtime.onTopClick(this, serverPlayer, slotId, menuClick, shift);
+            runtime.onTopClick(this, serverPlayer, slotId, click.button(), click.shift());
             return;
         }
         if (slot.container == player.getInventory()) {
-            runtime.onBottomClick(this, serverPlayer, slot.getContainerSlot(), menuClick, shift, slot.getItem());
+            runtime.onBottomClick(this, serverPlayer, slot.getContainerSlot(), click.button(), click.shift(), slot.getItem());
         }
     }
 
@@ -178,11 +177,31 @@ final class FabricMenuContainer extends ChestMenu {
         };
     }
 
+    static ClickBinding resolveClick(ContainerInput input, int button) {
+        Objects.requireNonNull(input, "input");
+        return switch (input) {
+            case PICKUP -> switch (button) {
+                case 0 -> new ClickBinding(MenuClick.LEFT, false);
+                case 1 -> new ClickBinding(MenuClick.RIGHT, false);
+                default -> null;
+            };
+            case QUICK_MOVE -> switch (button) {
+                case 0 -> new ClickBinding(MenuClick.LEFT, true);
+                case 1 -> new ClickBinding(MenuClick.RIGHT, true);
+                default -> null;
+            };
+            default -> null;
+        };
+    }
+
     private static MenuClick toMenuClick(int button) {
         return switch (button) {
             case 0 -> MenuClick.LEFT;
             case 1 -> MenuClick.RIGHT;
             default -> null;
         };
+    }
+
+    record ClickBinding(MenuClick button, boolean shift) {
     }
 }
