@@ -72,6 +72,56 @@ Published:
 - all `common/*` library modules
 - platform adapter modules such as `message-paper`, `menu-fabric`, `menu-minestom`, and `message-velocity`
 
+### Metrics Modules
+
+- `metrics-api` defines metric descriptors plus the platform-agnostic `Telemetry` facade
+- `metrics-core` provides the default in-memory registry and JVM/process collectors
+- `metrics-prometheus` renders Prometheus scrapes and includes an optional JDK `HttpServer` helper
+
+Manual timing instrumentation:
+
+```java
+LabelKey status = Metrics.label("status", "success", "failure");
+TimerMetric chunkGeneration = Metrics.timer(
+        "chunk_generation_seconds",
+        "Tracks chunk generation latency",
+        status
+);
+
+StandardTelemetry telemetry = new StandardTelemetry();
+telemetry.observe(
+        chunkGeneration,
+        MetricLabels.of(status, "success"),
+        () -> generateChunk(pos)
+);
+```
+
+Expose a Prometheus scrape endpoint from a generic JVM app:
+
+```java
+StandardTelemetry telemetry = new StandardTelemetry();
+MetricRegistration jvmMetrics = JvmMetricsBinder.bind(telemetry);
+PrometheusHttpExporter exporter = PrometheusHttpExporter.start(
+        new InetSocketAddress("127.0.0.1", 9464),
+        "/metrics",
+        telemetry
+);
+```
+
+Paper, Fabric, and other hosts can wire low-cardinality platform gauges directly through the shared API:
+
+```java
+GaugeMetric playersOnline = Metrics.gauge(
+        "players_online",
+        "Current online player count",
+        "players"
+);
+
+telemetry.registerGauge(playersOnline, MetricLabels.empty(), server::getPlayerCount);
+```
+
+Annotation-based instrumentation is intentionally deferred from v1. The primary path is explicit `observe(...)`, direct counter/gauge updates, and explicit Prometheus export wiring.
+
 Not published:
 
 - `paper-example`
