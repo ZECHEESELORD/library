@@ -74,12 +74,9 @@ public final class HouseMenuCompiler {
         if (exactLore) {
             lore.addAll(exactLoreLines);
             replaceableLoreLineCount = exactLoreLines.size();
-            if (item.secondary().isPresent()) {
-                lore.add(Component.empty());
-            }
         }
         appendSecondary(item.secondary().orElse(null), lore);
-        appendBlocks(item.blocks(), lore);
+        appendBlocks(item.blocks(), lore, item.secondary().isPresent(), exactLore && item.secondary().isEmpty());
         appendPrompt(item.interactions(), item.promptSuppressed(), lore, exactLore);
         int effectiveReplaceableLoreLineCount = item.tooltipBehavior() == MenuTooltipBehavior.LITERAL
                 ? replaceableLoreLineCount
@@ -100,7 +97,7 @@ public final class HouseMenuCompiler {
     ) {
         List<Component> lore = new ArrayList<>();
         appendSecondary(secondary, lore);
-        appendBlocks(blocks, lore);
+        appendBlocks(blocks, lore, secondary != null, false);
         appendPrompt(interactions, promptSuppressed, lore, false);
         return new CompiledMenuPresentation(icon, name, lore, glow, amount, MenuTooltipBehavior.CHROME, 0);
     }
@@ -116,16 +113,22 @@ public final class HouseMenuCompiler {
         wrapText(secondary, 0, 0).forEach(line -> lore.add(text(line, MUTED_NEUTRAL)));
     }
 
-    private static void appendBlocks(List<MenuBlock> blocks, List<Component> lore) {
+    private static void appendBlocks(List<MenuBlock> blocks, List<Component> lore, boolean hasSecondary, boolean forceInitialSpacer) {
+        boolean renderedBlock = false;
         for (MenuBlock block : blocks) {
             List<Component> blockLines = renderBlock(block);
             if (blockLines.isEmpty()) {
                 continue;
             }
-            if (!lore.isEmpty()) {
+            boolean needsSpacer = renderedBlock
+                    || forceInitialSpacer
+                    || (hasSecondary && !renderedBlock)
+                    || (!hasSecondary && lore.isEmpty() && block instanceof MenuBlock.Description);
+            if (needsSpacer) {
                 lore.add(Component.empty());
             }
             lore.addAll(blockLines);
+            renderedBlock = true;
         }
     }
 
@@ -185,7 +188,7 @@ public final class HouseMenuCompiler {
     private static List<Component> renderMutedLines(List<String> lines) {
         List<Component> rendered = new ArrayList<>();
         for (String line : lines) {
-            rendered.add(text(line, MUTED_NEUTRAL));
+            wrapText(line, 0, 0).forEach(wrappedLine -> rendered.add(text(wrappedLine, MUTED_NEUTRAL)));
         }
         return rendered;
     }

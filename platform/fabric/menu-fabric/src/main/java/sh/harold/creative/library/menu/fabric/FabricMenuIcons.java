@@ -46,9 +46,9 @@ final class FabricMenuIcons {
     }
 
     private static ResolvableProfile profile(String textureValue) {
-        PropertyMap properties = new PropertyMap(LinkedHashMultimap.create());
+        var properties = LinkedHashMultimap.<String, Property>create();
         properties.put(TEXTURES_PROPERTY, new Property(TEXTURES_PROPERTY, textureValue));
-        GameProfile profile = new GameProfile(UUID.nameUUIDFromBytes(textureValue.getBytes(StandardCharsets.UTF_8)), "", properties);
+        GameProfile profile = new GameProfile(UUID.nameUUIDFromBytes(textureValue.getBytes(StandardCharsets.UTF_8)), "", new PropertyMap(properties));
         return ResolvableProfile.createResolved(profile);
     }
 

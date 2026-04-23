@@ -57,6 +57,7 @@ class HouseMenuCompilerTest {
         MenuSlot slot = HouseMenuCompiler.compile(13, item);
 
         assertEquals(List.of(
+                "",
                 "View your equipment,",
                 "stats, and more!"), lore(slot));
     }
@@ -83,8 +84,26 @@ class HouseMenuCompilerTest {
         MenuSlot slot = HouseMenuCompiler.compile(13, item);
 
         assertEquals(List.of(
+                "",
                 "Harvest crops and shear",
                 "sheep to earn Farming XP!"), lore(slot));
+    }
+
+    @Test
+    void secondarySitsDirectlyUnderTitleAndDescriptionGetsLowerSpacer() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Card")
+                .secondary("Starter Pack")
+                .description("Call lightning on the active player.")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of(
+                "Starter Pack",
+                "",
+                "Call lightning on",
+                "the active player."), lore(slot));
     }
 
     @Test
@@ -106,6 +125,26 @@ class HouseMenuCompilerTest {
                 "",
                 "ID: TWITCH.LIGHTNING"), lore(slot));
         assertEquals(NamedTextColor.DARK_GRAY, slot.lore().getLast().color());
+    }
+
+    @Test
+    void mutedLineWrapsLongFlavorCopyAsDarkGrayBlock() {
+        MenuDisplayItem item = MenuDisplayItem.builder(MenuIcon.vanilla("name_tag"))
+                .name("Flip Mobs Upside-Down")
+                .description("Turns nearby mobs upside down.")
+                .mutedLine("we got upside down honse tech before GTA 6. Incredible.")
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, item);
+
+        assertEquals(List.of(
+                "",
+                "Turns nearby mobs upside down.",
+                "",
+                "we got upside down honse tech",
+                "before GTA 6. Incredible."), lore(slot));
+        assertEquals(NamedTextColor.DARK_GRAY, slot.lore().get(3).color());
+        assertEquals(NamedTextColor.DARK_GRAY, slot.lore().get(4).color());
     }
 
     @Test

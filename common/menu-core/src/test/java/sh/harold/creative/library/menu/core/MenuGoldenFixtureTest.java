@@ -44,6 +44,7 @@ class MenuGoldenFixtureTest {
                 SLOT 13
                 TITLE Your SkyBlock Profile
                 LORE
+                
                 View your equipment,
                 stats, and more!
                 
@@ -63,6 +64,7 @@ class MenuGoldenFixtureTest {
                 SLOT 13
                 TITLE Farming XLIX
                 LORE
+                
                 Harvest crops and shear
                 sheep to earn Farming XP!
                 
@@ -80,6 +82,7 @@ class MenuGoldenFixtureTest {
                 SLOT 13
                 TITLE Museum Rewards
                 LORE
+                
                 Every 100 SkyBlock XP
                 obtained from your Museum,
                 Eleanor will reward you.
