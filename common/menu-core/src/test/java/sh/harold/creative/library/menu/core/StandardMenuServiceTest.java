@@ -157,7 +157,8 @@ class StandardMenuServiceTest {
         List<String> lore = loreAt(frame, slot);
 
         assertEquals(NamedTextColor.LIGHT_PURPLE, frame.slots().get(slot).title().color());
-        assertTrue(lore.getFirst().startsWith("Upgrade your account"));
+        assertEquals("", lore.getFirst());
+        assertTrue(lore.get(1).startsWith("Upgrade your account"));
         assertTrue(lore.contains("Profile: Nothing Going On..."));
         assertTrue(lore.contains("Account: Bazaar Flipper II"));
         assertEquals("CLICK to view!", lore.getLast());
