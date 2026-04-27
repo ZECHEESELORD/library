@@ -89,7 +89,7 @@ final class FabricMenuSession implements MenuContext.SessionControls {
         List<MenuSlot> nextSlots = frame.slots();
         MenuStack nextCursor = state.cursor();
 
-        if (current == null || current.closed() || current.rows() != nextRows || !Objects.equals(title, nextTitle)) {
+        if (current == null || current.closed() || current.rows() != nextRows) {
             SimpleContainer nextInventory = new SimpleContainer(nextRows * 9);
             runtime.render(nextInventory, null, nextSlots, viewer.level().registryAccess());
             title = nextTitle;
@@ -103,6 +103,8 @@ final class FabricMenuSession implements MenuContext.SessionControls {
             return;
         }
 
+        // Reopening a Fabric container recreates the vanilla screen and recenters the client cursor.
+        // Keep same-row menu transitions in-place; title changes become visible on the next real open.
         runtime.render(current.topContainer(), renderedSlots, nextSlots, viewer.level().registryAccess());
         title = nextTitle;
         renderedSlots = nextSlots;
