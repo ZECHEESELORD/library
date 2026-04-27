@@ -34,4 +34,43 @@ class PrometheusHttpExporterTest {
             assertTrue(response.body().contains("players_online_total 1.0"));
         }
     }
+
+    @Test
+    void reportsConfiguredAdvertisedUri() throws Exception {
+        URI advertisedUri = URI.create("https://metrics.example.test/eternum/prometheus");
+
+        try (StandardTelemetry telemetry = new StandardTelemetry();
+             PrometheusHttpExporter exporter = PrometheusHttpExporter.start(
+                     new PrometheusHttpExporter.Options(new InetSocketAddress("127.0.0.1", 0), "/metrics", telemetry)
+                             .advertisedUri(advertisedUri)
+             )) {
+            assertEquals(advertisedUri, exporter.uri());
+        }
+    }
+
+    @Test
+    void reportsActualPortAndNormalizedPath() throws Exception {
+        try (StandardTelemetry telemetry = new StandardTelemetry();
+             PrometheusHttpExporter exporter = PrometheusHttpExporter.start(
+                     new PrometheusHttpExporter.Options(new InetSocketAddress("127.0.0.1", 0), "custom-metrics", telemetry)
+             )) {
+            URI uri = exporter.uri();
+
+            assertEquals("http", uri.getScheme());
+            assertEquals("127.0.0.1", uri.getHost());
+            assertTrue(uri.getPort() > 0);
+            assertEquals("/custom-metrics", uri.getPath());
+        }
+    }
+
+    @Test
+    void reportsLoopbackUriForWildcardBindAddress() throws Exception {
+        try (StandardTelemetry telemetry = new StandardTelemetry();
+             PrometheusHttpExporter exporter = PrometheusHttpExporter.start(
+                     new PrometheusHttpExporter.Options(new InetSocketAddress("0.0.0.0", 0), "/metrics", telemetry)
+             )) {
+            assertEquals("127.0.0.1", exporter.uri().getHost());
+            assertTrue(exporter.uri().getPort() > 0);
+        }
+    }
 }
