@@ -8,6 +8,18 @@ dependencies {
     implementation("net.kyori:adventure-text-serializer-gson:${rootProject.property("adventureVersion")}")
 }
 
+loom {
+    runs {
+        named("client") {
+            runDir("run/client")
+        }
+        named("server") {
+            runDir("run/client")
+            ideConfigGenerated(false)
+        }
+    }
+}
+
 tasks.processResources {
     filesMatching("fabric.mod.json") {
         expand("version" to project.version)
