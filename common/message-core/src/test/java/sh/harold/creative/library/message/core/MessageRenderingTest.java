@@ -45,6 +45,24 @@ class MessageRenderingTest {
     }
 
     @Test
+    void debugNoticeCanRenderDebugTagWithoutTopicStyling() {
+        NoticeMessage message = Message.debug(
+                "Loaded arena {arena}.",
+                Message.slot("arena", "Factory Floor")
+        ).tag(Tag.DEBUG);
+
+        Component expected = Component.text()
+                .append(Component.text("[DEBUG]", NamedTextColor.AQUA))
+                .append(Component.space())
+                .append(Component.text("Loaded arena ", NamedTextColor.GRAY))
+                .append(Component.text("Factory Floor", NamedTextColor.DARK_GRAY))
+                .append(Component.text(".", NamedTextColor.GRAY))
+                .build();
+
+        assertEquals(expected, renderChat(message));
+    }
+
+    @Test
     void styledComponentValueKeepsItsOwnColor() {
         NoticeMessage message = Message.info(
                 "You are holding {item}.",

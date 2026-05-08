@@ -65,7 +65,7 @@ final class DefaultMessageRenderer {
             if (!first) {
                 builder.append(Component.space());
             }
-            builder.append(Component.text("[" + tag.label() + "]", style.defaultValueColor()));
+            builder.append(Component.text("[" + tag.label() + "]", tag.color().orElse(style.defaultValueColor())));
             first = false;
         }
         if (!message.tags().isEmpty()) {
