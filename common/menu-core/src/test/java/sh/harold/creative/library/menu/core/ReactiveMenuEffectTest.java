@@ -21,4 +21,9 @@ class ReactiveMenuEffectTest {
         assertEquals(7, effect.slot());
         assertNull(effect.stack());
     }
+
+    @Test
+    void replaceEffectRejectsNullMenu() {
+        assertThrows(NullPointerException.class, () -> new ReactiveMenuEffect.Replace(null));
+    }
 }

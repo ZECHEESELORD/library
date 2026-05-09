@@ -3,11 +3,19 @@ package sh.harold.creative.library.menu;
 import java.util.Objects;
 
 public sealed interface ReactiveMenuEffect permits ReactiveMenuEffect.Close, ReactiveMenuEffect.Open,
+        ReactiveMenuEffect.Replace,
         ReactiveMenuEffect.RequestTextPrompt, ReactiveMenuEffect.SetViewerInventorySlot {
 
     record Open(MenuDefinition menu) implements ReactiveMenuEffect {
 
         public Open {
+            menu = Objects.requireNonNull(menu, "menu");
+        }
+    }
+
+    record Replace(MenuDefinition menu) implements ReactiveMenuEffect {
+
+        public Replace {
             menu = Objects.requireNonNull(menu, "menu");
         }
     }

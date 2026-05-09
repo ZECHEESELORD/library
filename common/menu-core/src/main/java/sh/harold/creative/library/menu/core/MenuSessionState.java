@@ -120,6 +120,11 @@ public final class MenuSessionState {
         invalidate();
     }
 
+    public void replaceCurrent(MenuDefinition menu) {
+        this.current = newEntry(menu);
+        invalidate();
+    }
+
     public void openFrame(String frameId) {
         Objects.requireNonNull(frameId, "frameId");
         if (!(current instanceof CompiledEntry compiled)) {

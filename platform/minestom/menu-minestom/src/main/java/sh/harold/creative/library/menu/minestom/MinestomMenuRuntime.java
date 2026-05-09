@@ -232,6 +232,16 @@ final class MinestomMenuRuntime implements AutoCloseable {
         });
     }
 
+    void replaceCurrent(MinestomMenuSession session, MenuDefinition menu) {
+        if (sessions.get(session.viewer().getUuid()) != session) {
+            return;
+        }
+        MenuTrace.time("runtime.replaceCurrent", () -> {
+            session.state().replaceCurrent(menu);
+            show(session, true);
+        });
+    }
+
     void back(MinestomMenuSession session) {
         if (sessions.get(session.viewer().getUuid()) != session) {
             return;
@@ -456,6 +466,10 @@ final class MinestomMenuRuntime implements AutoCloseable {
                 }
                 case ReactiveMenuEffect.Open open -> {
                     replace(session, open.menu());
+                    return true;
+                }
+                case ReactiveMenuEffect.Replace replace -> {
+                    replaceCurrent(session, replace.menu());
                     return true;
                 }
                 case ReactiveMenuEffect.Close ignored -> {

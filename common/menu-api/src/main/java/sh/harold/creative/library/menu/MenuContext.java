@@ -18,6 +18,10 @@ public final class MenuContext {
             }
 
             @Override
+            public void replace(MenuDefinition menu) {
+            }
+
+            @Override
             public void back() {
             }
 
@@ -29,6 +33,10 @@ public final class MenuContext {
         void refresh();
 
         void open(MenuDefinition menu);
+
+        default void replace(MenuDefinition menu) {
+            open(menu);
+        }
 
         void back();
 
@@ -69,6 +77,10 @@ public final class MenuContext {
 
     public void open(MenuDefinition menu) {
         controls.open(java.util.Objects.requireNonNull(menu, "menu"));
+    }
+
+    public void replace(MenuDefinition menu) {
+        controls.replace(java.util.Objects.requireNonNull(menu, "menu"));
     }
 
     public void back() {

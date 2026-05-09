@@ -273,6 +273,16 @@ final class FabricMenuRuntime implements AutoCloseable {
         });
     }
 
+    void replaceCurrent(FabricMenuSession session, MenuDefinition menu) {
+        if (sessions.get(session.viewer().getUUID()) != session) {
+            return;
+        }
+        MenuTrace.time("runtime.replaceCurrent", () -> {
+            session.state().replaceCurrent(menu);
+            show(session, true);
+        });
+    }
+
     void back(FabricMenuSession session) {
         if (sessions.get(session.viewer().getUUID()) != session) {
             return;
@@ -423,6 +433,10 @@ final class FabricMenuRuntime implements AutoCloseable {
                 }
                 case ReactiveMenuEffect.Open open -> {
                     replace(session, open.menu());
+                    return true;
+                }
+                case ReactiveMenuEffect.Replace replace -> {
+                    replaceCurrent(session, replace.menu());
                     return true;
                 }
                 case ReactiveMenuEffect.Close ignored -> {

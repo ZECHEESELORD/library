@@ -396,6 +396,19 @@ final class PaperMenuRuntime implements AutoCloseable {
         });
     }
 
+    void replaceCurrent(PaperMenuSession session, MenuDefinition menu) {
+        if (sessions.get(session.viewerId()) != session) {
+            return;
+        }
+        MenuTrace.time("runtime.replaceCurrent", () -> {
+            session.state().replaceCurrent(menu);
+            Player player = playerLookup.apply(session.viewerId());
+            if (player != null) {
+                show(session, player, true);
+            }
+        });
+    }
+
     void back(PaperMenuSession session) {
         if (sessions.get(session.viewerId()) != session) {
             return;
@@ -596,6 +609,10 @@ final class PaperMenuRuntime implements AutoCloseable {
                 }
                 case ReactiveMenuEffect.Open open -> {
                     replace(session, open.menu());
+                    return true;
+                }
+                case ReactiveMenuEffect.Replace replace -> {
+                    replaceCurrent(session, replace.menu());
                     return true;
                 }
                 case ReactiveMenuEffect.Close ignored -> {

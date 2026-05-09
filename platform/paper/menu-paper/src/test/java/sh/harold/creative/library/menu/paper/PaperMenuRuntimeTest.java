@@ -136,6 +136,40 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
+    void actionReplaceCurrentMenuPreservesParentBackHistory() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+        AtomicBoolean enabled = new AtomicBoolean(false);
+
+        runtime.open(player, toggleLauncherMenu(enabled));
+        Inventory rootInventory = access.lastOpenedInventory();
+        assertEquals("Open Toggle", slotTitle(access, rootInventory, 10));
+
+        InventoryClickEvent openChild = click(player, rootInventory, 10, ClickType.LEFT);
+        runtime.onInventoryClick(openChild);
+
+        assertTrue(openChild.isCancelled());
+        Inventory childInventory = access.lastOpenedInventory();
+        assertEquals("Disabled", slotTitle(access, childInventory, 10));
+        assertEquals("Go Back", slotTitle(access, childInventory, 48));
+
+        InventoryClickEvent toggle = click(player, childInventory, 10, ClickType.LEFT);
+        runtime.onInventoryClick(toggle);
+
+        assertTrue(toggle.isCancelled());
+        assertEquals("Enabled", slotTitle(access, childInventory, 10));
+        assertEquals("Go Back", slotTitle(access, childInventory, 48));
+
+        InventoryClickEvent back = click(player, childInventory, 48, ClickType.LEFT);
+        runtime.onInventoryClick(back);
+
+        assertTrue(back.isCancelled());
+        assertEquals("Open Toggle", slotTitle(access, access.lastOpenedInventory(), 10));
+    }
+
+    @Test
     void refreshRebuildsReactiveMenuAfterExternalStateMutation() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
@@ -979,8 +1013,18 @@ class PaperMenuRuntimeTest {
                         .name(enabled.get() ? "Enabled" : "Disabled")
                         .action(ActionVerb.TOGGLE, context -> {
                             enabled.set(!enabled.get());
-                            context.open(toggleMenu(enabled));
+                            context.replace(toggleMenu(enabled));
                         })
+                        .build())
+                .build();
+    }
+
+    private static Menu toggleLauncherMenu(AtomicBoolean enabled) {
+        return new StandardMenuService().list()
+                .title("Settings")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("Open Toggle")
+                        .action(ActionVerb.OPEN, context -> context.open(toggleMenu(enabled)))
                         .build())
                 .build();
     }

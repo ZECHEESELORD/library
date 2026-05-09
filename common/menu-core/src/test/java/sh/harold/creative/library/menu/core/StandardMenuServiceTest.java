@@ -316,6 +316,38 @@ class StandardMenuServiceTest {
     }
 
     @Test
+    void sessionStateCanReplaceCurrentMenuWithoutPushingHistory() {
+        Menu root = menus.list()
+                .title("Settings")
+                .addItems(sampleButtons("Root", 1))
+                .build();
+        Menu child = menus.canvas()
+                .title("Offset")
+                .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("compass"))
+                        .name("Offset 0ms")
+                        .build())
+                .build();
+        Menu adjustedChild = menus.canvas()
+                .title("Offset")
+                .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("compass"))
+                        .name("Offset +5ms")
+                        .build())
+                .build();
+
+        MenuSessionState state = new MenuSessionState(root);
+        state.openChild(child);
+        state.replaceCurrent(adjustedChild);
+
+        assertEquals("Offset +5ms", titleAt(state.currentFrame(), 13));
+        assertEquals("Go Back", titleAt(state.currentFrame(), 48));
+        assertEquals(List.of("To Settings"), loreAt(state.currentFrame().slots().get(48)));
+
+        assertTrue(state.back());
+        assertEquals("Settings", ComponentText.flatten(state.currentFrame().title()));
+        assertFalse(state.back());
+    }
+
+    @Test
     void sessionStateTracksFrameHistoryButBackLoreUsesMenuTitleOnly() {
         Menu root = menus.list()
                 .title("Gallery")

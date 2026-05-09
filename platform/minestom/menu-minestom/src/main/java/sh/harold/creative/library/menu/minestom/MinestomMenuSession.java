@@ -105,6 +105,11 @@ final class MinestomMenuSession implements MenuContext.SessionControls {
     }
 
     @Override
+    public void replace(MenuDefinition menu) {
+        runtime.replaceCurrent(this, menu);
+    }
+
+    @Override
     public void back() {
         runtime.back(this);
     }
