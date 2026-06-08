@@ -1,6 +1,5 @@
 package sh.harold.creative.library.menu.minestom;
 
-import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -46,6 +45,7 @@ import sh.harold.creative.library.sound.SoundCueKeys;
 import sh.harold.creative.library.sound.SoundCuePacks;
 import sh.harold.creative.library.sound.SoundCueRegistry;
 import sh.harold.creative.library.sound.SoundCueService;
+import sh.harold.creative.library.sound.SoundTarget;
 import sh.harold.creative.library.sound.core.StandardSoundCueRegistry;
 
 import java.net.InetSocketAddress;
@@ -1251,7 +1251,7 @@ class MinestomMenuRuntimeTest {
         }
 
         @Override
-        public CuePlayback play(Audience audience, SoundCue cue) {
+        public CuePlayback play(SoundTarget target, SoundCue cue) {
             playedKeys.add(keysByCue.get(cue));
             return CuePlayback.noop();
         }

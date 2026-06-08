@@ -5,11 +5,14 @@ import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.minecraft.ChatFormatting;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Style;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.ItemLore;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sh.harold.creative.library.menu.ActionVerb;
 import sh.harold.creative.library.menu.MenuButton;
@@ -23,6 +26,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FabricMenuPlatformTest {
+
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
 
     @Test
     void buttonFromItemStackDefaultsToChromeAndPreservesStyledPresentation() {
@@ -67,7 +76,7 @@ class FabricMenuPlatformTest {
     }
 
     private static ItemStack styledStack() {
-        ItemStack stack = new ItemStack(Items.NETHER_STAR, 7);
+        ItemStack stack = new ItemStack(net.minecraft.core.Holder.direct(Items.NETHER_STAR), 7);
         stack.set(DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("Styled Name")
                 .setStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true).withItalic(false)));
         stack.set(DataComponents.LORE, new ItemLore(List.of(

@@ -1,9 +1,3 @@
-sourceSets {
-    main {
-        java.srcDir("src/main/java")
-    }
-}
-
 dependencies {
     api(project(":common:message-api"))
     implementation(project(":common:message-core"))
