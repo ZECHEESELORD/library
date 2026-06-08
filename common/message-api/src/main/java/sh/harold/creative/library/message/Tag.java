@@ -8,7 +8,7 @@ import java.util.Optional;
 public enum Tag {
     STAFF("STAFF", NamedTextColor.AQUA),
     DAEMON("DAEMON"),
-    DEBUG("DEBUG", NamedTextColor.AQUA);
+    DEBUG("DEBUG", NamedTextColor.GRAY);
 
     private final String label;
     private final TextColor color;

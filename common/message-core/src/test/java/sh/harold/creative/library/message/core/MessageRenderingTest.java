@@ -70,7 +70,7 @@ class MessageRenderingTest {
         ).tag(Tag.DEBUG);
 
         Component expected = Component.text()
-                .append(Component.text("[DEBUG]", NamedTextColor.AQUA))
+                .append(Component.text("[DEBUG]", NamedTextColor.GRAY))
                 .append(Component.space())
                 .append(Component.text("Loaded arena ", NamedTextColor.GRAY))
                 .append(Component.text("Factory Floor", NamedTextColor.DARK_GRAY))
