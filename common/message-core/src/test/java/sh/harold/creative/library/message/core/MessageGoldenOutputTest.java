@@ -237,6 +237,52 @@ class MessageGoldenOutputTest {
     }
 
     @Test
+    void chatMenuOutputMatchesGoldenSnapshot() {
+        MessageBlock block = Message.chatMenu("Players")
+                .pageSize(2)
+                .nextCommand("/event list page 2")
+                .row("{player}", Message.slot("player", "Alpha"))
+                .row("{player}", Message.slot("player", "Beta"))
+                .row("{player}", Message.slot("player", "Gamma"))
+                .build();
+
+        assertSnapshot(
+                """
+                TEXT:
+
+                PLAYERS
+                 Alpha
+                 Beta
+
+                 [PREV] Page 1/2 [NEXT]
+
+                TREE:
+                text("")
+                  text("\\n")
+                  text("PLAYERS") color=#57C7FF bold
+                  text("\\n")
+                  text(" ") color=gray
+                  text("Alpha") color=gray
+                  text("\\n")
+                  text(" ") color=gray
+                  text("Beta") color=gray
+                  text("\\n")
+                  text("\\n")
+                  text(" ") color=gray
+                  text("[PREV]") color=dark_gray
+                  text(" Page ") color=gray
+                  text("1") color=gray
+                  text("/") color=gray
+                  text("2") color=gray
+                  text(" ") color=gray
+                  text("[NEXT]") color=yellow click=run_command(/event list page 2)
+                  text("\\n")
+                """,
+                renderBlock(block)
+        );
+    }
+
+    @Test
     void validationFailuresUseExactMessages() {
         IllegalArgumentException unmatchedOpening = assertThrows(IllegalArgumentException.class, () -> Message.info("Hello {player"));
         IllegalArgumentException missingSlot = assertThrows(IllegalArgumentException.class, () -> Message.info("Hello {player}"));

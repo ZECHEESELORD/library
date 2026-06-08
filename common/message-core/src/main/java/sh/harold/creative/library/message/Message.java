@@ -40,6 +40,10 @@ public final class Message {
         return new DefaultMessageBlockBuilder();
     }
 
+    public static ChatMenuBuilder chatMenu(String title) {
+        return new ChatMenuBuilder(title);
+    }
+
     public static SlotBinding slot(String name, Object value) {
         return new SlotBinding(name, value(value));
     }
