@@ -45,6 +45,24 @@ class MessageRenderingTest {
     }
 
     @Test
+    void staffTagKeepsAquaPrefixForSuccessNotices() {
+        NoticeMessage message = Message.success(
+                "Successfully froze {count} player(s).",
+                Message.slot("count", 1)
+        ).tag(Tag.STAFF);
+
+        Component expected = Component.text()
+                .append(Component.text("[STAFF]", NamedTextColor.AQUA))
+                .append(Component.space())
+                .append(Component.text("Successfully froze ", NamedTextColor.GREEN))
+                .append(Component.text("1", NamedTextColor.YELLOW))
+                .append(Component.text(" player(s).", NamedTextColor.GREEN))
+                .build();
+
+        assertEquals(expected, renderChat(message));
+    }
+
+    @Test
     void debugNoticeCanRenderDebugTagWithoutTopicStyling() {
         NoticeMessage message = Message.debug(
                 "Loaded arena {arena}.",

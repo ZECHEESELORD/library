@@ -6,7 +6,7 @@ import net.kyori.adventure.text.format.TextColor;
 import java.util.Optional;
 
 public enum Tag {
-    STAFF("STAFF"),
+    STAFF("STAFF", NamedTextColor.AQUA),
     DAEMON("DAEMON"),
     DEBUG("DEBUG", NamedTextColor.AQUA);
 
