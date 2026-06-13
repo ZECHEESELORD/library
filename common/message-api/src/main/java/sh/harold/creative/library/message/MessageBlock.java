@@ -1,6 +1,7 @@
 package sh.harold.creative.library.message;
 
 import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 
 import java.util.Collections;
@@ -12,6 +13,8 @@ import java.util.Objects;
 public interface MessageBlock {
 
     List<Entry> entries();
+
+    Component component();
 
     void send(Audience audience);
 

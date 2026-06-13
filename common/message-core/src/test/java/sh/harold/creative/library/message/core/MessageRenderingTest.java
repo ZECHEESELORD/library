@@ -42,6 +42,7 @@ class MessageRenderingTest {
                 .build();
 
         assertEquals(expected, renderChat(message));
+        assertEquals(expected, message.component());
     }
 
     @Test
@@ -171,6 +172,7 @@ class MessageRenderingTest {
         );
 
         assertEquals(expected, renderBlock(block));
+        assertEquals(expected, block.component());
     }
 
     @Test

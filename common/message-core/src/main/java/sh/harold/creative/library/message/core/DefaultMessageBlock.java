@@ -1,6 +1,7 @@
 package sh.harold.creative.library.message.core;
 
 import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.text.Component;
 import sh.harold.creative.library.message.MessageBlock;
 
 import java.util.ArrayList;
@@ -31,9 +32,14 @@ public final class DefaultMessageBlock implements MessageBlock, CompiledMessageB
     }
 
     @Override
+    public Component component() {
+        return DefaultMessageRenderer.INSTANCE.renderBlock(this, RenderTarget.CHAT);
+    }
+
+    @Override
     public void send(Audience audience) {
         Objects.requireNonNull(audience, "audience");
-        audience.sendMessage(DefaultMessageRenderer.INSTANCE.renderBlock(this, RenderTarget.CHAT));
+        audience.sendMessage(component());
     }
 
     @Override

@@ -1,6 +1,7 @@
 package sh.harold.creative.library.message.core;
 
 import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.text.Component;
 import sh.harold.creative.library.message.Message;
 import sh.harold.creative.library.message.MessageBlock;
 import sh.harold.creative.library.message.MessageValue;
@@ -85,15 +86,25 @@ public final class DefaultNoticeMessage implements NoticeMessage, CompiledInline
     }
 
     @Override
+    public Component component() {
+        return DefaultMessageRenderer.INSTANCE.renderInline(this, RenderTarget.CHAT);
+    }
+
+    @Override
+    public Component actionBarComponent() {
+        return DefaultMessageRenderer.INSTANCE.renderInline(this, RenderTarget.ACTION_BAR);
+    }
+
+    @Override
     public void send(Audience audience) {
         Objects.requireNonNull(audience, "audience");
-        audience.sendMessage(DefaultMessageRenderer.INSTANCE.renderInline(this, RenderTarget.CHAT));
+        audience.sendMessage(component());
     }
 
     @Override
     public void sendActionBar(Audience audience) {
         Objects.requireNonNull(audience, "audience");
-        audience.sendActionBar(DefaultMessageRenderer.INSTANCE.renderInline(this, RenderTarget.ACTION_BAR));
+        audience.sendActionBar(actionBarComponent());
     }
 
     @Override

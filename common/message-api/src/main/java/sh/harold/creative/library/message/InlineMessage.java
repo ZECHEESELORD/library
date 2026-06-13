@@ -1,6 +1,7 @@
 package sh.harold.creative.library.message;
 
 import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.text.Component;
 
 import java.util.Map;
 import java.util.Optional;
@@ -18,6 +19,10 @@ public interface InlineMessage {
     InlineMessage with(String name, MessageValue value);
 
     InlineMessage hover(MessageBlock hover);
+
+    Component component();
+
+    Component actionBarComponent();
 
     void send(Audience audience);
 
