@@ -39,6 +39,7 @@ dependencies {
     implementation("com.github.ZECHEESELORD.library:cooldown-api:<tag>")
     implementation("com.github.ZECHEESELORD.library:cooldown-core:<tag>")
     implementation("com.github.ZECHEESELORD.library:message-paper:<tag>")
+    implementation("com.github.ZECHEESELORD.library:message-paper-1_21_11:<tag>")
     implementation("com.github.ZECHEESELORD.library:entity-minestom:<tag>")
     implementation("com.github.ZECHEESELORD.library:message-velocity:<tag>")
 }
@@ -46,9 +47,22 @@ dependencies {
 
 ### Java Compatibility
 
-- Common modules, Paper adapters, and Velocity adapters target Java 21.
+- Common modules, Paper `*-1_21_11` adapters, and Velocity adapters target Java 21.
+- Unsuffixed Paper adapters target Java 25 for the latest Paper lane.
 - Minestom adapters target Java 25.
 - Fabric adapters target Java 25.
+
+### Paper 26.1 Notes
+
+- Unsuffixed Paper modules target Paper API `26.1.2.build.66-stable` and Java `25`.
+- Paper example plugin descriptors advertise `api-version: '26.1.2'`.
+- Use the unsuffixed artifact names such as `message-paper`, `menu-paper`, and `entity-paper` for latest Paper consumers.
+
+### Paper 1.21.11 Notes
+
+- Legacy Paper modules use version-suffixed artifact names such as `message-paper-1_21_11`.
+- The `1.21.11` Paper lane targets Java `21` and Paper API `1.21.11-R0.1-SNAPSHOT`.
+- Keep 1.21.11 compatibility in suffixed Paper modules instead of adding version checks to common APIs or consumer plugins.
 
 ### Fabric 26.1 Notes
 
