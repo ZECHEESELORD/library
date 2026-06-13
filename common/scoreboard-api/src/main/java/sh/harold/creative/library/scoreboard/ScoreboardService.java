@@ -1,6 +1,7 @@
 package sh.harold.creative.library.scoreboard;
 
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
 import sh.harold.creative.library.tick.KeyedHandle;
 
 import java.util.Optional;
@@ -19,6 +20,10 @@ public interface ScoreboardService extends AutoCloseable {
     void refresh(UUID viewerId);
 
     void clearViewer(UUID viewerId);
+
+    void overrideTitle(UUID viewerId, Component title);
+
+    void clearTitleOverride(UUID viewerId);
 
     void overrideSection(UUID viewerId, String sectionId, ScoreboardSection replacement);
 

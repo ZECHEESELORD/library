@@ -2,6 +2,7 @@ package sh.harold.creative.library.scoreboard.paper;
 
 import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -84,6 +85,20 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
 
     public void clearViewer(Player player) {
         hide(player);
+    }
+
+    public void overrideTitle(Player player, Component title) {
+        requirePrimaryThread("override Paper scoreboard titles");
+        Player target = Objects.requireNonNull(player, "player");
+        scoreboards.overrideTitle(target.getUniqueId(), Objects.requireNonNull(title, "title"));
+        reconcile(target);
+    }
+
+    public void clearTitleOverride(Player player) {
+        requirePrimaryThread("clear Paper scoreboard title overrides");
+        Player target = Objects.requireNonNull(player, "player");
+        scoreboards.clearTitleOverride(target.getUniqueId());
+        reconcile(target);
     }
 
     public void overrideSection(Player player, String sectionId, ScoreboardSection replacement) {

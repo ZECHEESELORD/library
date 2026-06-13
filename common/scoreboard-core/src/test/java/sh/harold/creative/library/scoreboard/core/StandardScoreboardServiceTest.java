@@ -63,6 +63,22 @@ class StandardScoreboardServiceTest {
     }
 
     @Test
+    void titleOverrideIsScopedToViewerAndClearsExplicitly() {
+        StandardScoreboardService service = serviceWithBaseBoard();
+        service.show(VIEWER, BOARD);
+        service.show(OTHER_VIEWER, BOARD);
+
+        service.overrideTitle(VIEWER, text("Parkour"));
+
+        assertEquals(text("Parkour"), service.render(VIEWER).orElseThrow().title());
+        assertEquals(text("Lobby"), service.render(OTHER_VIEWER).orElseThrow().title());
+
+        service.clearTitleOverride(VIEWER);
+
+        assertEquals(text("Lobby"), service.render(VIEWER).orElseThrow().title());
+    }
+
+    @Test
     void transientSectionsSupportRelativePlacement() {
         StandardScoreboardService service = serviceWithBaseBoard();
         service.show(VIEWER, BOARD);

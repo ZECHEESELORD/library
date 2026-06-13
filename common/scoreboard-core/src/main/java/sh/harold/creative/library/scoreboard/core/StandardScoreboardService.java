@@ -94,6 +94,25 @@ public final class StandardScoreboardService implements ScoreboardService {
     }
 
     @Override
+    public void overrideTitle(UUID viewerId, Component title) {
+        ensureOpen();
+        ViewerSession session = activeSession(viewerId, "override scoreboard titles");
+        session.titleOverride = Objects.requireNonNull(title, "title");
+    }
+
+    @Override
+    public void clearTitleOverride(UUID viewerId) {
+        ensureOpen();
+        ViewerSession session = sessions.get(Objects.requireNonNull(viewerId, "viewerId"));
+        if (session != null) {
+            session.titleOverride = null;
+            if (session.empty()) {
+                sessions.remove(viewerId);
+            }
+        }
+    }
+
+    @Override
     public void overrideSection(UUID viewerId, String sectionId, ScoreboardSection replacement) {
         ensureOpen();
         String id = requireSectionId(sectionId);
@@ -213,7 +232,8 @@ public final class StandardScoreboardService implements ScoreboardService {
         for (int index = 0; index < lines.size(); index++) {
             indexedLines.add(new ScoreboardLine(index, lines.get(index)));
         }
-        return Optional.of(new ScoreboardFrame(spec.key(), spec.title(), indexedLines));
+        Component title = session.titleOverride != null ? session.titleOverride : spec.title();
+        return Optional.of(new ScoreboardFrame(spec.key(), title, indexedLines));
     }
 
     @Override
@@ -388,6 +408,7 @@ public final class StandardScoreboardService implements ScoreboardService {
 
     private static final class ViewerSession {
         private Key activeKey;
+        private Component titleOverride;
         private final Map<String, ScoreboardSection> overrides = new HashMap<>();
         private final Set<String> hiddenSections = new HashSet<>();
         private final Map<Key, ActiveTransient> transients = new LinkedHashMap<>();
@@ -398,13 +419,14 @@ public final class StandardScoreboardService implements ScoreboardService {
         }
 
         private void clearSectionState() {
+            titleOverride = null;
             overrides.clear();
             hiddenSections.clear();
             transients.clear();
         }
 
         private boolean empty() {
-            return activeKey == null && overrides.isEmpty() && hiddenSections.isEmpty() && transients.isEmpty();
+            return activeKey == null && titleOverride == null && overrides.isEmpty() && hiddenSections.isEmpty() && transients.isEmpty();
         }
 
         private void purgeExpired(long tick) {
