@@ -1,3 +1,4 @@
+import org.gradle.api.JavaVersion
 import org.gradle.api.plugins.JavaLibraryPlugin
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.PublishingExtension
@@ -36,6 +37,41 @@ val unpublishedProjectPaths = setOf(
     ":platform:fabric:fabric-example",
     ":platform:fabric:fabric-client-example",
 )
+val paperLatestProjectPaths = listOf(
+    ":platform:paper:message-paper",
+    ":platform:paper:sound-paper",
+    ":platform:paper:camera-motion-paper",
+    ":platform:paper:block-grid-paper",
+    ":platform:paper:block-boundary-paper",
+    ":platform:paper:screen-overlay-paper",
+    ":platform:paper:telegraph-paper",
+    ":platform:paper:trajectory-preview-paper",
+    ":platform:paper:impulse-paper",
+    ":platform:paper:ambient-zone-paper",
+    ":platform:paper:data-paper",
+    ":platform:paper:paper-data-owner",
+    ":platform:paper:menu-paper",
+    ":platform:paper:paper-example",
+    ":platform:paper:entity-paper",
+    ":platform:paper:entity-paper-citizens",
+    ":platform:paper:paper-entity-example",
+)
+val paperLegacy12111ProjectPaths = listOf(
+    ":platform:paper:message-paper-1_21_11",
+    ":platform:paper:sound-paper-1_21_11",
+    ":platform:paper:camera-motion-paper-1_21_11",
+    ":platform:paper:block-grid-paper-1_21_11",
+    ":platform:paper:block-boundary-paper-1_21_11",
+    ":platform:paper:screen-overlay-paper-1_21_11",
+    ":platform:paper:telegraph-paper-1_21_11",
+    ":platform:paper:trajectory-preview-paper-1_21_11",
+    ":platform:paper:impulse-paper-1_21_11",
+    ":platform:paper:ambient-zone-paper-1_21_11",
+    ":platform:paper:data-paper-1_21_11",
+    ":platform:paper:menu-paper-1_21_11",
+    ":platform:paper:entity-paper-1_21_11",
+    ":platform:paper:entity-paper-citizens-1_21_11",
+)
 
 // JitPack serves multi-module repos under com.github.<owner>.<repo>.
 group = if (isJitPackBuild && jitPackGroup != null) jitPackGroup else configuredGroup
@@ -47,6 +83,8 @@ subprojects {
 
     apply<JavaLibraryPlugin>()
     val isLegacyFabric12111 = path.startsWith(":platform:fabric:") && name.endsWith("-1_21_11")
+    val isLegacyPaper12111 = path.startsWith(":platform:paper:") && name.endsWith("-1_21_11")
+    val isLatestPaper = path.startsWith(":platform:paper:") && !isLegacyPaper12111
     if (isLegacyFabric12111) {
         apply(plugin = "net.fabricmc.fabric-loom-remap")
     } else if (path.startsWith(":platform:fabric:")) {
@@ -54,11 +92,13 @@ subprojects {
     }
 
     val targetJava = when {
-        isLegacyFabric12111 -> 21
-        path.startsWith(":platform:minestom:") || path.startsWith(":platform:fabric:") -> 25
+        isLegacyFabric12111 || isLegacyPaper12111 -> 21
+        isLatestPaper || path.startsWith(":platform:minestom:") || path.startsWith(":platform:fabric:") -> 25
         else -> 21
     }
     val javaExtension = extensions.getByType<JavaPluginExtension>()
+    javaExtension.sourceCompatibility = JavaVersion.toVersion(targetJava)
+    javaExtension.targetCompatibility = JavaVersion.toVersion(targetJava)
 
     // JitPack runs the build on one configured JDK; use --release for mixed targets there.
     if (!isJitPackBuild) {
@@ -78,6 +118,9 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+        if (targetJava >= 25) {
+            jvmArgs("-Dnet.bytebuddy.experimental=true", "-XX:+EnableDynamicAgentLoading")
+        }
     }
 
     if (path !in unpublishedProjectPaths) {
@@ -111,4 +154,21 @@ tasks.register("runFabricClientExample") {
     group = "application"
     description = "Runs the Fabric client example using Loom."
     dependsOn(":platform:fabric:fabric-client-example:runClient")
+}
+tasks.register("paperLatestCheck") {
+    group = "verification"
+    description = "Runs checks for the latest Paper adapter lane."
+    dependsOn(paperLatestProjectPaths.map { "$it:check" })
+}
+
+tasks.register("paperLegacy12111Check") {
+    group = "verification"
+    description = "Runs checks for the Paper 1.21.11 legacy adapter lane."
+    dependsOn(paperLegacy12111ProjectPaths.map { "$it:check" })
+}
+
+tasks.register("paperCompatibilityCheck") {
+    group = "verification"
+    description = "Runs both latest and Paper 1.21.11 adapter checks."
+    dependsOn("paperLatestCheck", "paperLegacy12111Check")
 }
