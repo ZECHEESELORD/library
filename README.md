@@ -40,6 +40,9 @@ dependencies {
     implementation("com.github.ZECHEESELORD.library:cooldown-core:<tag>")
     implementation("com.github.ZECHEESELORD.library:message-paper:<tag>")
     implementation("com.github.ZECHEESELORD.library:message-paper-1_21_11:<tag>")
+    implementation("com.github.ZECHEESELORD.library:scoreboard-api:<tag>")
+    implementation("com.github.ZECHEESELORD.library:scoreboard-core:<tag>")
+    implementation("com.github.ZECHEESELORD.library:scoreboard-paper:<tag>")
     implementation("com.github.ZECHEESELORD.library:entity-minestom:<tag>")
     implementation("com.github.ZECHEESELORD.library:message-velocity:<tag>")
 }
@@ -85,6 +88,43 @@ Published:
 
 - all `common/*` library modules
 - platform adapter modules such as `message-paper`, `menu-fabric`, `menu-minestom`, and `message-velocity`
+
+### Scoreboard Modules
+
+Scoreboards use a generic section model. Common code knows about boards, ordered sections, per-viewer section overrides, and tick-based transient sections. Consumer plugins own all domain data and names.
+
+Available modules:
+
+- `scoreboard-api`
+- `scoreboard-core`
+- `scoreboard-paper`
+- `scoreboard-paper-1_21_11`
+- `scoreboard-minestom`
+
+There is no Velocity scoreboard adapter because a proxy cannot honestly render a Minecraft sidebar.
+
+```java
+ScoreboardSpec board = ScoreboardSpec.builder(Key.key("example", "main"))
+        .title(Component.text("Status"))
+        .fixedSection("info", Component.text("Line 1"), Component.text("Line 2"))
+        .section("activity", context -> List.of(currentLine(context)))
+        .build();
+
+scoreboards.register(board);
+scoreboards.show(playerId, board.key());
+
+scoreboards.overrideSection(
+        playerId,
+        "activity",
+        ScoreboardSection.fixed("activity", Component.text("Temporary replacement"))
+);
+
+scoreboards.pushTransient(playerId, TransientSectionSpec.builder(Key.key("example", "notice"))
+        .section(ScoreboardSection.fixed("notice", Component.text("Short-lived notice")))
+        .placement(TransientPlacement.TOP)
+        .ttlTicks(60)
+        .build());
+```
 
 ### Metrics Modules
 
