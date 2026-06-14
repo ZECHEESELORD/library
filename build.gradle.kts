@@ -66,21 +66,7 @@ val paperLatestProjectPaths = listOf(
     ":platform:paper:paper-entity-example",
 )
 val paperLegacy12111ProjectPaths = listOf(
-    ":platform:paper:message-paper-1_21_11",
-    ":platform:paper:sound-paper-1_21_11",
-    ":platform:paper:camera-motion-paper-1_21_11",
-    ":platform:paper:block-grid-paper-1_21_11",
-    ":platform:paper:block-boundary-paper-1_21_11",
-    ":platform:paper:screen-overlay-paper-1_21_11",
     ":platform:paper:scoreboard-paper-1_21_11",
-    ":platform:paper:telegraph-paper-1_21_11",
-    ":platform:paper:trajectory-preview-paper-1_21_11",
-    ":platform:paper:impulse-paper-1_21_11",
-    ":platform:paper:ambient-zone-paper-1_21_11",
-    ":platform:paper:data-paper-1_21_11",
-    ":platform:paper:menu-paper-1_21_11",
-    ":platform:paper:entity-paper-1_21_11",
-    ":platform:paper:entity-paper-citizens-1_21_11",
 )
 
 // JitPack serves multi-module repos under com.github.<owner>.<repo>.
@@ -186,7 +172,7 @@ tasks.register("paperLatestCheck") {
 
 tasks.register("paperLegacy12111Check") {
     group = "verification"
-    description = "Runs checks for the Paper 1.21.11 legacy adapter lane."
+    description = "Runs checks for retained Paper 1.21.11 adapters with source divergence."
     dependsOn(paperLegacy12111ProjectPaths.map { "$it:check" })
 }
 
