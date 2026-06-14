@@ -25,6 +25,7 @@ val jitPackGroup = System.getenv("GROUP")
     ?.takeUnless(String::isBlank)
     ?.let { "$it.${rootProject.name}" }
 val jitPackVersion = System.getenv("VERSION")?.takeUnless(String::isBlank)
+val bomProjectPath = ":library-bom"
 val unpublishedProjectPaths = setOf(
     ":platform:paper:paper-example",
     ":platform:paper:paper-entity-example",
@@ -37,6 +38,13 @@ val unpublishedProjectPaths = setOf(
     ":platform:fabric:fabric-example",
     ":platform:fabric:fabric-client-example",
 )
+val publishedLibraryProjectPaths = subprojects
+    .filter { it.buildFile.isFile }
+    .map { it.path }
+    .filter { it != bomProjectPath && it !in unpublishedProjectPaths }
+
+extra["publishedLibraryProjectPaths"] = publishedLibraryProjectPaths
+
 val paperLatestProjectPaths = listOf(
     ":platform:paper:message-paper",
     ":platform:paper:sound-paper",
@@ -83,6 +91,10 @@ subprojects {
     group = rootProject.group
     version = rootProject.version
 
+    if (path == bomProjectPath) {
+        return@subprojects
+    }
+
     apply<JavaLibraryPlugin>()
     val isLegacyFabric12111 = path.startsWith(":platform:fabric:") && name.endsWith("-1_21_11")
     val isLegacyPaper12111 = path.startsWith(":platform:paper:") && name.endsWith("-1_21_11")
@@ -125,7 +137,7 @@ subprojects {
         }
     }
 
-    if (path !in unpublishedProjectPaths) {
+    if (path in publishedLibraryProjectPaths) {
         apply(plugin = "maven-publish")
         javaExtension.withSourcesJar()
 
@@ -134,6 +146,15 @@ subprojects {
                 create<MavenPublication>("mavenJava") {
                     from(components["java"])
                     artifactId = project.name
+                    pom {
+                        licenses {
+                            license {
+                                name.set("GNU General Public License v3.0 only")
+                                url.set("https://www.gnu.org/licenses/gpl-3.0-standalone.html")
+                                distribution.set("repo")
+                            }
+                        }
+                    }
                 }
             }
         }

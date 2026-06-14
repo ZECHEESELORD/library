@@ -12,6 +12,7 @@ pluginManagement {
 rootProject.name = "library"
 
 include(
+    ":library-bom",
     ":common:tick-lifecycle-api",
     ":common:spatial-api",
     ":common:spatial-core",

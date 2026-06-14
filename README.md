@@ -2,6 +2,10 @@
 
 Shared cross platform library modules for Paper, Fabric, Minestom, and Velocity.
 
+### License
+
+This project is licensed under `GPL-3.0-only`. Distributed forks and dependent works must comply with the GPL v3 source-sharing terms.
+
 ### Repositories
 
 Add JitPack plus the repositories needed by the modules you consume:
@@ -32,21 +36,26 @@ JitPack publishes this multi-module repo under:
 com.github.ZECHEESELORD.library:<module>:<tag>
 ```
 
-Examples:
+Import the BOM once, then declare only the modules you need without repeating the tag:
 
 ```kotlin
 dependencies {
-    implementation("com.github.ZECHEESELORD.library:cooldown-api:<tag>")
-    implementation("com.github.ZECHEESELORD.library:cooldown-core:<tag>")
-    implementation("com.github.ZECHEESELORD.library:message-paper:<tag>")
-    implementation("com.github.ZECHEESELORD.library:message-paper-1_21_11:<tag>")
-    implementation("com.github.ZECHEESELORD.library:scoreboard-api:<tag>")
-    implementation("com.github.ZECHEESELORD.library:scoreboard-core:<tag>")
-    implementation("com.github.ZECHEESELORD.library:scoreboard-paper:<tag>")
-    implementation("com.github.ZECHEESELORD.library:entity-minestom:<tag>")
-    implementation("com.github.ZECHEESELORD.library:message-velocity:<tag>")
+    implementation(platform("com.github.ZECHEESELORD.library:library-bom:<tag>"))
+    implementation("com.github.ZECHEESELORD.library:cooldown-api")
+    implementation("com.github.ZECHEESELORD.library:cooldown-core")
+    implementation("com.github.ZECHEESELORD.library:message-paper")
+    implementation("com.github.ZECHEESELORD.library:message-paper-1_21_11")
+    implementation("com.github.ZECHEESELORD.library:scoreboard-api")
+    implementation("com.github.ZECHEESELORD.library:scoreboard-core")
+    implementation("com.github.ZECHEESELORD.library:scoreboard-paper")
+    implementation("com.github.ZECHEESELORD.library:entity-minestom")
+    implementation("com.github.ZECHEESELORD.library:message-velocity")
 }
 ```
+
+The BOM manages this repo's published library artifacts only. Host dependencies such as Paper,
+Fabric, Minestom, Velocity, Citizens, and MongoDB still come from the repositories and versions
+required by the modules you choose.
 
 ### Java Compatibility
 
