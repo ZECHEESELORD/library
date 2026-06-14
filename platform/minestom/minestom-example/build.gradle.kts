@@ -28,7 +28,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("sh.harold.creative.library.example.minestom.MinestomExampleBootstrap")
+    mainClass.set("sh.harold.library.example.minestom.MinestomExampleBootstrap")
 }
 
 tasks.named<org.gradle.api.tasks.JavaExec>("run") {

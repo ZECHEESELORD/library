@@ -7,7 +7,7 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "sh.harold.creative.library.example.fabric.client.FabricClientExampleMod"
+      "sh.harold.library.example.fabric.client.FabricClientExampleMod"
     ]
   },
   "depends": {

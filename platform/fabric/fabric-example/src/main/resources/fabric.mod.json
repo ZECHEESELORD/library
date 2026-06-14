@@ -7,7 +7,7 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "sh.harold.creative.library.example.fabric.FabricExampleMod"
+      "sh.harold.library.example.fabric.FabricExampleMod"
     ]
   },
   "depends": {

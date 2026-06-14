@@ -12,5 +12,5 @@ dependencies {
 }
 
 application {
-    mainClass.set("sh.harold.creative.library.data.minestom.owner.MinestomDataOwnerBootstrap")
+    mainClass.set("sh.harold.library.data.minestom.owner.MinestomDataOwnerBootstrap")
 }
