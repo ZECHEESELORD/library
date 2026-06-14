@@ -44,11 +44,12 @@ dependencies {
     implementation("com.github.ZECHEESELORD.library:cooldown-api")
     implementation("com.github.ZECHEESELORD.library:cooldown-core")
     implementation("com.github.ZECHEESELORD.library:message-paper")
-    implementation("com.github.ZECHEESELORD.library:message-paper-1_21_11")
     implementation("com.github.ZECHEESELORD.library:scoreboard-api")
     implementation("com.github.ZECHEESELORD.library:scoreboard-core")
     implementation("com.github.ZECHEESELORD.library:scoreboard-paper")
+    implementation("com.github.ZECHEESELORD.library:scoreboard-paper-1_21_11")
     implementation("com.github.ZECHEESELORD.library:entity-minestom")
+    implementation("com.github.ZECHEESELORD.library:menu-fabric-1_21_11")
     implementation("com.github.ZECHEESELORD.library:message-velocity")
 }
 ```
@@ -59,10 +60,16 @@ required by the modules you choose.
 
 ### Java Compatibility
 
-- Common modules, Paper `*-1_21_11` adapters, and Velocity adapters target Java 21.
+- Common modules, retained `*-1_21_11` adapters, and Velocity adapters target Java 21.
 - Unsuffixed Paper adapters target Java 25 for the latest Paper lane.
 - Minestom adapters target Java 25.
-- Fabric adapters target Java 25.
+- Unsuffixed Fabric adapters target Java 25.
+
+### Versioned Artifact Policy
+
+- Version-suffixed adapter artifacts are published only when their source differs from the latest adapter lane.
+- Do not add a suffixed artifact only to pin a different host dependency or Java target.
+- A source-alias support artifact is allowed only when a retained diverged legacy adapter needs it directly. The current exception is `sound-fabric-1_21_11`, which supports `menu-fabric-1_21_11`.
 
 ### Paper 26.1 Notes
 
@@ -72,9 +79,9 @@ required by the modules you choose.
 
 ### Paper 1.21.11 Notes
 
-- Legacy Paper modules use version-suffixed artifact names such as `message-paper-1_21_11`.
-- The `1.21.11` Paper lane targets Java `21` and Paper API `1.21.11-R0.1-SNAPSHOT`.
-- Keep 1.21.11 compatibility in suffixed Paper modules instead of adding version checks to common APIs or consumer plugins.
+- `scoreboard-paper-1_21_11` is retained because its source differs from the latest Paper scoreboard adapter.
+- The retained Paper `1.21.11` adapter targets Java `21` and Paper API `1.21.11-R0.1-SNAPSHOT`.
+- Other Paper adapters use the unsuffixed latest lane until real source divergence justifies a suffixed artifact.
 
 ### Fabric 26.1 Notes
 
@@ -86,17 +93,18 @@ required by the modules you choose.
 
 ### Fabric 1.21.11 Notes
 
-- The repo now has a versioned legacy adapter lane starting with `message-fabric-1_21_11`.
-- `data-fabric-1_21_11` follows the same pattern.
+- The retained source-diverged Fabric legacy adapters are `message-fabric-1_21_11` and `menu-fabric-1_21_11`.
+- `sound-fabric-1_21_11` is retained as a source-alias support dependency for `menu-fabric-1_21_11`.
+- There is no `data-fabric-1_21_11` artifact until the data adapter source actually diverges.
 - The `1.21.11` lane targets Java `21` and uses the remap Loom plugin id `net.fabricmc.fabric-loom-remap`.
-- Keep legacy Fabric modules version-suffixed so the `26.1.2` lane remains unchanged and publishable.
+- Keep legacy Fabric modules version-suffixed only when the source or a retained support dependency requires it.
 
 ### Published Modules
 
 Published:
 
 - all `common/*` library modules
-- platform adapter modules such as `message-paper`, `menu-fabric`, `menu-minestom`, and `message-velocity`
+- platform adapter modules such as `message-paper`, `scoreboard-paper-1_21_11`, `menu-fabric`, `menu-fabric-1_21_11`, `menu-minestom`, and `message-velocity`
 
 ### Scoreboard Modules
 
