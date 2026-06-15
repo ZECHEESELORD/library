@@ -1,8 +1,11 @@
 import org.gradle.api.JavaVersion
+import org.gradle.api.GradleException
+import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaLibraryPlugin
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.toolchain.JavaLanguageVersion
@@ -10,6 +13,7 @@ import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
 
 plugins {
@@ -143,6 +147,38 @@ subprojects {
                     }
                 }
             }
+        }
+    }
+}
+
+tasks.register<Zip>("releaseJarBundle") {
+    group = "distribution"
+    description = "Bundles published library binary and source JARs for GitHub release assets."
+
+    archiveFileName.set("library-${project.version}-jars.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("release"))
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+
+    dependsOn(publishedLibraryProjectPaths.flatMap { listOf("$it:jar", "$it:sourcesJar") })
+
+    publishedLibraryProjectPaths.forEach { projectPath ->
+        val publishedProject = project(projectPath)
+        into(publishedProject.name) {
+            from(publishedProject.tasks.named("jar"))
+            from(publishedProject.tasks.named("sourcesJar"))
+        }
+    }
+
+    doFirst {
+        if (publishedLibraryProjectPaths.isEmpty()) {
+            throw GradleException("No published library projects were found to bundle.")
+        }
+    }
+
+    doLast {
+        val bundle = archiveFile.get().asFile
+        if (!bundle.isFile || bundle.length() == 0L) {
+            throw GradleException("Release JAR bundle was not created: ${bundle.absolutePath}")
         }
     }
 }
