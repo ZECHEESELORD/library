@@ -75,6 +75,7 @@ include(
     ":platform:paper:data-paper",
     ":platform:paper:paper-data-owner",
     ":platform:paper:menu-paper",
+    ":platform:paper:menu-paper-1_21_11",
     ":platform:paper:paper-example",
     ":platform:paper:entity-paper",
     ":platform:paper:entity-paper-citizens",
