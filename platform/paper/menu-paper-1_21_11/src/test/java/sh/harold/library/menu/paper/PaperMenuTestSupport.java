@@ -58,6 +58,14 @@ final class PaperMenuTestSupport {
         return proxy(Block.class, new BlockHandler(location));
     }
 
+    static BlockData blockData() {
+        return proxy(BlockData.class, new EmptyHandler("FakeBlockData"));
+    }
+
+    static TileState tileState() {
+        return proxy(TileState.class, new EmptyHandler("FakeTileState"));
+    }
+
     static ItemStack item(Material material, int amount, Component name, List<Component> lore, boolean glow) {
         return new FakeItemStack(material, amount, new MetaState(name, lore, glow ? Boolean.TRUE : null));
     }
@@ -299,6 +307,24 @@ final class PaperMenuTestSupport {
             }
             if (name.equals("toString")) {
                 return "FakeBlock[" + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ() + "]";
+            }
+            return defaultValue(method.getReturnType());
+        }
+    }
+
+    private record EmptyHandler(String label) implements InvocationHandler {
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) {
+            String name = method.getName();
+            if (name.equals("equals")) {
+                return proxy == args[0];
+            }
+            if (name.equals("hashCode")) {
+                return System.identityHashCode(proxy);
+            }
+            if (name.equals("toString")) {
+                return label;
             }
             return defaultValue(method.getReturnType());
         }

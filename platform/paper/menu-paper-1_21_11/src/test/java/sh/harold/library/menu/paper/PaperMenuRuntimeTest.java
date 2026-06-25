@@ -8,8 +8,6 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.block.TileState;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.block.sign.Side;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
@@ -75,8 +73,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-
 class PaperMenuRuntimeTest {
 
     private static final Key SPECIAL_SOUND = Key.key("test", "menu/special");
@@ -195,7 +191,7 @@ class PaperMenuRuntimeTest {
         TestPaperMenuAccess access = new TestPaperMenuAccess();
         Deque<Runnable> scheduled = new ArrayDeque<>();
         PaperMenuRuntime.PaperVirtualSignSupport virtualSigns = (request, allowedEditorId) ->
-                new PaperMenuRuntime.PreparedVirtualSign(mock(BlockData.class), mock(TileState.class));
+                new PaperMenuRuntime.PreparedVirtualSign(PaperMenuTestSupport.blockData(), PaperMenuTestSupport.tileState());
         PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(),
                 new RecordingSoundCueService(), sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
                 queuedScheduler(scheduled), virtualSigns);
