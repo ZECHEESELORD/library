@@ -294,7 +294,7 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
-    void compiledMenusIgnoreDoubleAndShiftClickVariants() {
+    void compiledMenusIgnoreDoubleAndUnauthoredShiftClickVariants() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
@@ -313,6 +313,29 @@ class PaperMenuRuntimeTest {
         assertTrue(doubleClick.isCancelled());
         assertTrue(shifted.isCancelled());
         assertEquals(0, count.get());
+    }
+
+    @Test
+    void compiledMenusRouteAuthoredShiftClickVariants() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+        AtomicInteger left = new AtomicInteger();
+        AtomicInteger right = new AtomicInteger();
+
+        runtime.open(player, shiftCounterMenu(left, right));
+        Inventory inventory = access.lastOpenedInventory();
+
+        InventoryClickEvent shiftLeft = click(player, inventory, 10, ClickType.SHIFT_LEFT);
+        runtime.onInventoryClick(shiftLeft);
+        InventoryClickEvent shiftRight = click(player, inventory, 10, ClickType.SHIFT_RIGHT);
+        runtime.onInventoryClick(shiftRight);
+
+        assertTrue(shiftLeft.isCancelled());
+        assertTrue(shiftRight.isCancelled());
+        assertEquals(1, left.get());
+        assertEquals(1, right.get());
     }
 
     @Test
@@ -984,6 +1007,18 @@ class PaperMenuRuntimeTest {
                 .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
                         .name("Increment")
                         .action(ActionVerb.VIEW, context -> count.incrementAndGet())
+                        .build())
+                .build();
+    }
+
+    private static Menu shiftCounterMenu(AtomicInteger left, AtomicInteger right) {
+        return new StandardMenuService().list()
+                .title("Shift Counter")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("Increment")
+                        .action(ActionVerb.VIEW, context -> {})
+                        .onShiftLeftClick(ActionVerb.VIEW, context -> left.incrementAndGet())
+                        .onShiftRightClick(ActionVerb.VIEW, context -> right.incrementAndGet())
                         .build())
                 .build();
     }

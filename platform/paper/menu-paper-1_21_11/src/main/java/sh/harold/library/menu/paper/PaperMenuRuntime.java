@@ -834,6 +834,8 @@ final class PaperMenuRuntime implements AutoCloseable {
         return switch (clickType) {
             case LEFT -> MenuClick.LEFT;
             case RIGHT -> MenuClick.RIGHT;
+            case SHIFT_LEFT -> MenuClick.SHIFT_LEFT;
+            case SHIFT_RIGHT -> MenuClick.SHIFT_RIGHT;
             default -> null;
         };
     }

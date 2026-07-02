@@ -357,6 +357,22 @@ class HouseMenuCompilerTest {
     }
 
     @Test
+    void shiftPromptsReuseBasePromptLines() {
+        MenuButton button = MenuButton.builder(MenuIcon.vanilla("book"))
+                .name("Button")
+                .line("Body")
+                .action(ActionVerb.OPEN, context -> {})
+                .onShiftLeftClick(ActionVerb.CONFIRM, "reset", context -> {})
+                .onRightClick(ActionVerb.BROWSE, context -> {})
+                .onShiftRightClick(ActionVerb.CONFIRM, "reset", context -> {})
+                .build();
+
+        MenuSlot slot = HouseMenuCompiler.compile(13, button);
+
+        assertEquals(List.of("Body", "", "CLICK to open!", "RIGHT CLICK to browse!"), lore(slot));
+    }
+
+    @Test
     void exactLorePreservesSourceLinesAndAppendsBodyBeforePrompt() {
         MenuButton button = MenuButton.builder(MenuIcon.vanilla("book"))
                 .exactName(Component.text("Exact Button"))

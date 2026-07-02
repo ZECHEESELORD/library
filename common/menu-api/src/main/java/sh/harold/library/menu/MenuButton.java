@@ -131,6 +131,24 @@ public final class MenuButton implements MenuItem {
             return this;
         }
 
+        public Builder onShiftLeftClick(ActionVerb verb, MenuAction action) {
+            return onShiftLeftClick(verb, verb.promptLabel(), action);
+        }
+
+        public Builder onShiftLeftClick(ActionVerb verb, String promptLabel, MenuAction action) {
+            interactions.put(MenuClick.SHIFT_LEFT, MenuInteraction.of(verb, promptLabel, new MenuSlotAction.Execute(action)));
+            return this;
+        }
+
+        public Builder onShiftRightClick(ActionVerb verb, MenuAction action) {
+            return onShiftRightClick(verb, verb.promptLabel(), action);
+        }
+
+        public Builder onShiftRightClick(ActionVerb verb, String promptLabel, MenuAction action) {
+            interactions.put(MenuClick.SHIFT_RIGHT, MenuInteraction.of(verb, promptLabel, new MenuSlotAction.Execute(action)));
+            return this;
+        }
+
         public Builder emit(ActionVerb verb, Object message) {
             return emit(verb, verb.promptLabel(), message);
         }
