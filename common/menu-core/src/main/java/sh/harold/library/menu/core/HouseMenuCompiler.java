@@ -146,9 +146,17 @@ public final class HouseMenuCompiler {
         if (left != null) {
             promptLines.add(promptLine("CLICK", left.promptLabel(), NamedTextColor.YELLOW));
         }
+        MenuInteraction shiftLeft = interactions.get(MenuClick.SHIFT_LEFT);
+        if (shiftLeft != null) {
+            promptLines.add(promptLine("SHIFT CLICK", shiftLeft.promptLabel(), NamedTextColor.YELLOW));
+        }
         MenuInteraction right = interactions.get(MenuClick.RIGHT);
         if (right != null) {
             promptLines.add(promptLine("RIGHT CLICK", right.promptLabel(), NamedTextColor.AQUA));
+        }
+        MenuInteraction shiftRight = interactions.get(MenuClick.SHIFT_RIGHT);
+        if (shiftRight != null) {
+            promptLines.add(promptLine("SHIFT RIGHT CLICK", shiftRight.promptLabel(), NamedTextColor.AQUA));
         }
         if (!promptLines.isEmpty()) {
             if (!lore.isEmpty() || separateFromPreservedPresentation) {

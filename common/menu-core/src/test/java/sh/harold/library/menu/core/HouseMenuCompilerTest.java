@@ -357,7 +357,7 @@ class HouseMenuCompilerTest {
     }
 
     @Test
-    void shiftPromptsReuseBasePromptLines() {
+    void shiftPromptsRenderVisiblePromptLines() {
         MenuButton button = MenuButton.builder(MenuIcon.vanilla("book"))
                 .name("Button")
                 .line("Body")
@@ -369,7 +369,13 @@ class HouseMenuCompilerTest {
 
         MenuSlot slot = HouseMenuCompiler.compile(13, button);
 
-        assertEquals(List.of("Body", "", "CLICK to open!", "RIGHT CLICK to browse!"), lore(slot));
+        assertEquals(List.of(
+                "Body",
+                "",
+                "CLICK to open!",
+                "SHIFT CLICK to reset!",
+                "RIGHT CLICK to browse!",
+                "SHIFT RIGHT CLICK to reset!"), lore(slot));
     }
 
     @Test
