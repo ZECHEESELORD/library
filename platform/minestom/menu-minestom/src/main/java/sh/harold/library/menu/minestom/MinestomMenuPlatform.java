@@ -10,6 +10,7 @@ import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
 import net.minestom.server.timer.TaskSchedule;
 import sh.harold.library.menu.CanvasMenuBuilder;
+import sh.harold.library.menu.ConfirmationMenuBuilder;
 import sh.harold.library.menu.ListMenuBuilder;
 import sh.harold.library.menu.MenuButton;
 import sh.harold.library.menu.MenuDefinition;
@@ -83,6 +84,10 @@ public final class MinestomMenuPlatform implements AutoCloseable {
 
     public CanvasMenuBuilder canvas() {
         return menus.canvas();
+    }
+
+    public ConfirmationMenuBuilder confirmation() {
+        return menus.confirmation();
     }
 
     public ReactiveMenuBuilder<Void> reactive() {

@@ -723,6 +723,62 @@ class StandardMenuServiceTest {
     }
 
     @Test
+    void confirmationUsesFixedHouseLayout() {
+        Menu menu = menus.confirmation()
+                .title("Delete Instance")
+                .info(MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                        .name("Instance Details")
+                        .build())
+                .cancel(MenuButton.builder(MenuIcon.vanilla("red_concrete"))
+                        .name("Cancel")
+                        .action(ActionVerb.BACK, context -> {})
+                        .build())
+                .confirm(MenuButton.builder(MenuIcon.vanilla("lime_concrete"))
+                        .name("Delete Instance")
+                        .action(ActionVerb.CONFIRM, context -> {})
+                        .build())
+                .build();
+
+        MenuFrame frame = menu.initialFrame();
+        assertEquals(MenuGeometry.CANVAS, menu.geometry());
+        assertEquals(6, menu.rows());
+        assertEquals(54, frame.slots().size());
+        assertEquals("Instance Details", titleAt(frame, 13));
+        assertFalse(frame.slots().get(13).clickable());
+        assertEquals("Cancel", titleAt(frame, 38));
+        assertEquals(ActionVerb.BACK, interactionAt(frame, 38, MenuClick.LEFT).verb());
+        assertEquals("Delete Instance", titleAt(frame, 42));
+        assertEquals(ActionVerb.CONFIRM, interactionAt(frame, 42, MenuClick.LEFT).verb());
+        assertEquals("Close", titleAt(frame, 49));
+    }
+
+    @Test
+    void confirmationRequiresEveryRole() {
+        MenuDisplayItem info = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                .name("Details")
+                .build();
+        MenuButton cancel = MenuButton.builder(MenuIcon.vanilla("red_concrete"))
+                .name("Cancel")
+                .action(ActionVerb.BACK, context -> {})
+                .build();
+        MenuButton confirm = MenuButton.builder(MenuIcon.vanilla("lime_concrete"))
+                .name("Confirm")
+                .action(ActionVerb.CONFIRM, context -> {})
+                .build();
+
+        IllegalStateException missingInfo = assertThrows(IllegalStateException.class,
+                () -> menus.confirmation().cancel(cancel).confirm(confirm).build());
+        IllegalStateException missingCancel = assertThrows(IllegalStateException.class,
+                () -> menus.confirmation().info(info).confirm(confirm).build());
+        IllegalStateException missingConfirm = assertThrows(IllegalStateException.class,
+                () -> menus.confirmation().info(info).cancel(cancel).build());
+
+        assertEquals("Confirmation menu requires an info item", missingInfo.getMessage());
+        assertEquals("Confirmation menu requires a cancel button", missingCancel.getMessage());
+        assertEquals("Confirmation menu requires a confirm button", missingConfirm.getMessage());
+    }
+
+    @Test
     void pairsRejectOddAlternatingInput() {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MenuDisplayItem.builder(MenuIcon.vanilla("book"))
                 .name("Card")

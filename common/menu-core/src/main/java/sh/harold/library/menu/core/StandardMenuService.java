@@ -5,10 +5,12 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import sh.harold.library.menu.ActionVerb;
 import sh.harold.library.menu.CanvasMenuBuilder;
+import sh.harold.library.menu.ConfirmationMenuBuilder;
 import sh.harold.library.menu.ListMenuBuilder;
 import sh.harold.library.menu.Menu;
 import sh.harold.library.menu.MenuButton;
 import sh.harold.library.menu.MenuClick;
+import sh.harold.library.menu.MenuDisplayItem;
 import sh.harold.library.menu.MenuFrame;
 import sh.harold.library.menu.MenuGeometry;
 import sh.harold.library.menu.MenuIcon;
@@ -50,6 +52,10 @@ import java.util.function.Supplier;
 public final class StandardMenuService implements MenuService {
 
     static final int LIST_ROWS = 6;
+    static final int CONFIRMATION_ROWS = 6;
+    static final int CONFIRMATION_INFO_SLOT = 13;
+    static final int CONFIRMATION_CANCEL_SLOT = 38;
+    static final int CONFIRMATION_CONFIRM_SLOT = 42;
 
     static final int TABS_CONTENT_START = 18;
     static final int TABS_SHARED_CONTENT_END = 44;
@@ -78,6 +84,11 @@ public final class StandardMenuService implements MenuService {
     @Override
     public CanvasMenuBuilder canvas() {
         return new DefaultCanvasMenuBuilder();
+    }
+
+    @Override
+    public ConfirmationMenuBuilder confirmation() {
+        return new DefaultConfirmationMenuBuilder();
     }
 
     @Override
@@ -374,6 +385,64 @@ public final class StandardMenuService implements MenuService {
                     });
             MenuValidator.validate(menu);
             return menu;
+        }
+    }
+
+    private final class DefaultConfirmationMenuBuilder implements ConfirmationMenuBuilder {
+
+        private Component title = Component.text("Menu");
+        private MenuDisplayItem info;
+        private MenuButton cancel;
+        private MenuButton confirm;
+
+        @Override
+        public ConfirmationMenuBuilder title(String title) {
+            this.title = Component.text(Objects.requireNonNull(title, "title"));
+            return this;
+        }
+
+        @Override
+        public ConfirmationMenuBuilder title(Component title) {
+            this.title = Objects.requireNonNull(title, "title");
+            return this;
+        }
+
+        @Override
+        public ConfirmationMenuBuilder info(MenuDisplayItem info) {
+            this.info = Objects.requireNonNull(info, "info");
+            return this;
+        }
+
+        @Override
+        public ConfirmationMenuBuilder cancel(MenuButton cancel) {
+            this.cancel = Objects.requireNonNull(cancel, "cancel");
+            return this;
+        }
+
+        @Override
+        public ConfirmationMenuBuilder confirm(MenuButton confirm) {
+            this.confirm = Objects.requireNonNull(confirm, "confirm");
+            return this;
+        }
+
+        @Override
+        public Menu build() {
+            if (info == null) {
+                throw new IllegalStateException("Confirmation menu requires an info item");
+            }
+            if (cancel == null) {
+                throw new IllegalStateException("Confirmation menu requires a cancel button");
+            }
+            if (confirm == null) {
+                throw new IllegalStateException("Confirmation menu requires a confirm button");
+            }
+            return canvas()
+                    .title(title)
+                    .rows(CONFIRMATION_ROWS)
+                    .place(CONFIRMATION_INFO_SLOT, info)
+                    .place(CONFIRMATION_CANCEL_SLOT, cancel)
+                    .place(CONFIRMATION_CONFIRM_SLOT, confirm)
+                    .build();
         }
     }
 

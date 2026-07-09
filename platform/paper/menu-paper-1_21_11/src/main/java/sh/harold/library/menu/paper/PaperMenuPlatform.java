@@ -8,6 +8,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.library.menu.CanvasMenuBuilder;
+import sh.harold.library.menu.ConfirmationMenuBuilder;
 import sh.harold.library.menu.ListMenuBuilder;
 import sh.harold.library.menu.MenuButton;
 import sh.harold.library.menu.MenuDefinition;
@@ -76,6 +77,10 @@ public final class PaperMenuPlatform implements AutoCloseable {
 
     public CanvasMenuBuilder canvas() {
         return menus.canvas();
+    }
+
+    public ConfirmationMenuBuilder confirmation() {
+        return menus.confirmation();
     }
 
     public ReactiveMenuBuilder<Void> reactive() {

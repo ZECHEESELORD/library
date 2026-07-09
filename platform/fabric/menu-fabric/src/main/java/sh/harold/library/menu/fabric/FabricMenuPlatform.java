@@ -6,6 +6,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ItemLike;
 import sh.harold.library.menu.CanvasMenuBuilder;
+import sh.harold.library.menu.ConfirmationMenuBuilder;
 import sh.harold.library.menu.ListMenuBuilder;
 import sh.harold.library.menu.MenuButton;
 import sh.harold.library.menu.MenuDefinition;
@@ -67,6 +68,10 @@ public final class FabricMenuPlatform implements AutoCloseable {
 
     public CanvasMenuBuilder canvas() {
         return menus.canvas();
+    }
+
+    public ConfirmationMenuBuilder confirmation() {
+        return menus.confirmation();
     }
 
     public ReactiveMenuBuilder<Void> reactive() {
