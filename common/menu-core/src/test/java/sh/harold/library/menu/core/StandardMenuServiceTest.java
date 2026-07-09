@@ -745,10 +745,10 @@ class StandardMenuServiceTest {
         assertEquals(54, frame.slots().size());
         assertEquals("Instance Details", titleAt(frame, 13));
         assertFalse(frame.slots().get(13).clickable());
-        assertEquals("Cancel", titleAt(frame, 38));
-        assertEquals(ActionVerb.BACK, interactionAt(frame, 38, MenuClick.LEFT).verb());
-        assertEquals("Delete Instance", titleAt(frame, 42));
-        assertEquals(ActionVerb.CONFIRM, interactionAt(frame, 42, MenuClick.LEFT).verb());
+        assertEquals("Cancel", titleAt(frame, 29));
+        assertEquals(ActionVerb.BACK, interactionAt(frame, 29, MenuClick.LEFT).verb());
+        assertEquals("Delete Instance", titleAt(frame, 33));
+        assertEquals(ActionVerb.CONFIRM, interactionAt(frame, 33, MenuClick.LEFT).verb());
         assertEquals("Close", titleAt(frame, 49));
     }
 

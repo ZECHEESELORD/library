@@ -54,8 +54,8 @@ public final class StandardMenuService implements MenuService {
     static final int LIST_ROWS = 6;
     static final int CONFIRMATION_ROWS = 6;
     static final int CONFIRMATION_INFO_SLOT = 13;
-    static final int CONFIRMATION_CANCEL_SLOT = 38;
-    static final int CONFIRMATION_CONFIRM_SLOT = 42;
+    static final int CONFIRMATION_CANCEL_SLOT = 29;
+    static final int CONFIRMATION_CONFIRM_SLOT = 33;
 
     static final int TABS_CONTENT_START = 18;
     static final int TABS_SHARED_CONTENT_END = 44;
