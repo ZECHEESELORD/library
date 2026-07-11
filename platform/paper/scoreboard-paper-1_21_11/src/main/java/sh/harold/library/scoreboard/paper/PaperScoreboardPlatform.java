@@ -38,14 +38,28 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
     private static final String OBJECTIVE_NAME = "creative_sb";
 
     private final JavaPlugin plugin;
+    private final int reconcilePeriodTicks;
     private final StandardScoreboardService scoreboards = new StandardScoreboardService();
     private final Map<UUID, PaperScoreboardSession> sessions = new ConcurrentHashMap<>();
 
     private BukkitTask tickTask;
+    private int ticksUntilReconcile;
     private boolean closed;
 
     public PaperScoreboardPlatform(JavaPlugin plugin) {
+        this.reconcilePeriodTicks = 1;
+        this.ticksUntilReconcile = 1;
         this.plugin = Objects.requireNonNull(plugin, "plugin");
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    }
+
+    public PaperScoreboardPlatform(JavaPlugin plugin, int reconcilePeriodTicks) {
+        this.plugin = Objects.requireNonNull(plugin);
+        if (reconcilePeriodTicks < 1) {
+            throw new IllegalArgumentException();
+        }
+        this.reconcilePeriodTicks = reconcilePeriodTicks;
+        this.ticksUntilReconcile = reconcilePeriodTicks;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
@@ -229,7 +243,10 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
             return;
         }
         scoreboards.advance();
-        reconcileAll();
+        if (--ticksUntilReconcile <= 0) {
+            ticksUntilReconcile = reconcilePeriodTicks;
+            reconcileAll();
+        }
     }
 
     private static void requirePrimaryThread(String action) {
@@ -248,7 +265,7 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
 
         private Scoreboard scoreboard;
         private Objective objective;
-        private int renderedLineCount;
+        private ScoreboardFrame lastFrame;
         private boolean closed;
 
         private PaperScoreboardSession(Player player) {
@@ -268,8 +285,11 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
             }
             ScoreboardFrame frame = rendered.orElseThrow();
             ensureObjective(player, frame);
-            objective.displayName(frame.title());
-            writeLines(frame.lines());
+            if (lastFrame == null || !lastFrame.title().equals(frame.title())) {
+                objective.displayName(frame.title());
+            }
+            writeLines(lastFrame == null ? List.of() : lastFrame.lines(), frame.lines());
+            lastFrame = frame;
             if (player.getScoreboard() != scoreboard) {
                 player.setScoreboard(scoreboard);
             }
@@ -279,6 +299,7 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
             if (objectiveUsable()) {
                 return;
             }
+            lastFrame = null;
 
             ScoreboardManager manager = Objects.requireNonNull(Bukkit.getScoreboardManager(), "scoreboard manager");
             scoreboard = manager.getNewScoreboard();
@@ -287,19 +308,31 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
             player.setScoreboard(scoreboard);
         }
 
-        private void writeLines(List<ScoreboardLine> lines) {
+        private void writeLines(List<ScoreboardLine> previous, List<ScoreboardLine> lines) {
             int size = lines.size();
             for (ScoreboardLine line : lines) {
+                ScoreboardLine oldLine = line.index() < previous.size() ? previous.get(line.index()) : null;
+                boolean newLine = oldLine == null || oldLine.index() != line.index();
+                boolean contentChanged = newLine || !oldLine.content().equals(line.content());
+                boolean scoreChanged = newLine || previous.size() != size;
+                if (!contentChanged && !scoreChanged) {
+                    continue;
+                }
                 String entry = entryId(line.index());
                 Score score = objective.getScore(entry);
-                score.setScore(size - line.index());
-                score.customName(line.content());
-                score.numberFormat(NumberFormat.blank());
+                if (scoreChanged) {
+                    score.setScore(size - line.index());
+                }
+                if (contentChanged) {
+                    score.customName(line.content());
+                }
+                if (newLine) {
+                    score.numberFormat(NumberFormat.blank());
+                }
             }
-            for (int index = size; index < renderedLineCount; index++) {
+            for (int index = size; index < previous.size(); index++) {
                 scoreboard.resetScores(entryId(index));
             }
-            renderedLineCount = size;
         }
 
         private boolean closed() {
@@ -332,7 +365,7 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
             }
             scoreboard = null;
             objective = null;
-            renderedLineCount = 0;
+            lastFrame = null;
         }
 
         private boolean objectiveUsable() {
