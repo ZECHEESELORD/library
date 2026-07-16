@@ -1,3 +1,7 @@
+plugins {
+    id("net.fabricmc.fabric-loom")
+}
+
 dependencies {
     implementation(project(":common:message-core"))
     implementation(project(":platform:fabric:message-fabric"))

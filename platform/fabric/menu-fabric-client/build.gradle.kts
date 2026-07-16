@@ -1,3 +1,7 @@
+plugins {
+    id("net.fabricmc.fabric-loom")
+}
+
 dependencies {
     api(project(":platform:fabric:menu-fabric"))
     minecraft("com.mojang:minecraft:${rootProject.property("minecraftVersion")}")

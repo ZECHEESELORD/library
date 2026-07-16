@@ -1,3 +1,7 @@
+plugins {
+    id("net.fabricmc.fabric-loom")
+}
+
 dependencies {
     api(project(":common:entity-api"))
     api(project(":common:house-service-entity"))

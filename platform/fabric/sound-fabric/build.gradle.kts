@@ -1,3 +1,7 @@
+plugins {
+    id("net.fabricmc.fabric-loom")
+}
+
 dependencies {
     api(project(":common:sound-api"))
     implementation(project(":common:sound-core"))

@@ -1,3 +1,7 @@
+plugins {
+    id("net.fabricmc.fabric-loom")
+}
+
 dependencies {
     api(project(":common:data-api"))
     implementation(project(":common:data-yaml"))

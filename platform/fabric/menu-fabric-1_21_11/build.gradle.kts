@@ -1,3 +1,7 @@
+plugins {
+    id("net.fabricmc.fabric-loom-remap")
+}
+
 dependencies {
     api(project(":common:menu-api"))
     implementation(project(":common:menu-core"))

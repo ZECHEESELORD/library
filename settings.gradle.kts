@@ -11,7 +11,7 @@ pluginManagement {
 
 rootProject.name = "library"
 
-include(
+val projectPaths = listOf(
     ":library-bom",
     ":common:tick-lifecycle-api",
     ":common:spatial-api",
@@ -116,6 +116,18 @@ include(
     ":platform:fabric:entity-fabric-client",
     ":platform:fabric:fabric-example",
     ":platform:fabric:fabric-client-example",
+)
+
+val buildProfile = providers.gradleProperty("buildProfile").orElse("full").get()
+require(buildProfile == "full" || buildProfile == "nonFabric") {
+    "Unsupported buildProfile '$buildProfile'. Expected 'full' or 'nonFabric'."
+}
+
+include(
+    *projectPaths.filterNot {
+        buildProfile == "nonFabric" &&
+            (it == ":library-bom" || it.startsWith(":platform:fabric:"))
+    }.toTypedArray(),
 )
 
 dependencyResolutionManagement {

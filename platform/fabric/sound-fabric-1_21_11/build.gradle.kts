@@ -1,3 +1,7 @@
+plugins {
+    id("net.fabricmc.fabric-loom-remap")
+}
+
 sourceSets {
     main {
         java.srcDir("../sound-fabric/src/main/java")
