@@ -1,64 +1,64 @@
 # library
 
-Shared modules for Minecraft server and proxy development, split so a Paper plugin and a Fabric mod can lean on the same APIs instead of reimplementing the same scoreboard twice and disagreeing about the details.
+Shared modules for Minecraft servers, proxies, and mods. Paper and Minestom projects can use the same scoreboard API instead of maintaining separate implementations.
 
 [![CI](https://github.com/ZECHEESELORD/library/actions/workflows/ci.yml/badge.svg)](https://github.com/ZECHEESELORD/library/actions/workflows/ci.yml)
 [![JitPack](https://jitpack.io/v/ZECHEESELORD/library.svg)](https://jitpack.io/#ZECHEESELORD/library)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
-[![Java](https://img.shields.io/badge/Java-21%20%7C%2025-orange.svg)](#compatibility)
-[![Platforms](https://img.shields.io/badge/platforms-Paper%20%C2%B7%20Fabric%20%C2%B7%20Minestom%20%C2%B7%20Velocity-5b8a3a.svg)](#features)
+[![Java](https://img.shields.io/badge/Java-21%20and%2025-orange.svg)](#compatibility)
+[![Platforms](https://img.shields.io/badge/platforms-Paper%2C%20Fabric%2C%20Minestom%2C%20Velocity-5b8a3a.svg)](#features)
 
-Each module does one thing: scoreboards, cooldowns, tweening, entity capabilities, metrics. The logic for it lives in one place, behind a platform-neutral API, and the host-specific code stays a thin layer at the edge. You compile against the interface and pick up whichever adapter matches the server you're running.
+The repository groups modules by feature. Public contracts and reusable logic do not depend on a host. Host code lives in adapter modules for Paper, Fabric, Minestom, and Velocity. Consumers compile against an API and include the adapter for their server.
 
 ---
 
 ## How the modules fit together
 
-A feature ships in up to three layers, and the artifact names follow the layers:
+Each feature uses up to three layers. Artifact names match those layers:
 
 | Suffix | Layer | What's in it |
 | --- | --- | --- |
-| `<feature>-api` | API | Interfaces, specs, and value types. No platform code. This is what you compile against. |
-| `<feature>-core` | Core | The platform-neutral implementation: the logic that doesn't care whether it's on Paper or Minestom. |
-| `<feature>-<platform>` | Adapter | The thin wiring that binds core to a specific host: `-paper`, `-minestom`, `-velocity`, `-fabric`. |
+| `<feature>-api` | API | Interfaces, specs, and value types with no host code. Compile against this module. |
+| `<feature>-core` | Core | Shared implementation with no Paper, Fabric, Minestom, or Velocity dependencies. |
+| `<feature>-<platform>` | Adapter | Wiring that binds core to one host: `-paper`, `-minestom`, `-velocity`, or `-fabric`. |
 
-Pure-logic features (tween, cooldown, state-machine, metrics) stop at `api`/`core` and need no adapter. Anything that has to touch players, worlds, or packets gets one adapter per platform it supports.
+The `tween`, `cooldown`, `state-machine`, and `metrics` features need only API and core modules because all of their logic is shared. Features that access players, worlds, or packets need an adapter for each supported platform.
 
 > [!TIP]
-> Compile against `-api`. At runtime you ship `-core` plus one `-<platform>` adapter. Most consumers never import more than that.
+> Compile against `-api`. At runtime, ship `-core` and one `-<platform>` adapter. Most consumers need no other modules.
 
 ---
 
 ## Features
 
-Modules marked **common** are platform-neutral and drop into any host as-is. The rest list the platforms with a shipped adapter.
+Modules marked **common** work on any host without an adapter. Other rows list their available adapters.
 
-### Spatial & world
+### Spatial and world
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
-| `spatial` | Vectors, frames, anchors, bounds, and segments: the geometry the other systems sit on | common |
-| `block-grid` | Block-aligned positions and bounds | Paper · Minestom |
-| `block-boundary` | Region boundaries and cross-boundary allow/deny decisions | Paper · Minestom |
+| `spatial` | Shared vectors, frames, anchors, bounds, and segments | common |
+| `block-grid` | Positions and bounds aligned to blocks | Paper, Minestom |
+| `block-boundary` | Region boundaries and rules that allow or deny crossings | Paper, Minestom |
 
-### Motion & game feel
+### Motion and game feel
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
 | `tween` | Keyed interpolation with easing, envelopes, hold behavior, and repeat modes | common |
 | `curve` | Catmull-Rom spline paths with sampling and splitting | common |
-| `camera-motion` | Server-driven camera moves with blend modes and per-viewer playback | Paper · Minestom |
-| `trajectory-preview` | Projectile-path previews with collision queries and recompute policy | Paper · Minestom |
-| `impulse` | Movement impulses (knockback, dashes) with stacking, compose modes, and axis masks | Paper · Minestom |
-| `telegraph` | Wind-up indicators for incoming attacks and areas: shapes, timing, and viewer scope | Paper · Minestom |
-| `ambient-zone` | Overlapping ambient zones blended per viewer along weight curves | Paper · Minestom |
-| `screen-overlay` | Timed full-screen tints and vignettes with a conflict policy | Paper · Minestom |
+| `camera-motion` | Camera moves controlled by the server, with blend modes and playback for each viewer | Paper, Minestom |
+| `trajectory-preview` | Projectile path previews with collision queries and recompute rules | Paper, Minestom |
+| `impulse` | Knockback and dash impulses with stacking, compose modes, and axis masks | Paper, Minestom |
+| `telegraph` | Attack and area warnings with configurable shapes, timing, and viewer scope | Paper, Minestom |
+| `ambient-zone` | Overlapping ambient zones blended for each viewer along weight curves | Paper, Minestom |
+| `screen-overlay` | Timed screen tints and vignettes with conflict rules | Paper, Minestom |
 
-### State & timing
+### State and timing
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
-| `tick-lifecycle` | Tick-driven handles and instance-conflict policy shared by the timed systems | common |
+| `tick-lifecycle` | Handles driven by ticks and the instance conflict policy shared by timed systems | common |
 | `state-machine` | Typed reducer state machines with timers | common |
 | `cooldown` | Reserve and query cooldown windows by scope and key | common |
 
@@ -66,39 +66,39 @@ Modules marked **common** are platform-neutral and drop into any host as-is. The
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
-| `data` | Storage-agnostic persistence with `-memory`, `-yaml`, and `-mongodb` backends | Paper · Minestom · Velocity · Fabric |
+| `data` | Document persistence with `-memory`, `-yaml`, and `-mongodb` backends | Paper, Minestom, Velocity, Fabric |
 
-### Player-facing
+### Player interaction
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
-| `message` | Adventure text building: click and hover actions, pagination | Paper · Minestom · Velocity · Fabric |
-| `sound` | Sound-cue playback abstraction | Paper · Minestom · Fabric |
-| `scoreboard` | Sidebar scoreboards on a generic section model, with per-viewer overrides and transient sections | Paper · Minestom |
-| `menu` | Inventory menus: list and canvas builders, actions, accent families | Paper · Minestom · Fabric |
+| `message` | Adventure text with click and hover actions plus pagination | Paper, Minestom, Velocity, Fabric |
+| `sound` | Sound playback API | Paper, Minestom, Fabric |
+| `scoreboard` | Sidebar scoreboards built from sections, with viewer overrides and temporary sections | Paper, Minestom |
+| `menu` | Inventory menus with list and canvas builders, actions, and accent families | Paper, Minestom, Fabric |
 | `ui-values` | A small text value with an optional color, shared across the UI modules | common |
 
 ### Entities
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
-| `entity` | Capability-based entities: display, AI, equipment, pose, skin, variant, leash, passenger, and more | Paper · Minestom · Fabric |
-| `house-service-entity` | A ready-made service NPC built on `entity-core` | common |
+| `entity` | Entities composed from typed capabilities, including display, AI, equipment, pose, skin, variant, leash, and passenger support | Paper, Minestom, Fabric |
+| `house-service-entity` | Service NPC implementation built on `entity-core` | common |
 
 > [!NOTE]
-> Paper gets an optional `entity-paper-citizens` bridge for Citizens-backed NPCs. And there is no Velocity scoreboard adapter, because a proxy cannot honestly render a Minecraft sidebar.
+> Paper has an optional `entity-paper-citizens` bridge for NPCs backed by Citizens. Velocity has no scoreboard adapter because a proxy cannot render a Minecraft sidebar.
 
 ### Observability
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
-| `metrics` | A `Telemetry` facade with an in-memory registry, JVM/process collectors, and Prometheus export (`-prometheus`) | common |
+| `metrics` | A `Telemetry` facade with a memory registry, JVM and process collectors, and Prometheus export through `-prometheus` | common |
 
 ---
 
 ## Install
 
-Published through JitPack under:
+Artifacts use this JitPack coordinate:
 
 ```text
 com.github.ZECHEESELORD.library:<module>:<tag>
@@ -117,7 +117,7 @@ dependencyResolutionManagement {
 }
 ```
 
-Add the rest only for the adapters you actually pull in:
+Add the repositories required by the adapters you use:
 
 | Repository | Needed for |
 | --- | --- |
@@ -144,19 +144,19 @@ dependencies {
 ```
 
 > [!IMPORTANT]
-> The BOM manages this repo's published artifacts only. Host dependencies (Paper, Fabric, Minestom, Velocity, Citizens, MongoDB) still come from their own repositories, at the versions your chosen modules require.
+> The BOM manages only artifacts from this repository. Host dependencies for Paper, Fabric, Minestom, Velocity, Citizens, and MongoDB still use their own repositories and the versions required by each module.
 
 <details>
 <summary>Full list of published artifacts</summary>
 
-Published:
+JitPack publishes:
 
-- every `common/*` module (the `-api`, `-core`, and backend artifacts listed above)
-- platform adapters under each host, e.g. `message-paper`, `scoreboard-minestom`, `menu-fabric`, `data-velocity`, `entity-paper-citizens`
+- every `common/*` module, including the `-api`, `-core`, and backend artifacts listed above
+- platform adapters under each host, such as `message-paper`, `scoreboard-minestom`, `menu-fabric`, `data-velocity`, and `entity-paper-citizens`
 
-Legacy lanes carry a version suffix and exist only where the source has actually diverged from the latest lane. Examples: `scoreboard-paper-1_21_11`, `message-fabric-1_21_11`, and `menu-fabric-1_21_11`.
+Legacy artifacts add a version suffix when their source differs from the current lane. Examples include `scoreboard-paper-1_21_11`, `message-fabric-1_21_11`, and `menu-fabric-1_21_11`.
 
-Not published (worked examples, kept in-tree for reference):
+Example modules (not published):
 
 `paper-example`, `paper-entity-example`, `minestom-example`, `minestom-entity-example`, `velocity-example`, `fabric-example`, `fabric-client-example`
 
@@ -168,7 +168,7 @@ Not published (worked examples, kept in-tree for reference):
 
 | Lane | Target | Java |
 | --- | --- | --- |
-| Common modules | platform-neutral | 21 |
+| Common modules | any platform | 21 |
 | Paper (latest) | Paper API `26.1.2.build.66-stable` (MC `26.1.2`) | 25 |
 | Paper (legacy) | Paper API `1.21.11-R0.1-SNAPSHOT` | 21 |
 | Fabric (latest) | MC `26.1.2`, Loader `0.19.1`, API `0.145.4+26.1.2` | 25 |
@@ -176,16 +176,16 @@ Not published (worked examples, kept in-tree for reference):
 | Minestom | `2026.03.03-1.21.11` | 25 |
 | Velocity | `3.3.0-SNAPSHOT` | 21 |
 
-All text rides on Adventure `4.17.0`.
+All text uses Adventure `4.17.0`.
 
 > [!WARNING]
-> The Java 25 lanes need a toolchain that supports it. IntelliJ IDEA `2025.3` or newer is recommended when working on the latest Paper and Fabric modules.
+> The Java 25 lanes require a compatible toolchain. Use IntelliJ IDEA `2025.3` or later when working on the latest Paper and Fabric modules.
 
 ---
 
 ## Usage
 
-A scoreboard, end to end. Register a board, show it, override a section for one viewer, then push a short-lived notice:
+This example registers and displays a scoreboard, overrides one section for a viewer, and adds a temporary notice:
 
 ```java
 ScoreboardSpec board = ScoreboardSpec.builder(Key.key("example", "main"))
@@ -204,13 +204,13 @@ scoreboards.overrideSection(
 );
 
 scoreboards.pushTransient(playerId, TransientSectionSpec.builder(Key.key("example", "notice"))
-        .section(ScoreboardSection.fixed("notice", Component.text("Short-lived notice")))
+        .section(ScoreboardSection.fixed("notice", Component.text("Temporary notice")))
         .placement(TransientPlacement.TOP)
         .ttlTicks(60)
         .build());
 ```
 
-The board knows about ordered sections, per-viewer overrides, and tick-based transients. It does not know your domain; names, data, and meaning stay in the consumer plugin.
+The scoreboard API handles section order, viewer overrides, and transient sections measured in ticks. The consumer plugin supplies the domain data and meaning.
 
 <details>
 <summary>Metrics: timing, JVM gauges, and a Prometheus endpoint</summary>
@@ -233,7 +233,7 @@ telemetry.observe(
 );
 ```
 
-Expose a Prometheus scrape from a plain JVM process:
+Start a Prometheus scrape endpoint in a plain JVM process:
 
 ```java
 StandardTelemetry telemetry = new StandardTelemetry();
@@ -245,7 +245,7 @@ PrometheusHttpExporter exporter = PrometheusHttpExporter.start(
 );
 ```
 
-Wire a low-cardinality platform gauge straight through the shared API:
+Register a platform gauge without labels through the shared API:
 
 ```java
 GaugeMetric playersOnline = Metrics.gauge(
@@ -257,7 +257,7 @@ GaugeMetric playersOnline = Metrics.gauge(
 telemetry.registerGauge(playersOnline, MetricLabels.empty(), server::getPlayerCount);
 ```
 
-Annotation-based instrumentation is deferred on purpose. The primary path is explicit `observe(...)`, direct counter and gauge updates, and explicit export wiring.
+The API uses explicit `observe(...)` calls, direct counter and gauge updates, and export wiring. It does not provide annotation instrumentation.
 
 </details>
 
@@ -265,14 +265,22 @@ Annotation-based instrumentation is deferred on purpose. The primary path is exp
 
 ## Building from source
 
+For faster work outside Fabric:
+
+```bash
+./gradlew build -PbuildProfile=nonFabric --configuration-cache
+```
+
+This profile leaves out Fabric projects and the BOM. Without Loom, the command can reuse Gradle's configuration cache. Use the full build for final platform verification:
+
 ```bash
 ./gradlew build
 ```
 
-You need JDK 21 and JDK 25 available, since the lanes target both. The example modules build with everything else but are not published.
+You need JDK 21 and JDK 25 because modules target both versions. The example modules are included in the build but are not published.
 
 > [!NOTE]
-> Fabric builds wire Minecraft through Loom's `minecraft(...)` configuration; everything else (mods, libraries, and intra-repo `project(...)` dependencies) uses ordinary Gradle wiring. Jars come from the standard `jar` task, not `remapJar`.
+> Fabric builds declare Minecraft through Loom's `minecraft(...)` configuration. Mods, libraries, and `project(...)` dependencies use standard Gradle configurations. Published artifacts come from the `jar` task, not `remapJar`.
 
 ---
 
@@ -281,4 +289,4 @@ You need JDK 21 and JDK 25 available, since the lanes target both. The example m
 Licensed under [`GPL-3.0-only`](LICENSE).
 
 > [!CAUTION]
-> This is a copyleft license. Distributed forks and dependent works must comply with the GPL v3 source-sharing terms: if you ship it, you ship the source.
+> This is a copyleft license. If you distribute a fork or dependent work, follow the GPL v3 source requirements.
