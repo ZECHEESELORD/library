@@ -5,6 +5,12 @@ import net.kyori.adventure.text.Component;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * A stack-shaped menu presentation.
+ *
+ * <p>This type is not a lossless representation of a platform item. Real item ownership and
+ * movement must stay in the platform adapter's custody runtime.</p>
+ */
 public final class MenuStack implements MenuItem {
 
     private final MenuIcon icon;

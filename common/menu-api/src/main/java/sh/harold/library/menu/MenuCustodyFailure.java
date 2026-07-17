@@ -1,0 +1,11 @@
+package sh.harold.library.menu;
+
+public enum MenuCustodyFailure {
+    POLICY_REJECTED,
+    STALE_INPUT,
+    OCCUPIED_DESTINATION,
+    INVALID_DESTINATION,
+    UNSUPPORTED_GESTURE,
+    TRANSITION_IN_PROGRESS,
+    NATIVE_MUTATION_FAILED
+}
