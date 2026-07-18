@@ -34,7 +34,7 @@ public sealed interface ReactiveMenuEffect permits ReactiveMenuEffect.Close, Rea
 
         public SetViewerInventorySlot {
             if (slot < 0) {
-                throw new IllegalArgumentException("slot cannot be negative");
+                throw new IllegalArgumentException();
             }
         }
     }

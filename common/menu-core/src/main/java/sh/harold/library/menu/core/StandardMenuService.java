@@ -27,6 +27,7 @@ import sh.harold.library.menu.ReactiveListMenuBuilder;
 import sh.harold.library.menu.ReactiveListRenderer;
 import sh.harold.library.menu.ReactiveMenu;
 import sh.harold.library.menu.ReactiveMenuBuilder;
+import sh.harold.library.menu.ReactiveMenuCustodyPolicy;
 import sh.harold.library.menu.ReactiveGeometryAction;
 import sh.harold.library.menu.ReactiveMenuReducer;
 import sh.harold.library.menu.ReactiveMenuRenderer;
@@ -37,6 +38,7 @@ import sh.harold.library.menu.UtilitySlot;
 
 import java.util.ArrayList;
 import java.util.AbstractSet;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -162,13 +164,16 @@ public final class StandardMenuService implements MenuService {
 
         @Override
         public Menu build() {
-            int totalPages = PagedListSupport.pageCount(items.size(), PagedListSupport.PURE_LIST_PAGE_SIZE);
+            Component builtTitle = title;
+            List<MenuItem> builtItems = List.copyOf(items);
+            Map<UtilitySlot, MenuItem> builtUtilities = snapshotMap(utilities);
+            int totalPages = PagedListSupport.pageCount(builtItems.size(), PagedListSupport.PURE_LIST_PAGE_SIZE);
             Set<String> frameIds = new ListFrameIds(totalPages);
-            Menu menu = new StandardMenu(title, MenuGeometry.LIST, LIST_ROWS, listFrameId(0), frameIds,
+            Menu menu = new StandardMenu(builtTitle, MenuGeometry.LIST, LIST_ROWS, listFrameId(0), frameIds,
                     frameId -> {
                         int pageIndex = listPageIndex(frameId);
-                        return new MenuFrame(listFrameTitle(title, pageIndex, totalPages),
-                                buildListPage(pageIndex, totalPages, items, utilities));
+                        return new MenuFrame(listFrameTitle(builtTitle, pageIndex, totalPages),
+                                buildListPage(pageIndex, totalPages, builtItems, builtUtilities));
                     });
             MenuValidator.validate(menu);
             return menu;
@@ -233,27 +238,32 @@ public final class StandardMenuService implements MenuService {
 
         @Override
         public Menu build() {
+            Component builtTitle = title;
+            Map<UtilitySlot, MenuItem> builtUtilities = snapshotMap(utilities);
+            String builtDefaultTabId = defaultTabId;
+            boolean builtSharedFooter = sharedFooter;
             List<MenuTabGroup> builtGroups = buildGroups();
             List<FlatTab> flatTabs = flattenTabs(builtGroups);
-            validateTabs(flatTabs);
-            validateFooterMode(flatTabs);
-            validateTabPlacements(flatTabs);
+            validateTabs(flatTabs, builtDefaultTabId);
+            validateFooterMode(flatTabs, builtSharedFooter, builtUtilities);
+            validateTabPlacements(flatTabs, builtSharedFooter);
 
             NavPlan navPlan = buildNavPlan(flatTabs);
-            String initialTabId = defaultTabId != null ? defaultTabId : flatTabs.get(0).tab().id();
+            String initialTabId = builtDefaultTabId != null ? builtDefaultTabId : flatTabs.get(0).tab().id();
             int initialNavStart = initialNavStart(flatTabs, navPlan, initialTabId);
 
             Map<String, FlatTab> tabsById = new LinkedHashMap<>();
             for (FlatTab flatTab : flatTabs) {
                 tabsById.put(flatTab.tab().id(), flatTab);
             }
-            Set<String> frameIds = new TabFrameIds(tabsById, navPlan);
+            Map<String, FlatTab> builtTabsById = snapshotMap(tabsById);
+            Set<String> frameIds = new TabFrameIds(builtTabsById, navPlan);
 
             String initialFrameId = tabFrameId(initialTabId, initialNavStart, 0);
-            Menu menu = new StandardMenu(title, MenuGeometry.TABS, LIST_ROWS, initialFrameId, frameIds,
+            Menu menu = new StandardMenu(builtTitle, MenuGeometry.TABS, LIST_ROWS, initialFrameId, frameIds,
                     frameId -> {
                         TabFrameRef ref = parseTabFrameId(frameId);
-                        FlatTab flatTab = tabsById.get(ref.tabId());
+                        FlatTab flatTab = builtTabsById.get(ref.tabId());
                         if (flatTab == null) {
                             throw new IllegalArgumentException("Unknown tab id: " + ref.tabId());
                         }
@@ -264,8 +274,8 @@ public final class StandardMenuService implements MenuService {
                         if (ref.navStart() < 0 || ref.navStart() >= navPlan.windowCount()) {
                             throw new IllegalArgumentException("Unknown nav start " + ref.navStart() + " for tab " + ref.tabId());
                         }
-                        return new MenuFrame(title, buildTabPage(flatTab.tab(), ref.pageIndex(), totalPages, utilities, flatTabs,
-                                navPlan, ref.navStart(), sharedFooter));
+                        return new MenuFrame(builtTitle, buildTabPage(flatTab.tab(), ref.pageIndex(), totalPages,
+                                builtUtilities, flatTabs, navPlan, ref.navStart(), builtSharedFooter));
                     });
             MenuValidator.validate(menu);
             return menu;
@@ -282,7 +292,7 @@ public final class StandardMenuService implements MenuService {
             return List.copyOf(built);
         }
 
-        private void validateTabs(List<FlatTab> flatTabs) {
+        private void validateTabs(List<FlatTab> flatTabs, String builtDefaultTabId) {
             if (flatTabs.size() < 2) {
                 throw new IllegalStateException("Tabs menu requires at least two tabs");
             }
@@ -292,16 +302,20 @@ public final class StandardMenuService implements MenuService {
                     throw new IllegalStateException("Duplicate tab id: " + flatTab.tab().id());
                 }
             }
-            if (defaultTabId != null && flatTabs.stream().noneMatch(tab -> tab.tab().id().equals(defaultTabId))) {
-                throw new IllegalStateException("Default tab id does not exist: " + defaultTabId);
+            if (builtDefaultTabId != null && flatTabs.stream().noneMatch(tab -> tab.tab().id().equals(builtDefaultTabId))) {
+                throw new IllegalStateException("Default tab id does not exist: " + builtDefaultTabId);
             }
         }
 
-        private void validateFooterMode(List<FlatTab> flatTabs) {
-            if (sharedFooter) {
+        private void validateFooterMode(
+                List<FlatTab> flatTabs,
+                boolean builtSharedFooter,
+                Map<UtilitySlot, MenuItem> builtUtilities
+        ) {
+            if (builtSharedFooter) {
                 return;
             }
-            if (!utilities.isEmpty()) {
+            if (!builtUtilities.isEmpty()) {
                 throw new IllegalStateException("Custom-footer tabs may not use shared footer utility slots");
             }
             for (FlatTab flatTab : flatTabs) {
@@ -311,7 +325,7 @@ public final class StandardMenuService implements MenuService {
             }
         }
 
-        private void validateTabPlacements(List<FlatTab> flatTabs) {
+        private void validateTabPlacements(List<FlatTab> flatTabs, boolean builtSharedFooter) {
             for (FlatTab flatTab : flatTabs) {
                 if (!(flatTab.tab().content() instanceof MenuTabContent.CanvasContent canvas)) {
                     continue;
@@ -320,10 +334,10 @@ public final class StandardMenuService implements MenuService {
                     if (slot < TABS_CONTENT_START) {
                         throw new IllegalArgumentException("Tab canvas slot " + slot + " collides with reserved tab chrome");
                     }
-                    if (sharedFooter && slot > TABS_SHARED_CONTENT_END) {
+                    if (builtSharedFooter && slot > TABS_SHARED_CONTENT_END) {
                         throw new IllegalArgumentException("Shared-footer tabs may not place content in row 5");
                     }
-                    if (!sharedFooter && slot > TABS_CUSTOM_CONTENT_END) {
+                    if (!builtSharedFooter && slot > TABS_CUSTOM_CONTENT_END) {
                         throw new IllegalArgumentException("Tab canvas slot " + slot + " is outside the tab menu");
                     }
                 }
@@ -376,12 +390,16 @@ public final class StandardMenuService implements MenuService {
 
         @Override
         public Menu build() {
-            Menu menu = new StandardMenu(title, MenuGeometry.CANVAS, rows, "canvas:0", Set.of("canvas:0"),
+            Component builtTitle = title;
+            int builtRows = rows;
+            Map<Integer, MenuItem> builtPlacements = snapshotMap(placed);
+            Map<UtilitySlot, MenuItem> builtUtilities = snapshotMap(utilities);
+            Menu menu = new StandardMenu(builtTitle, MenuGeometry.CANVAS, builtRows, "canvas:0", Set.of("canvas:0"),
                     frameId -> {
                         if (!"canvas:0".equals(frameId)) {
                             throw new IllegalArgumentException("Unknown canvas frame: " + frameId);
                         }
-                        return new MenuFrame(title, buildCanvasPage(rows, placed, utilities));
+                        return new MenuFrame(builtTitle, buildCanvasPage(builtRows, builtPlacements, builtUtilities));
                     });
             MenuValidator.validate(menu);
             return menu;
@@ -427,21 +445,25 @@ public final class StandardMenuService implements MenuService {
 
         @Override
         public Menu build() {
-            if (info == null) {
+            Component builtTitle = title;
+            MenuDisplayItem builtInfo = info;
+            MenuButton builtCancel = cancel;
+            MenuButton builtConfirm = confirm;
+            if (builtInfo == null) {
                 throw new IllegalStateException("Confirmation menu requires an info item");
             }
-            if (cancel == null) {
+            if (builtCancel == null) {
                 throw new IllegalStateException("Confirmation menu requires a cancel button");
             }
-            if (confirm == null) {
+            if (builtConfirm == null) {
                 throw new IllegalStateException("Confirmation menu requires a confirm button");
             }
             return canvas()
-                    .title(title)
+                    .title(builtTitle)
                     .rows(CONFIRMATION_ROWS)
-                    .place(CONFIRMATION_INFO_SLOT, info)
-                    .place(CONFIRMATION_CANCEL_SLOT, cancel)
-                    .place(CONFIRMATION_CONFIRM_SLOT, confirm)
+                    .place(CONFIRMATION_INFO_SLOT, builtInfo)
+                    .place(CONFIRMATION_CANCEL_SLOT, builtCancel)
+                    .place(CONFIRMATION_CONFIRM_SLOT, builtConfirm)
                     .build();
         }
     }
@@ -455,9 +477,10 @@ public final class StandardMenuService implements MenuService {
         private Supplier<?> stateFactory = () -> null;
         private ReactiveMenuRenderer<?> renderer;
         private ReactiveMenuReducer<?> reducer;
+        private final Map<String, Integer> custodyTargets = new LinkedHashMap<>();
+        private ReactiveMenuCustodyPolicy<?> custodyPolicy;
 
         @Override
-        @SuppressWarnings("unchecked")
         public <T> ReactiveCanvasMenuBuilder<T> state(T state) {
             this.stateFactory = () -> state;
             return (ReactiveCanvasMenuBuilder<T>) this;
@@ -488,6 +511,31 @@ public final class StandardMenuService implements MenuService {
         @Override
         public ReactiveCanvasMenuBuilder<S> fillWithBlackPane(boolean fillWithBlackPane) {
             this.fillWithBlackPane = fillWithBlackPane;
+            return this;
+        }
+
+        @Override
+        public ReactiveCanvasMenuBuilder<S> custodyTarget(String key, int slot) {
+            Objects.requireNonNull(key, "key");
+            if (key.isBlank()) {
+                throw new IllegalArgumentException("key cannot be blank");
+            }
+            if (slot < 0 || slot > 53) {
+                throw new IllegalArgumentException("custody target slot must be between 0 and 53");
+            }
+            if (custodyTargets.containsKey(key)) {
+                throw new IllegalArgumentException("custody target key is already registered");
+            }
+            if (custodyTargets.containsValue(slot)) {
+                throw new IllegalArgumentException("custody target slot is already registered");
+            }
+            custodyTargets.put(key, slot);
+            return this;
+        }
+
+        @Override
+        public ReactiveCanvasMenuBuilder<S> custodyPolicy(ReactiveMenuCustodyPolicy<? super S> policy) {
+            this.custodyPolicy = Objects.requireNonNull(policy, "policy");
             return this;
         }
 
@@ -523,10 +571,38 @@ public final class StandardMenuService implements MenuService {
             }
             int footerStart = HouseMenuCompiler.footerStart(rows);
             validateUtilitySlots(utilities, footerStart, reservedCanvasFooterSlots(footerStart));
+            validateCustodyTargets(custodyTargets, utilities, rows, footerStart);
+            if (custodyTargets.isEmpty() != (custodyPolicy == null)) {
+                throw new IllegalStateException("Reactive custody requires both targets and a policy");
+            }
             return new StandardReactiveMenu<>(rows, utilities, fillWithBlackPane, tickIntervalTicks,
                     (Supplier<? extends S>) stateFactory,
                     (ReactiveMenuRenderer<? super S>) renderer,
-                    (ReactiveMenuReducer<? super S>) reducer);
+                    (ReactiveMenuReducer<? super S>) reducer,
+                    custodyTargets,
+                    (ReactiveMenuCustodyPolicy<? super S>) custodyPolicy);
+        }
+
+        private static void validateCustodyTargets(
+                Map<String, Integer> targets,
+                Map<UtilitySlot, MenuItem> utilities,
+                int rows,
+                int footerStart
+        ) {
+            Set<Integer> reserved = reservedCanvasFooterSlots(footerStart);
+            Set<Integer> utilitySlots = new HashSet<>();
+            utilities.keySet().forEach(slot -> utilitySlots.add(slot.resolveSlot(footerStart)));
+            for (Map.Entry<String, Integer> target : targets.entrySet()) {
+                int slot = target.getValue();
+                if (slot >= rows * 9) {
+                    throw new IllegalArgumentException(
+                            "Custody target " + target.getKey() + " is outside the final menu geometry");
+                }
+                if (reserved.contains(slot) || utilitySlots.contains(slot)) {
+                    throw new IllegalArgumentException(
+                            "Custody target " + target.getKey() + " collides with house chrome");
+                }
+            }
         }
     }
 
@@ -539,7 +615,6 @@ public final class StandardMenuService implements MenuService {
         private ReactiveMenuReducer<?> reducer;
 
         @Override
-        @SuppressWarnings("unchecked")
         public <T> ReactiveListMenuBuilder<T> state(T state) {
             this.stateFactory = () -> state;
             return (ReactiveListMenuBuilder<T>) this;
@@ -607,7 +682,6 @@ public final class StandardMenuService implements MenuService {
         private ReactiveMenuReducer<?> reducer;
 
         @Override
-        @SuppressWarnings("unchecked")
         public <T> ReactiveTabsMenuBuilder<T> state(T state) {
             this.stateFactory = () -> state;
             return (ReactiveTabsMenuBuilder<T>) this;
@@ -933,6 +1007,10 @@ public final class StandardMenuService implements MenuService {
             int slot = entry.getKey().resolveSlot(footerStart);
             slots.put(slot, HouseMenuCompiler.compile(slot, entry.getValue()));
         }
+    }
+
+    private static <K, V> Map<K, V> snapshotMap(Map<K, V> values) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
 
     static Map<Integer, MenuSlot> createFilledSlots(int rows) {

@@ -141,7 +141,7 @@ final class StandardReactiveTabsMenu<S> implements ReactiveMenuDefinition {
         }
 
         MenuTrace.setCount("placementCount", touchedSlots.size());
-        return new MenuSessionView(rendered.title(), List.copyOf(slots), null, reactiveClickTargets);
+        return new MenuSessionView(rendered.title(), List.copyOf(slots), reactiveClickTargets);
     }
 
     private void renderTabChrome(

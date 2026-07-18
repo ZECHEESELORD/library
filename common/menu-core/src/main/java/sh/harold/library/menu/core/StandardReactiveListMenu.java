@@ -127,7 +127,7 @@ final class StandardReactiveListMenu<S> implements ReactiveMenuDefinition {
         }
 
         MenuTrace.setCount("placementCount", touchedSlots.size());
-        return new MenuSessionView(title, List.copyOf(slots), null, reactiveClickTargets);
+        return new MenuSessionView(title, List.copyOf(slots), reactiveClickTargets);
     }
 
     private Map<UtilitySlot, MenuItem> mergedUtilities(Map<UtilitySlot, MenuItem> renderedUtilities) {

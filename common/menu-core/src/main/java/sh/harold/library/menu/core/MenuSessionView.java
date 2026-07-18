@@ -18,8 +18,16 @@ record MenuSessionView(Component title, List<MenuSlot> slots, MenuStack cursor, 
         reactiveClickTargets = Set.copyOf(reactiveClickTargets);
     }
 
+    MenuSessionView(Component title, List<MenuSlot> slots) {
+        this(title, slots, null, Set.of());
+    }
+
     MenuSessionView(Component title, List<MenuSlot> slots, MenuStack cursor) {
         this(title, slots, cursor, Set.of());
+    }
+
+    MenuSessionView(Component title, List<MenuSlot> slots, Set<Integer> reactiveClickTargets) {
+        this(title, slots, null, reactiveClickTargets);
     }
 
     MenuFrame frame() {

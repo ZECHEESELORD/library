@@ -3,7 +3,8 @@ package sh.harold.library.menu;
 import java.util.List;
 import java.util.Objects;
 
-public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, ReactiveMenuInput.Closed, ReactiveMenuInput.Drag,
+public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, ReactiveMenuInput.Closed,
+        ReactiveMenuInput.CustodyCommitted, ReactiveMenuInput.CustodyRejected, ReactiveMenuInput.Drag,
         ReactiveMenuInput.DropCursor, ReactiveMenuInput.InventoryClick, ReactiveMenuInput.Opened,
         ReactiveMenuInput.TextPromptCancelled, ReactiveMenuInput.TextPromptSubmitted, ReactiveMenuInput.Tick {
 
@@ -11,6 +12,31 @@ public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, React
     }
 
     record Closed() implements ReactiveMenuInput {
+    }
+
+    record CustodyCommitted(long operationId, MenuCustodyGesture gesture, MenuCustodySnapshot snapshot)
+            implements ReactiveMenuInput {
+
+        public CustodyCommitted {
+            if (operationId <= 0L) {
+                throw new IllegalArgumentException("operationId must be greater than zero");
+            }
+            gesture = Objects.requireNonNull(gesture, "gesture");
+            snapshot = Objects.requireNonNull(snapshot, "snapshot");
+        }
+    }
+
+    record CustodyRejected(long operationId, MenuCustodyGesture gesture, MenuCustodyFailure failure,
+                           MenuCustodySnapshot snapshot) implements ReactiveMenuInput {
+
+        public CustodyRejected {
+            if (operationId <= 0L) {
+                throw new IllegalArgumentException("operationId must be greater than zero");
+            }
+            gesture = Objects.requireNonNull(gesture, "gesture");
+            failure = Objects.requireNonNull(failure, "failure");
+            snapshot = Objects.requireNonNull(snapshot, "snapshot");
+        }
     }
 
     record Tick(long tick) implements ReactiveMenuInput {
@@ -45,7 +71,8 @@ public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, React
         }
     }
 
-    record Click(int slot, MenuClick button, boolean shift, Object message, MenuStack cursor, MenuStack slotItem) implements ReactiveMenuInput {
+    record Click(int slot, MenuClick button, boolean shift, Object message, MenuStack cursor, MenuStack slotItem)
+            implements ReactiveMenuInput {
 
         public Click {
             Objects.requireNonNull(button, "button");
@@ -62,9 +89,9 @@ public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, React
     record InventoryClick(int slot, MenuClick button, boolean shift, MenuStack item) implements ReactiveMenuInput {
 
         public InventoryClick {
-            Objects.requireNonNull(button, "button");
+            Objects.requireNonNull(button);
             if (slot < 0) {
-                throw new IllegalArgumentException("slot cannot be negative");
+                throw new IllegalArgumentException();
             }
         }
     }
@@ -72,14 +99,14 @@ public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, React
     record Drag(MenuClick button, List<Integer> slots, MenuStack cursor) implements ReactiveMenuInput {
 
         public Drag {
-            button = Objects.requireNonNull(button, "button");
+            button = Objects.requireNonNull(button);
             slots = List.copyOf(slots);
             if (slots.isEmpty()) {
-                throw new IllegalArgumentException("slots cannot be empty");
+                throw new IllegalArgumentException();
             }
             for (Integer slot : slots) {
                 if (slot == null || slot < 0 || slot > 53) {
-                    throw new IllegalArgumentException("drag slot must be between 0 and 53");
+                    throw new IllegalArgumentException();
                 }
             }
         }
@@ -92,7 +119,7 @@ public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, React
     record DropCursor(MenuClick button, MenuStack cursor) implements ReactiveMenuInput {
 
         public DropCursor {
-            button = Objects.requireNonNull(button, "button");
+            button = Objects.requireNonNull(button);
         }
 
         public DropCursor(MenuClick button) {

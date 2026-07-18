@@ -34,7 +34,7 @@ class ReactiveListControlsTest {
 
         assertFalse(update.changed());
         ReactiveMenuEffect.RequestTextPrompt effect =
-                assertInstanceOf(ReactiveMenuEffect.RequestTextPrompt.class, update.effects().getFirst());
+                assertInstanceOf(ReactiveMenuEffect.RequestTextPrompt.class, update.effect().orElseThrow());
         assertEquals(SEARCH_PROMPT, effect.request());
     }
 
@@ -51,7 +51,7 @@ class ReactiveListControlsTest {
 
         assertTrue(update.changed());
         assertEquals("pain bow", state.searchQuery());
-        assertTrue(update.effects().isEmpty());
+        assertTrue(update.effect().isEmpty());
     }
 
     @Test

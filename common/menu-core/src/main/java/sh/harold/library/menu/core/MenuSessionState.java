@@ -11,6 +11,9 @@ import sh.harold.library.menu.MenuDefinition;
 import sh.harold.library.menu.MenuFrame;
 import sh.harold.library.menu.MenuIcon;
 import sh.harold.library.menu.MenuInteraction;
+import sh.harold.library.menu.MenuCustodyDecision;
+import sh.harold.library.menu.MenuCustodyGesture;
+import sh.harold.library.menu.MenuCustodySnapshot;
 import sh.harold.library.menu.MenuSlot;
 import sh.harold.library.menu.MenuSlotAction;
 import sh.harold.library.menu.MenuStack;
@@ -32,6 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class MenuSessionState {
 
     private static final int FOOTER_BACK_OFFSET = 3;
+    private static final int MAX_HISTORY_DEPTH = 32;
 
     private final Map<String, Object> values = new ConcurrentHashMap<>();
     private final Deque<HistoryEntry> history = new ArrayDeque<>();
@@ -102,27 +106,43 @@ public final class MenuSessionState {
         return currentView().cursor();
     }
 
+    public Map<String, Integer> custodyTargets() {
+        if (current instanceof ReactiveEntry reactive) {
+            return reactive.menu().custodyTargets();
+        }
+        return Map.of();
+    }
+
+    public Optional<String> custodyTargetAt(int slot) {
+        return custodyTargets().entrySet().stream()
+                .filter(entry -> entry.getValue() == slot)
+                .map(Map.Entry::getKey)
+                .findFirst();
+    }
+
+    public MenuCustodyDecision decideCustody(MenuCustodyGesture gesture, MenuCustodySnapshot snapshot) {
+        Objects.requireNonNull(gesture, "gesture");
+        Objects.requireNonNull(snapshot, "snapshot");
+        if (current instanceof ReactiveEntry reactive) {
+            return reactive.menu().decideCustody(reactive.state(), gesture, snapshot);
+        }
+        return MenuCustodyDecision.reject();
+    }
+
     public void invalidateView() {
         invalidate();
     }
 
     public void open(MenuDefinition menu) {
-        history.clear();
-        this.current = newEntry(menu);
-        this.autoBackEligible = false;
-        invalidate();
+        prepareOpen(menu).commit();
     }
 
     public void openChild(MenuDefinition menu) {
-        pushCurrent();
-        this.current = newEntry(menu);
-        this.autoBackEligible = true;
-        invalidate();
+        prepareOpenChild(menu).ifPresent(PreparedTransition::commit);
     }
 
     public void replaceCurrent(MenuDefinition menu) {
-        this.current = newEntry(menu);
-        invalidate();
+        prepareReplaceCurrent(menu).commit();
     }
 
     public void openFrame(String frameId) {
@@ -134,20 +154,60 @@ public final class MenuSessionState {
         if (frameId.equals(compiled.frameId())) {
             return;
         }
-        pushCurrent();
-        this.current = new CompiledEntry(compiled.menu(), frameId);
-        invalidate();
+        prepareOpenFrame(frameId).ifPresent(PreparedTransition::commit);
     }
 
     public boolean back() {
-        HistoryEntry previous = history.pollFirst();
-        if (previous == null) {
-            return false;
+        Optional<PreparedTransition> transition = prepareBack();
+        transition.ifPresent(PreparedTransition::commit);
+        return transition.isPresent();
+    }
+
+    public PreparedTransition prepareOpen(MenuDefinition menu) {
+        return new PreparedTransition(
+                newEntry(menu),
+                new ArrayDeque<>(),
+                false);
+    }
+
+    public Optional<PreparedTransition> prepareOpenChild(MenuDefinition menu) {
+        Objects.requireNonNull(menu, "menu");
+        if (history.size() >= MAX_HISTORY_DEPTH) {
+            MenuTrace.field("navigationRejected", "historyDepth");
+            return Optional.empty();
         }
-        this.current = previous.entry();
-        this.autoBackEligible = previous.autoBackEligible();
-        invalidate();
-        return true;
+        Deque<HistoryEntry> nextHistory = new ArrayDeque<>(history);
+        nextHistory.addFirst(new HistoryEntry(current, autoBackEligible, historyTitle(current)));
+        return Optional.of(new PreparedTransition(newEntry(menu), nextHistory, true));
+    }
+
+    public PreparedTransition prepareReplaceCurrent(MenuDefinition menu) {
+        return new PreparedTransition(newEntry(menu), new ArrayDeque<>(history), autoBackEligible);
+    }
+
+    public Optional<PreparedTransition> prepareOpenFrame(String frameId) {
+        Objects.requireNonNull(frameId, "frameId");
+        if (!(current instanceof CompiledEntry compiled)) {
+            throw new IllegalStateException("Only compiled menus support frame navigation");
+        }
+        compiled.menu().frame(frameId);
+        if (frameId.equals(compiled.frameId())) {
+            return Optional.empty();
+        }
+        return Optional.of(new PreparedTransition(
+                new CompiledEntry(compiled.menu(), frameId),
+                new ArrayDeque<>(history),
+                autoBackEligible));
+    }
+
+    public Optional<PreparedTransition> prepareBack() {
+        HistoryEntry previous = history.peekFirst();
+        if (previous == null) {
+            return Optional.empty();
+        }
+        Deque<HistoryEntry> nextHistory = new ArrayDeque<>(history);
+        nextHistory.removeFirst();
+        return Optional.of(new PreparedTransition(previous.entry(), nextHistory, previous.autoBackEligible()));
     }
 
     public List<ReactiveMenuEffect> opened() {
@@ -155,9 +215,7 @@ public final class MenuSessionState {
     }
 
     public void closed() {
-        MenuTrace.time("state.closed", () -> {
-            dispatchLifecycle(new ReactiveMenuInput.Closed());
-        });
+        dispatchLifecycle(new ReactiveMenuInput.Closed());
     }
 
     public List<ReactiveMenuEffect> tick() {
@@ -172,22 +230,57 @@ public final class MenuSessionState {
         if (!(current instanceof ReactiveEntry)) {
             return List.of();
         }
-        return MenuTrace.time("state.dispatchReactive", () -> dispatchLifecycle(input));
+        return MenuTrace.time("state.dispatchReactive", () -> prepareReactive(input).commit());
+    }
+
+    public PreparedReactiveDispatch prepareReactive(ReactiveMenuInput input) {
+        Objects.requireNonNull(input, "input");
+        if (!(current instanceof ReactiveEntry reactive)) {
+            throw new IllegalStateException("The current menu is not reactive");
+        }
+        return prepareLifecycle(reactive, input);
     }
 
     private List<ReactiveMenuEffect> dispatchLifecycle(ReactiveMenuInput input) {
         if (!(current instanceof ReactiveEntry reactive)) {
             return List.of();
         }
-        ReactiveMenuResult<?> result = reactive.menu().reduce(reactive.state(), input);
-        long nextTick = input instanceof ReactiveMenuInput.Tick tick ? tick.tick() : reactive.tick();
-        this.current = new ReactiveEntry(reactive.menu(), result.state(), nextTick);
-        invalidate();
-        return result.effects();
+        return prepareLifecycle(reactive, input).commit();
     }
 
-    private void pushCurrent() {
-        history.addFirst(new HistoryEntry(current, autoBackEligible, historyTitle(current)));
+    private PreparedReactiveDispatch prepareLifecycle(ReactiveEntry reactive, ReactiveMenuInput input) {
+        ReactiveMenuResult<?> result = reactive.menu().reduce(reactive.state(), input);
+        long nextTick = input instanceof ReactiveMenuInput.Tick tick ? tick.tick() : reactive.tick();
+        ReactiveEntry nextEntry = result.stateChanged()
+                ? new ReactiveEntry(reactive.menu(), result.state(), nextTick)
+                : new ReactiveEntry(reactive.menu(), reactive.state(), nextTick);
+        MenuSessionView nextView = result.stateChanged()
+                ? buildView(nextEntry, autoBackEligible, history)
+                : cachedView;
+        return new PreparedReactiveDispatch(
+                reactive,
+                nextEntry,
+                nextView,
+                result.effects(),
+                result.stateChanged());
+    }
+
+    private List<ReactiveMenuEffect> commitPreparedReactive(
+            ReactiveEntry expected,
+            ReactiveEntry nextEntry,
+            MenuSessionView nextView,
+            List<ReactiveMenuEffect> effects,
+            boolean stateChanged
+    ) {
+        if (current != expected) {
+            throw new IllegalStateException("Reactive dispatch is stale");
+        }
+        current = nextEntry;
+        if (stateChanged) {
+            cachedView = nextView;
+            revision.incrementAndGet();
+        }
+        return effects;
     }
 
     private SessionEntry newEntry(MenuDefinition menu) {
@@ -205,20 +298,24 @@ public final class MenuSessionState {
     }
 
     private MenuSessionView buildCurrentView() {
+        return buildView(current, autoBackEligible, history);
+    }
+
+    private MenuSessionView buildView(SessionEntry entry, boolean backEligible, Deque<HistoryEntry> entryHistory) {
         MenuSessionView view;
-        if (current instanceof CompiledEntry compiled) {
+        if (entry instanceof CompiledEntry compiled) {
             MenuFrame frame = compiled.menu().frame(compiled.frameId());
             MenuTrace.title(frame.title());
-            view = new MenuSessionView(frame.title(), frame.slots(), null);
-        } else if (current instanceof ReactiveEntry reactive) {
+            view = new MenuSessionView(frame.title(), frame.slots());
+        } else if (entry instanceof ReactiveEntry reactive) {
             view = buildReactiveView(reactive.menu(), reactive.state());
         } else {
-            throw new IllegalStateException("Unsupported session entry: " + current);
+            throw new IllegalStateException("Unsupported session entry: " + entry);
         }
-        if (!autoBackEligible || history.isEmpty()) {
+        if (!backEligible || entryHistory.isEmpty()) {
             return view;
         }
-        return MenuTrace.time("state.overlayBack", () -> overlayBack(view, history.peekFirst().titleSnapshot()));
+        return MenuTrace.time("state.overlayBack", () -> overlayBack(view, entryHistory.peekFirst().titleSnapshot()));
     }
 
     private MenuSessionView buildReactiveView(ReactiveMenuDefinition menu, Object state) {
@@ -260,6 +357,127 @@ public final class MenuSessionState {
             return compiled.menu().title();
         }
         return currentView().title();
+    }
+
+    public final class PreparedTransition {
+
+        private final long expectedRevision = revision.get();
+        private final SessionEntry expectedEntry = current;
+        private final SessionEntry nextEntry;
+        private final Deque<HistoryEntry> nextHistory;
+        private final boolean nextAutoBackEligible;
+        private MenuSessionView preparedView;
+        private boolean committed;
+
+        private PreparedTransition(
+                SessionEntry nextEntry,
+                Deque<HistoryEntry> nextHistory,
+                boolean nextAutoBackEligible
+        ) {
+            this.nextEntry = Objects.requireNonNull(nextEntry, "nextEntry");
+            this.nextHistory = new ArrayDeque<>(nextHistory);
+            this.nextAutoBackEligible = nextAutoBackEligible;
+        }
+
+        public MenuDefinition menu() {
+            return nextEntry.menu();
+        }
+
+        public String frameId() {
+            return nextEntry.frameId();
+        }
+
+        public boolean reactive() {
+            return nextEntry instanceof ReactiveEntry;
+        }
+
+        public long tickIntervalTicks() {
+            if (nextEntry instanceof ReactiveEntry reactive) {
+                return reactive.menu().tickIntervalTicks();
+            }
+            return 0L;
+        }
+
+        public MenuFrame currentFrame() {
+            return view().frame();
+        }
+
+        public Map<String, Integer> custodyTargets() {
+            if (nextEntry instanceof ReactiveEntry reactive) {
+                return reactive.menu().custodyTargets();
+            }
+            return Map.of();
+        }
+
+        public void commit() {
+            if (committed) {
+                throw new IllegalStateException("Transition is already committed");
+            }
+            if (revision.get() != expectedRevision || current != expectedEntry) {
+                throw new IllegalStateException("Transition is stale");
+            }
+            MenuSessionView nextView = view();
+            current = nextEntry;
+            history.clear();
+            history.addAll(nextHistory);
+            autoBackEligible = nextAutoBackEligible;
+            cachedView = nextView;
+            revision.incrementAndGet();
+            committed = true;
+        }
+
+        private MenuSessionView view() {
+            if (preparedView == null) {
+                preparedView = buildView(nextEntry, nextAutoBackEligible, nextHistory);
+            }
+            return preparedView;
+        }
+    }
+
+    public final class PreparedReactiveDispatch {
+
+        private final ReactiveEntry expectedEntry;
+        private final ReactiveEntry nextEntry;
+        private final MenuSessionView nextView;
+        private final List<ReactiveMenuEffect> effects;
+        private final boolean stateChanged;
+        private boolean committed;
+
+        private PreparedReactiveDispatch(
+                ReactiveEntry expectedEntry,
+                ReactiveEntry nextEntry,
+                MenuSessionView nextView,
+                List<ReactiveMenuEffect> effects,
+                boolean stateChanged
+        ) {
+            this.expectedEntry = expectedEntry;
+            this.nextEntry = nextEntry;
+            this.nextView = nextView;
+            this.effects = List.copyOf(effects);
+            this.stateChanged = stateChanged;
+        }
+
+        public boolean stateChanged() {
+            return stateChanged;
+        }
+
+        public MenuFrame currentFrame() {
+            return nextView == null ? MenuSessionState.this.currentFrame() : nextView.frame();
+        }
+
+        public List<ReactiveMenuEffect> effects() {
+            return effects;
+        }
+
+        public List<ReactiveMenuEffect> commit() {
+            if (committed) {
+                throw new IllegalStateException("Reactive dispatch is already committed");
+            }
+            List<ReactiveMenuEffect> committedEffects = commitPreparedReactive(
+                    expectedEntry, nextEntry, nextView, effects, stateChanged);
+            committed = true;
+            return committedEffects;
+        }
     }
 
     private sealed interface SessionEntry permits CompiledEntry, ReactiveEntry {

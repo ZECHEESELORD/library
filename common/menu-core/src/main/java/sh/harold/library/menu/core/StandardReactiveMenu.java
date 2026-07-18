@@ -6,12 +6,16 @@ import net.kyori.adventure.text.format.TextDecoration;
 import sh.harold.library.menu.ActionVerb;
 import sh.harold.library.menu.MenuClick;
 import sh.harold.library.menu.MenuGeometry;
+import sh.harold.library.menu.MenuCustodyDecision;
+import sh.harold.library.menu.MenuCustodyGesture;
+import sh.harold.library.menu.MenuCustodySnapshot;
 import sh.harold.library.menu.MenuIcon;
 import sh.harold.library.menu.MenuInteraction;
 import sh.harold.library.menu.MenuItem;
 import sh.harold.library.menu.MenuSlot;
 import sh.harold.library.menu.MenuSlotAction;
 import sh.harold.library.menu.ReactiveMenuInput;
+import sh.harold.library.menu.ReactiveMenuCustodyPolicy;
 import sh.harold.library.menu.ReactiveMenuReducer;
 import sh.harold.library.menu.ReactiveMenuRenderer;
 import sh.harold.library.menu.ReactiveMenuResult;
@@ -19,6 +23,7 @@ import sh.harold.library.menu.ReactiveMenuView;
 import sh.harold.library.menu.UtilitySlot;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +43,8 @@ final class StandardReactiveMenu<S> implements ReactiveMenuDefinition {
     private final Supplier<? extends S> stateFactory;
     private final ReactiveMenuRenderer<? super S> renderer;
     private final ReactiveMenuReducer<? super S> reducer;
+    private final Map<String, Integer> custodyTargets;
+    private final ReactiveMenuCustodyPolicy<? super S> custodyPolicy;
     private final List<MenuSlot> filledBaseSlots;
     private final List<MenuSlot> emptyBaseSlots;
 
@@ -48,7 +55,9 @@ final class StandardReactiveMenu<S> implements ReactiveMenuDefinition {
             long tickIntervalTicks,
             Supplier<? extends S> stateFactory,
             ReactiveMenuRenderer<? super S> renderer,
-            ReactiveMenuReducer<? super S> reducer
+            ReactiveMenuReducer<? super S> reducer,
+            Map<String, Integer> custodyTargets,
+            ReactiveMenuCustodyPolicy<? super S> custodyPolicy
     ) {
         this.rows = rows;
         this.utilities = Map.copyOf(new LinkedHashMap<>(utilities));
@@ -57,6 +66,8 @@ final class StandardReactiveMenu<S> implements ReactiveMenuDefinition {
         this.stateFactory = Objects.requireNonNull(stateFactory, "stateFactory");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.reducer = Objects.requireNonNull(reducer, "reducer");
+        this.custodyTargets = Collections.unmodifiableMap(new LinkedHashMap<>(custodyTargets));
+        this.custodyPolicy = custodyPolicy;
         this.filledBaseSlots = buildBaseSlots(rows, this.utilities, true);
         this.emptyBaseSlots = buildBaseSlots(rows, this.utilities, false);
     }
@@ -84,6 +95,22 @@ final class StandardReactiveMenu<S> implements ReactiveMenuDefinition {
     @Override
     public long tickIntervalTicks() {
         return tickIntervalTicks;
+    }
+
+    @Override
+    public Map<String, Integer> custodyTargets() {
+        return custodyTargets;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public MenuCustodyDecision decideCustody(Object state, MenuCustodyGesture gesture, MenuCustodySnapshot snapshot) {
+        if (custodyPolicy == null) {
+            return MenuCustodyDecision.reject();
+        }
+        return Objects.requireNonNull(
+                ((ReactiveMenuCustodyPolicy<S>) custodyPolicy).decide((S) state, gesture, snapshot),
+                "custodyPolicy.decide(...)");
     }
 
     @Override

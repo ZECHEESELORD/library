@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class ReactiveListControls {
 
@@ -40,22 +41,22 @@ public final class ReactiveListControls {
         }
     }
 
-    public record Update(boolean changed, List<ReactiveMenuEffect> effects) {
+    public record Update(boolean changed, Optional<ReactiveMenuEffect> effect) {
 
         public Update {
-            effects = List.copyOf(effects);
+            effect = Objects.requireNonNull(effect, "effect");
         }
 
         public static Update unchanged() {
-            return new Update(false, List.of());
+            return new Update(false, Optional.empty());
         }
 
         public static Update modified() {
-            return new Update(true, List.of());
+            return new Update(true, Optional.empty());
         }
 
         public static Update effect(ReactiveMenuEffect effect) {
-            return new Update(false, List.of(effect));
+            return new Update(false, Optional.of(Objects.requireNonNull(effect, "effect")));
         }
     }
 

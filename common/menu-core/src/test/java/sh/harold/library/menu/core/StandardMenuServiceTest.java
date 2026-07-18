@@ -348,7 +348,7 @@ class StandardMenuServiceTest {
     }
 
     @Test
-    void sessionStateTracksFrameHistoryButBackLoreUsesMenuTitleOnly() {
+    void frameNavigationDoesNotCreateBreadcrumbHistory() {
         Menu root = menus.list()
                 .title("Gallery")
                 .addItems(sampleButtons("Root", 1))
@@ -363,11 +363,167 @@ class StandardMenuServiceTest {
         state.openFrame("page:1");
 
         assertEquals("Go Back", titleAt(state.currentFrame(), 48));
-        assertEquals(List.of("To Profiles"), loreAt(state.currentFrame().slots().get(48)));
+        assertEquals(List.of("To Gallery"), loreAt(state.currentFrame().slots().get(48)));
 
         assertTrue(state.back());
-        assertEquals("page:0", state.frameId());
-        assertEquals(List.of("To Gallery"), loreAt(state.currentFrame().slots().get(48)));
+        assertEquals("Gallery", ComponentText.flatten(state.currentFrame().title()));
+        assertFalse(state.back());
+    }
+
+    @Test
+    void childBreadcrumbHistoryIsCappedAtThirtyTwoEntries() {
+        Menu root = menus.canvas().title("Root").build();
+        MenuSessionState state = new MenuSessionState(root);
+
+        for (int index = 1; index <= 32; index++) {
+            state.openChild(menus.canvas().title("Child " + index).build());
+        }
+        state.openChild(menus.canvas().title("Rejected").build());
+
+        assertEquals("Child 32", ComponentText.flatten(state.currentFrame().title()));
+        for (int index = 0; index < 32; index++) {
+            assertTrue(state.back());
+        }
+        assertEquals("Root", ComponentText.flatten(state.currentFrame().title()));
+        assertFalse(state.back());
+    }
+
+    @Test
+    void preparedTransitionDoesNotPublishUntilCommit() {
+        Menu root = menus.canvas().title("Root").build();
+        Menu child = menus.canvas().title("Child").build();
+        MenuSessionState state = new MenuSessionState(root);
+
+        MenuSessionState.PreparedTransition prepared = state.prepareOpenChild(child).orElseThrow();
+
+        assertEquals("Child", ComponentText.flatten(prepared.currentFrame().title()));
+        assertEquals("Root", ComponentText.flatten(state.currentFrame().title()));
+        assertFalse(state.back());
+
+        prepared.commit();
+
+        assertEquals("Child", ComponentText.flatten(state.currentFrame().title()));
+        assertTrue(state.back());
+        assertEquals("Root", ComponentText.flatten(state.currentFrame().title()));
+    }
+
+    @Test
+    void failedCandidateRenderLeavesCurrentMenuAndHistoryUntouched() {
+        Menu root = menus.canvas().title("Root").build();
+        ReactiveMenu broken = menus.reactiveCanvas()
+                .stateFactory(() -> 0)
+                .render(ignored -> {
+                    throw new IllegalStateException("render failed");
+                })
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build();
+        MenuSessionState state = new MenuSessionState(root);
+
+        MenuSessionState.PreparedTransition prepared = state.prepareOpenChild(broken).orElseThrow();
+
+        assertThrows(IllegalStateException.class, prepared::commit);
+        assertEquals("Root", ComponentText.flatten(state.currentFrame().title()));
+        assertFalse(state.back());
+    }
+
+    @Test
+    void preparedTransitionRejectsAnInterveningUnchangedTick() {
+        ReactiveMenu root = menus.reactiveCanvas()
+                .stateFactory(() -> 0)
+                .tickEvery(1L)
+                .render(value -> ReactiveMenuView.builder("Root").build())
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build();
+        Menu child = menus.canvas().title("Child").build();
+        MenuSessionState state = new MenuSessionState(root);
+        MenuSessionState.PreparedTransition prepared = state.prepareOpenChild(child).orElseThrow();
+
+        state.tick();
+
+        assertThrows(IllegalStateException.class, prepared::commit);
+        assertEquals("Root", ComponentText.flatten(state.currentFrame().title()));
+        assertFalse(state.back());
+    }
+
+    @Test
+    void preparedReactiveDispatchDoesNotPublishCandidateStateBeforeCommit() {
+        ReactiveMenu menu = menus.reactiveCanvas()
+                .stateFactory(() -> 0)
+                .render(value -> ReactiveMenuView.builder("Value " + value).build())
+                .reduce((value, input) -> ReactiveMenuResult.update(value + 1))
+                .build();
+        MenuSessionState state = new MenuSessionState(menu);
+
+        MenuSessionState.PreparedReactiveDispatch prepared = state.prepareReactive(
+                new ReactiveMenuInput.Click(0, MenuClick.LEFT, false, null));
+
+        assertEquals("Value 1", ComponentText.flatten(prepared.currentFrame().title()));
+        assertEquals("Value 0", ComponentText.flatten(state.currentFrame().title()));
+        prepared.commit();
+        assertEquals("Value 1", ComponentText.flatten(state.currentFrame().title()));
+    }
+
+    @Test
+    void unchangedReactiveResultSkipsRenderingAndRevisionChanges() {
+        AtomicInteger renders = new AtomicInteger();
+        ReactiveMenu menu = menus.reactiveCanvas()
+                .stateFactory(() -> 0)
+                .render(value -> {
+                    renders.incrementAndGet();
+                    return ReactiveMenuView.builder("Stable").build();
+                })
+                .reduce((value, input) -> ReactiveMenuResult.unchanged())
+                .build();
+        MenuSessionState state = new MenuSessionState(menu);
+        state.currentFrame();
+        long revision = state.revision();
+
+        state.dispatchReactive(new ReactiveMenuInput.Click(0, MenuClick.LEFT, false, null));
+
+        assertEquals(1, renders.get());
+        assertEquals(revision, state.revision());
+    }
+
+    @Test
+    void twoHundredUnchangedTickingSessionsDoNotRerender() {
+        AtomicInteger renders = new AtomicInteger();
+        ReactiveMenu menu = menus.reactiveCanvas()
+                .stateFactory(() -> 0)
+                .tickEvery(1L)
+                .render(value -> {
+                    renders.incrementAndGet();
+                    return ReactiveMenuView.builder("Stable").build();
+                })
+                .reduce((value, input) -> ReactiveMenuResult.unchanged())
+                .build();
+        List<MenuSessionState> sessions = IntStream.range(0, 200)
+                .mapToObj(ignored -> new MenuSessionState(menu))
+                .toList();
+        sessions.forEach(MenuSessionState::currentFrame);
+
+        sessions.forEach(MenuSessionState::tick);
+
+        assertEquals(200, renders.get());
+    }
+
+    @Test
+    void custodyTargetsValidateAgainstFinalGeometryAndChrome() {
+        assertThrows(IllegalArgumentException.class, () -> menus.reactiveCanvas()
+                .custodyTarget("center", 40)
+                .rows(3)
+                .custodyPolicy((state, gesture, snapshot) -> sh.harold.library.menu.MenuCustodyDecision.reject())
+                .render(state -> ReactiveMenuView.builder("Custody").build())
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build());
+        assertThrows(IllegalArgumentException.class, () -> menus.reactiveCanvas()
+                .custodyTarget("close", 49)
+                .custodyPolicy((state, gesture, snapshot) -> sh.harold.library.menu.MenuCustodyDecision.reject())
+                .render(state -> ReactiveMenuView.builder("Custody").build())
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build());
+        assertThrows(IllegalArgumentException.class, () -> menus.reactiveCanvas()
+                .custodyTarget("center", 22)
+                .custodyTarget("center", 23));
     }
 
     @Test
@@ -396,7 +552,7 @@ class StandardMenuServiceTest {
     @Test
     void reactiveListUsesPureListGeometryAndDispatchesGeometryMessages() {
         ReactiveMenu menu = menus.reactiveList()
-                .state(1)
+                .stateFactory(() -> 1)
                 .render(pageIndex -> ReactiveListView.builder("Profiles")
                         .page(pageIndex)
                         .addItems(sampleButtons("Item", 29))
@@ -404,13 +560,13 @@ class StandardMenuServiceTest {
                 .reduce((pageIndex, input) -> {
                     if (input instanceof ReactiveMenuInput.Click click
                             && click.message() instanceof ReactiveGeometryAction.PreviousPage) {
-                        return ReactiveMenuResult.stay(pageIndex - 1);
+                        return ReactiveMenuResult.update(pageIndex - 1);
                     }
                     if (input instanceof ReactiveMenuInput.Click click
                             && click.message() instanceof ReactiveGeometryAction.NextPage) {
-                        return ReactiveMenuResult.stay(pageIndex + 1);
+                        return ReactiveMenuResult.update(pageIndex + 1);
                     }
-                    return ReactiveMenuResult.stay(pageIndex);
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
 
@@ -441,7 +597,7 @@ class StandardMenuServiceTest {
     @Test
     void reactiveListUtilitiesRenderFromCurrentState() {
         ReactiveMenu menu = menus.reactiveList()
-                .state(false)
+                .stateFactory(() -> false)
                 .render(active -> ReactiveListView.builder("Profiles")
                         .addItem(sampleButtons("Item", 1).getFirst())
                         .utility(UtilitySlot.RIGHT_1, MenuButton.builder(MenuIcon.vanilla("oak_sign"))
@@ -451,8 +607,8 @@ class StandardMenuServiceTest {
                         .build())
                 .reduce((active, input) -> input instanceof ReactiveMenuInput.Click click
                         && click.message() == ToggleUtility.INSTANCE
-                        ? ReactiveMenuResult.stay(!active)
-                        : ReactiveMenuResult.stay(active))
+                        ? ReactiveMenuResult.update(!active)
+                        : ReactiveMenuResult.unchanged())
                 .build();
 
         MenuSessionState state = new MenuSessionState(menu);
@@ -466,7 +622,7 @@ class StandardMenuServiceTest {
     @Test
     void reactiveTabsKeepActiveTabIndependentFromStripScrollAndPageThroughListContent() {
         ReactiveMenu menu = menus.reactiveTabs()
-                .state(new ReactiveTabsState("tab-0", 1, 1))
+                .stateFactory(() -> new ReactiveTabsState("tab-0", 1, 1))
                 .render(state -> ReactiveTabsView.builder("Reactive Tabs")
                         .activeTab(state.activeTabId())
                         .navStart(state.navStart())
@@ -481,30 +637,30 @@ class StandardMenuServiceTest {
                         .build())
                 .reduce((state, input) -> {
                     if (!(input instanceof ReactiveMenuInput.Click click)) {
-                        return ReactiveMenuResult.stay(state);
+                        return ReactiveMenuResult.unchanged();
                     }
                     if (click.message() instanceof ReactiveGeometryAction.PreviousTabs) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                        return ReactiveMenuResult.update(new ReactiveTabsState(
                                 state.activeTabId(),
                                 Math.max(0, state.navStart() - 1),
                                 state.pageIndex()));
                     }
                     if (click.message() instanceof ReactiveGeometryAction.NextTabs) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                        return ReactiveMenuResult.update(new ReactiveTabsState(
                                 state.activeTabId(),
                                 state.navStart() + 1,
                                 state.pageIndex()));
                     }
                     if (click.message() instanceof ReactiveGeometryAction.PreviousPage) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                        return ReactiveMenuResult.update(new ReactiveTabsState(
                                 state.activeTabId(),
                                 state.navStart(),
                                 Math.max(0, state.pageIndex() - 1)));
                     }
                     if (click.message() instanceof ReactiveGeometryAction.SwitchTab switchTab) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(switchTab.tabId(), state.navStart(), 0));
+                        return ReactiveMenuResult.update(new ReactiveTabsState(switchTab.tabId(), state.navStart(), 0));
                     }
-                    return ReactiveMenuResult.stay(state);
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
 
@@ -543,7 +699,7 @@ class StandardMenuServiceTest {
     @Test
     void reactiveTabsSharedFooterUtilitiesRenderFromCurrentState() {
         ReactiveMenu menu = menus.reactiveTabs()
-                .state(false)
+                .stateFactory(() -> false)
                 .render(active -> ReactiveTabsView.builder("Reactive Tabs")
                         .activeTab("alpha")
                         .addTab(MenuTab.of("alpha", "Alpha", MenuIcon.vanilla("stone"), sampleButtons("Alpha", 1)))
@@ -555,8 +711,8 @@ class StandardMenuServiceTest {
                         .build())
                 .reduce((active, input) -> input instanceof ReactiveMenuInput.Click click
                         && click.message() == ToggleUtility.INSTANCE
-                        ? ReactiveMenuResult.stay(!active)
-                        : ReactiveMenuResult.stay(active))
+                        ? ReactiveMenuResult.update(!active)
+                        : ReactiveMenuResult.unchanged())
                 .build();
 
         MenuSessionState state = new MenuSessionState(menu);
@@ -580,9 +736,9 @@ class StandardMenuServiceTest {
                         .build())
                 .reduce((state, input) -> {
                     if (input instanceof ReactiveMenuInput.Click click && "toggle-filler".equals(click.message())) {
-                        return ReactiveMenuResult.stay(new ToggleState(!state.enabled()));
+                        return ReactiveMenuResult.update(new ToggleState(!state.enabled()));
                     }
-                    return ReactiveMenuResult.stay(state);
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
 
@@ -602,7 +758,7 @@ class StandardMenuServiceTest {
     void reactiveSessionsCacheCompiledPlacementsByItemIdentityAcrossRerenders() {
         MenuDisplayItem staticCard = MenuDisplayItem.builder(MenuIcon.vanilla("book"))
                 .name("Shift Or Drag")
-                .description("Shift-click a stack from the bottom inventory, or click one to load the reactive cursor and place it in the center slot.")
+                .description("Shift-click a bottom stack or move it through the runtime-owned center custody target.")
                 .build();
 
         ReactiveMenu menu = menus.reactiveCanvas()
@@ -614,24 +770,36 @@ class StandardMenuServiceTest {
                                 .build())
                         .build())
                 .reduce((state, input) -> input instanceof ReactiveMenuInput.Tick
-                        ? ReactiveMenuResult.stay(new ToggleState(!state.enabled()))
-                        : ReactiveMenuResult.stay(state))
+                        ? ReactiveMenuResult.update(new ToggleState(!state.enabled()))
+                        : ReactiveMenuResult.unchanged())
                 .build();
 
-        MenuSessionState state = new MenuSessionState(menu);
         MenuTraceController trace = new MenuTraceController();
         trace.traceAll();
 
         List<String> firstLogs = new ArrayList<>();
-        MenuTrace.withTrace(trace, firstLogs::add, "test", UUID.randomUUID(), "refresh", () -> state.currentFrame());
+        MenuSessionState[] state = new MenuSessionState[1];
+        MenuTrace.withTrace(
+                trace,
+                firstLogs::add,
+                "test",
+                UUID.randomUUID(),
+                "refresh",
+                () -> state[0] = new MenuSessionState(menu)
+        );
         String firstSummary = summaryLine(firstLogs, "refresh");
         assertTrue(firstSummary.contains("placementCompileHits=\"0\""));
         assertTrue(firstSummary.contains("placementCompileMisses=\"2\""));
 
-        state.dispatchReactive(new ReactiveMenuInput.Tick(1L));
-
         List<String> secondLogs = new ArrayList<>();
-        MenuTrace.withTrace(trace, secondLogs::add, "test", UUID.randomUUID(), "refresh", () -> state.currentFrame());
+        MenuTrace.withTrace(
+                trace,
+                secondLogs::add,
+                "test",
+                UUID.randomUUID(),
+                "refresh",
+                () -> state[0].dispatchReactive(new ReactiveMenuInput.Tick(1L))
+        );
         String secondSummary = summaryLine(secondLogs, "refresh");
         assertTrue(secondSummary.contains("placementCompileHits=\"1\""));
         assertTrue(secondSummary.contains("placementCompileMisses=\"1\""));
@@ -641,13 +809,13 @@ class StandardMenuServiceTest {
     void invalidateViewRebuildsReactiveMenusAfterExternalStateMutation() {
         AtomicBoolean enabled = new AtomicBoolean(false);
         ReactiveMenu menu = menus.reactiveCanvas()
-                .state(enabled)
+                .stateFactory(() -> enabled)
                 .render(state -> ReactiveMenuView.builder("Reactive Refresh")
                         .place(22, MenuDisplayItem.builder(MenuIcon.vanilla("lever"))
                                 .name(state.get() ? "Refresh: On" : "Refresh: Off")
                                 .build())
                         .build())
-                .reduce((state, input) -> ReactiveMenuResult.stay(state))
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
                 .build();
 
         MenuSessionState session = new MenuSessionState(menu);
