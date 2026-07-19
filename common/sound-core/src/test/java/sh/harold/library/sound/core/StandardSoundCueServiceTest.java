@@ -15,7 +15,10 @@ import java.util.List;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static sh.harold.library.sound.SoundCues.atTick;
 import static sh.harold.library.sound.SoundCues.layer;
 import static sh.harold.library.sound.SoundCues.oneOf;
@@ -84,6 +87,71 @@ class StandardSoundCueServiceTest {
 
         assertEquals(List.of(), audience.played);
         assertEquals(List.of(true, true), scheduler.cancelledStates());
+    }
+
+    @Test
+    void delayedStepsAreScheduledAgainstTheirPlaybackTarget() {
+        TargetAwareScheduler scheduler = new TargetAwareScheduler();
+        StandardSoundCueService service = new StandardSoundCueService(scheduler);
+        SoundTarget target = SoundTarget.audience(new RecordingAudience());
+
+        service.play(target, sequence(
+                atTick(2, sound("minecraft:ui.button.click", 0.8f, 1.0f))
+        ));
+
+        assertSame(target, scheduler.target);
+        assertEquals(2L, scheduler.delayTicks);
+    }
+
+    @Test
+    void synchronousRetirementCompletesPlaybackBeforeTaskRegistration() {
+        DiscardAwareScheduler scheduler = new DiscardAwareScheduler(true);
+        StandardSoundCueService service = new StandardSoundCueService(scheduler);
+        RecordingAudience audience = new RecordingAudience();
+
+        service.play(SoundTarget.audience(audience), sequence(
+                atTick(2, sound("minecraft:ui.button.click", 0.8f, 1.0f))
+        ));
+
+        assertEquals(List.of(), audience.played);
+        assertTrue(scheduler.task.cancelled);
+        service.close();
+        assertEquals(1, scheduler.task.cancelCalls);
+    }
+
+    @Test
+    void laterRetirementDiscardsPlaybackWithoutLeavingItActive() {
+        DiscardAwareScheduler scheduler = new DiscardAwareScheduler(false);
+        StandardSoundCueService service = new StandardSoundCueService(scheduler);
+        RecordingAudience audience = new RecordingAudience();
+
+        service.play(SoundTarget.audience(audience), sequence(
+                atTick(2, sound("minecraft:ui.button.click", 0.8f, 1.0f))
+        ));
+        scheduler.discard();
+        scheduler.fire();
+        service.close();
+
+        assertEquals(List.of(), audience.played);
+        assertFalse(scheduler.task.cancelled);
+    }
+
+    @Test
+    void firedDelayedStepCannotAlsoBeDiscarded() {
+        DiscardAwareScheduler scheduler = new DiscardAwareScheduler(false);
+        StandardSoundCueService service = new StandardSoundCueService(scheduler);
+        RecordingAudience audience = new RecordingAudience();
+
+        service.play(SoundTarget.audience(audience), sequence(
+                atTick(2, sound("minecraft:ui.button.click", 0.8f, 1.0f))
+        ));
+        scheduler.fire();
+        scheduler.discard();
+        scheduler.fire();
+        service.close();
+
+        assertEquals(List.of("minecraft:ui.button.click@0.8/1.0"), audience.played);
+        assertFalse(scheduler.task.cancelled);
     }
 
     @Test
@@ -175,6 +243,78 @@ class StandardSoundCueServiceTest {
             }
             fired = true;
             action.run();
+        }
+    }
+
+    private static final class TargetAwareScheduler implements SoundCueScheduler {
+
+        private SoundTarget target;
+        private long delayTicks;
+
+        @Override
+        public ScheduledCueTask schedule(long delayTicks, Runnable action) {
+            throw new AssertionError();
+        }
+
+        @Override
+        public ScheduledCueTask schedule(SoundTarget target, long delayTicks, Runnable action) {
+            this.target = target;
+            this.delayTicks = delayTicks;
+            return () -> {
+            };
+        }
+    }
+
+    private static final class DiscardAwareScheduler implements SoundCueScheduler {
+
+        private final boolean discardSynchronously;
+        private final CountingTask task = new CountingTask();
+
+        private Runnable action;
+        private Runnable onDiscard;
+
+        private DiscardAwareScheduler(boolean discardSynchronously) {
+            this.discardSynchronously = discardSynchronously;
+        }
+
+        @Override
+        public ScheduledCueTask schedule(long delayTicks, Runnable action) {
+            throw new AssertionError();
+        }
+
+        @Override
+        public ScheduledCueTask schedule(
+                SoundTarget target,
+                long delayTicks,
+                Runnable action,
+                Runnable onDiscard
+        ) {
+            this.action = action;
+            this.onDiscard = onDiscard;
+            if (discardSynchronously) {
+                onDiscard.run();
+            }
+            return task;
+        }
+
+        void fire() {
+            action.run();
+        }
+
+        void discard() {
+            onDiscard.run();
+        }
+    }
+
+    private static final class CountingTask implements ScheduledCueTask {
+
+        private boolean cancelled;
+        private int cancelCalls;
+
+        @Override
+        public void cancel() {
+            cancelled = true;
+            cancelCalls++;
         }
     }
 

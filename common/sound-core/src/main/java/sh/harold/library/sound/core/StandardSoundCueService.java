@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class StandardSoundCueService implements SoundCueService {
 
@@ -73,7 +74,7 @@ public final class StandardSoundCueService implements SoundCueService {
             return CuePlayback.noop();
         }
 
-        ActiveCuePlayback playback = new ActiveCuePlayback();
+        ActiveCuePlayback playback = new ActiveCuePlayback(delayed.size());
         synchronized (monitor) {
             ensureOpenLocked();
             activePlaybacks.add(playback);
@@ -82,8 +83,14 @@ public final class StandardSoundCueService implements SoundCueService {
         try {
             for (Map.Entry<Long, List<Sound>> entry : delayed) {
                 List<Sound> sounds = entry.getValue();
-                ScheduledCueTask task = scheduler.schedule(entry.getKey(), () -> playback.fire(playbackTarget, sounds));
-                playback.addTask(task);
+                DelayedCueStep step = new DelayedCueStep(playback, playbackTarget, sounds);
+                ScheduledCueTask task = scheduler.schedule(
+                        playbackTarget,
+                        entry.getKey(),
+                        step::fire,
+                        step::discard
+                );
+                playback.addTask(Objects.requireNonNull(task, "scheduled task"));
             }
             playSounds(playbackTarget, immediate);
             return playback;
@@ -180,6 +187,10 @@ public final class StandardSoundCueService implements SoundCueService {
         private boolean finished;
         private int remainingTasks;
 
+        private ActiveCuePlayback(int remainingTasks) {
+            this.remainingTasks = remainingTasks;
+        }
+
         void addTask(ScheduledCueTask task) {
             synchronized (playbackMonitor) {
                 if (finished) {
@@ -187,7 +198,6 @@ public final class StandardSoundCueService implements SoundCueService {
                     return;
                 }
                 scheduledTasks.add(task);
-                remainingTasks++;
             }
         }
 
@@ -204,6 +214,12 @@ public final class StandardSoundCueService implements SoundCueService {
                 shouldUnregister = completeTask();
             }
             if (shouldUnregister) {
+                unregister(this);
+            }
+        }
+
+        void discard() {
+            if (completeTask()) {
                 unregister(this);
             }
         }
@@ -236,6 +252,32 @@ public final class StandardSoundCueService implements SoundCueService {
                     return true;
                 }
                 return false;
+            }
+        }
+    }
+
+    private final class DelayedCueStep {
+
+        private final ActiveCuePlayback playback;
+        private final SoundTarget target;
+        private final List<Sound> sounds;
+        private final AtomicBoolean completed = new AtomicBoolean();
+
+        private DelayedCueStep(ActiveCuePlayback playback, SoundTarget target, List<Sound> sounds) {
+            this.playback = playback;
+            this.target = target;
+            this.sounds = sounds;
+        }
+
+        void fire() {
+            if (completed.compareAndSet(false, true)) {
+                playback.fire(target, sounds);
+            }
+        }
+
+        void discard() {
+            if (completed.compareAndSet(false, true)) {
+                playback.discard();
             }
         }
     }
