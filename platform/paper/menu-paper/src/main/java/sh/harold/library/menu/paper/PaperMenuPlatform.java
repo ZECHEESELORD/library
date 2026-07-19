@@ -25,22 +25,27 @@ import sh.harold.library.menu.ReactiveListMenuBuilder;
 import sh.harold.library.menu.ReactiveMenuBuilder;
 import sh.harold.library.menu.ReactiveTabsMenuBuilder;
 import sh.harold.library.menu.TabsMenuBuilder;
-import sh.harold.library.menu.core.MenuTickScheduler;
 import sh.harold.library.menu.core.StandardMenuService;
+import sh.harold.library.sound.SoundTarget;
 import sh.harold.library.sound.SoundCueService;
+import sh.harold.library.sound.core.ScheduledCueTask;
+import sh.harold.library.sound.core.SoundCueScheduler;
 import sh.harold.library.sound.core.StandardSoundCueService;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public final class PaperMenuPlatform implements AutoCloseable {
 
     private final MenuService menus;
+    private final JavaPlugin plugin;
     private final PaperMenuRuntime runtime;
     private final PaperMenuListener listener;
     private final SoundCueService sounds;
     private final boolean closeSounds;
     private final MenuTraceController traceController;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     public PaperMenuPlatform(JavaPlugin plugin) {
         this(plugin, new StandardMenuService(), defaultSounds(plugin), true);
@@ -56,12 +61,13 @@ public final class PaperMenuPlatform implements AutoCloseable {
 
     private PaperMenuPlatform(JavaPlugin plugin, MenuService menus, SoundCueService sounds, boolean closeSounds) {
         Objects.requireNonNull(plugin, "plugin");
+        this.plugin = plugin;
         this.menus = Objects.requireNonNull(menus, "menus");
         this.sounds = Objects.requireNonNull(sounds, "sounds");
         this.closeSounds = closeSounds;
         this.traceController = new MenuTraceController();
         this.runtime = new PaperMenuRuntime(new BukkitPaperMenuAccess(), org.bukkit.Bukkit::getPlayer, new PaperMenuRenderer(), sounds,
-                scheduleTicks(plugin), action -> plugin.getServer().getScheduler().runTask(plugin, action)::cancel,
+                PaperMenuTaskScheduler.folia(plugin),
                 traceController, message -> plugin.getLogger().info("[paper-menu-trace] " + message));
         this.listener = new PaperMenuListener(runtime);
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
@@ -148,7 +154,30 @@ public final class PaperMenuPlatform implements AutoCloseable {
     }
 
     public void open(Player player, MenuDefinition menu) {
-        runtime.open(Objects.requireNonNull(player, "player"), Objects.requireNonNull(menu, "menu"));
+        if (closed.get()) {
+            throw new IllegalStateException("PaperMenuPlatform is closed");
+        }
+        Player viewer = Objects.requireNonNull(player, "player");
+        MenuDefinition definition = Objects.requireNonNull(menu, "menu");
+        boolean ownsRegion;
+        try {
+            ownsRegion = org.bukkit.Bukkit.isOwnedByCurrentRegion(viewer);
+        } catch (RuntimeException ignored) {
+            ownsRegion = false;
+        }
+        if (ownsRegion) {
+            runtime.open(viewer, definition);
+            return;
+        }
+        viewer.getScheduler().execute(
+                plugin,
+                () -> {
+                    if (!closed.get()) {
+                        runtime.open(viewer, definition);
+                    }
+                },
+                null,
+                1L);
     }
 
     public MenuTraceController trace() {
@@ -157,8 +186,13 @@ public final class PaperMenuPlatform implements AutoCloseable {
 
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         runtime.close();
-        HandlerList.unregisterAll(listener);
+        if (!runtime.requiresStaleInventoryGuard()) {
+            HandlerList.unregisterAll(listener);
+        }
         if (closeSounds) {
             sounds.close();
         }
@@ -166,12 +200,57 @@ public final class PaperMenuPlatform implements AutoCloseable {
 
     private static SoundCueService defaultSounds(JavaPlugin plugin) {
         Objects.requireNonNull(plugin, "plugin");
-        return new StandardSoundCueService((delayTicks, action) -> {
-            if (delayTicks < 0) {
-                throw new IllegalArgumentException("delayTicks cannot be negative");
+        return new StandardSoundCueService(new SoundCueScheduler() {
+            @Override
+            public ScheduledCueTask schedule(long delayTicks, Runnable action) {
+                validateDelay(delayTicks, action);
+                var scheduler = plugin.getServer().getGlobalRegionScheduler();
+                var task = delayTicks == 0L
+                        ? scheduler.run(plugin, ignored -> action.run())
+                        : scheduler.runDelayed(plugin, ignored -> action.run(), delayTicks);
+                return task::cancel;
             }
-            var task = plugin.getServer().getScheduler().runTaskLater(plugin, Objects.requireNonNull(action, "action"), delayTicks);
-            return task::cancel;
+
+            @Override
+            public ScheduledCueTask schedule(SoundTarget target, long delayTicks, Runnable action) {
+                return schedule(target, delayTicks, action, () -> {
+                });
+            }
+
+            @Override
+            public ScheduledCueTask schedule(
+                    SoundTarget target,
+                    long delayTicks,
+                    Runnable action,
+                    Runnable onDiscard
+            ) {
+                validateDelay(delayTicks, action);
+                Objects.requireNonNull(onDiscard, "onDiscard");
+                if (target instanceof SoundTarget.AudienceTarget audience
+                        && audience.audience() instanceof Player player) {
+                    AtomicBoolean completed = new AtomicBoolean();
+                    Runnable runAction = () -> {
+                        if (completed.compareAndSet(false, true)) {
+                            action.run();
+                        }
+                    };
+                    Runnable discard = () -> {
+                        if (completed.compareAndSet(false, true)) {
+                            onDiscard.run();
+                        }
+                    };
+                    var scheduler = player.getScheduler();
+                    var task = delayTicks == 0L
+                            ? scheduler.run(plugin, ignored -> runAction.run(), discard)
+                            : scheduler.runDelayed(plugin, ignored -> runAction.run(), discard, delayTicks);
+                    if (task == null) {
+                        discard.run();
+                        return () -> { };
+                    }
+                    return task::cancel;
+                }
+                return schedule(delayTicks, action);
+            }
         });
     }
 
@@ -239,14 +318,10 @@ public final class PaperMenuPlatform implements AutoCloseable {
         return builder.toString();
     }
 
-    private static MenuTickScheduler scheduleTicks(JavaPlugin plugin) {
-        return (intervalTicks, action) -> {
-            if (intervalTicks <= 0L) {
-                throw new IllegalArgumentException("intervalTicks must be greater than zero");
-            }
-            var task = plugin.getServer().getScheduler().runTaskTimer(plugin, Objects.requireNonNull(action, "action"),
-                    intervalTicks, intervalTicks);
-            return task::cancel;
-        };
+    private static void validateDelay(long delayTicks, Runnable action) {
+        if (delayTicks < 0L) {
+            throw new IllegalArgumentException("delayTicks cannot be negative");
+        }
+        Objects.requireNonNull(action, "action");
     }
 }

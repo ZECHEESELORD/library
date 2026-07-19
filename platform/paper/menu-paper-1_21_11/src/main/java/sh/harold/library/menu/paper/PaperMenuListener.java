@@ -2,10 +2,12 @@ package sh.harold.library.menu.paper;
 
 import io.papermc.paper.event.packet.UncheckedSignChangeEvent;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -18,7 +20,7 @@ final class PaperMenuListener implements Listener {
         this.runtime = runtime;
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onInventoryClick(InventoryClickEvent event) {
         runtime.onInventoryClick(event);
     }
@@ -28,7 +30,7 @@ final class PaperMenuListener implements Listener {
         runtime.onInventoryClose(event);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onInventoryDrag(InventoryDragEvent event) {
         runtime.onInventoryDrag(event);
     }
@@ -48,8 +50,15 @@ final class PaperMenuListener implements Listener {
         runtime.onPlayerDisconnect(event.getPlayer());
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerKick(PlayerKickEvent event) {
-        runtime.onPlayerDisconnect(event.getPlayer());
+        if (!event.isCancelled()) {
+            runtime.onPlayerDisconnect(event.getPlayer());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        runtime.onPlayerDeath(event.getEntity(), event.getKeepInventory(), event.getDrops());
     }
 }
