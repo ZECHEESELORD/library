@@ -17,6 +17,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.InventoryView;
@@ -26,8 +27,17 @@ import org.junit.jupiter.api.Test;
 import sh.harold.library.menu.ActionVerb;
 import sh.harold.library.menu.Menu;
 import sh.harold.library.menu.MenuButton;
+import sh.harold.library.menu.MenuClick;
 import sh.harold.library.menu.MenuDisplayItem;
+import sh.harold.library.menu.MenuCustodyDecision;
+import sh.harold.library.menu.MenuCustodyDestination;
+import sh.harold.library.menu.MenuCustodyGesture;
 import sh.harold.library.menu.MenuIcon;
+import sh.harold.library.menu.MenuFrame;
+import sh.harold.library.menu.MenuGeometry;
+import sh.harold.library.menu.MenuInteraction;
+import sh.harold.library.menu.MenuSlot;
+import sh.harold.library.menu.MenuSlotAction;
 import sh.harold.library.menu.MenuStack;
 import sh.harold.library.menu.MenuTab;
 import sh.harold.library.menu.MenuTabGroup;
@@ -64,11 +74,13 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -127,8 +139,9 @@ class PaperMenuRuntimeTest {
 
         runtime.onInventoryClick(click(player, inventory, 10, ClickType.LEFT));
 
+        inventory = access.lastOpenedInventory();
         assertEquals("Enabled", slotTitle(access, inventory, 10));
-        assertEquals(1, access.openedInventories.size());
+        assertEquals(2, access.openedInventories.size());
     }
 
     @Test
@@ -155,6 +168,7 @@ class PaperMenuRuntimeTest {
         runtime.onInventoryClick(toggle);
 
         assertTrue(toggle.isCancelled());
+        childInventory = access.lastOpenedInventory();
         assertEquals("Enabled", slotTitle(access, childInventory, 10));
         assertEquals("Go Back", slotTitle(access, childInventory, 48));
 
@@ -242,6 +256,172 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
+    void signRestoreSchedulingFailureStillUnlocksAndReopensTheSession() {
+        UUID viewerId = UUID.randomUUID();
+        org.bukkit.World world = org.mockito.Mockito.mock(org.bukkit.World.class);
+        PaperMenuTestSupport.TrackedPlayer trackedPlayer = PaperMenuTestSupport.trackedPlayer(
+                viewerId,
+                new Location(world, 0.0, 64.0, 0.0));
+        Player player = trackedPlayer.player();
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime.PaperVirtualSignSupport virtualSigns = (request, allowedEditorId) ->
+                new PaperMenuRuntime.PreparedVirtualSign(
+                        PaperMenuTestSupport.blockData(),
+                        PaperMenuTestSupport.tileState());
+        PaperMenuTaskScheduler taskScheduler = PaperMenuTaskScheduler.testing(
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled),
+                (location, action) -> {
+                    throw new IllegalStateException("location scheduler unavailable");
+                });
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                taskScheduler,
+                new MenuTraceController(),
+                message -> { },
+                virtualSigns,
+                (viewer, request, submit, cancel) -> { });
+
+        runtime.open(player, reactivePromptMenu(new PromptState("")));
+        Inventory inventory = access.lastOpenedInventory();
+        runtime.onInventoryClick(click(
+                player,
+                inventory,
+                UtilitySlot.RIGHT_1.resolveSlot(45),
+                ClickType.LEFT));
+        runNextTick(scheduled);
+        runNextTick(scheduled);
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+        runNextTick(scheduled);
+
+        Location signLocation = trackedPlayer.state().blockChangeLocations().getFirst();
+        UncheckedSignChangeEvent signChange = new UncheckedSignChangeEvent(
+                player,
+                Position.block(signLocation),
+                Side.FRONT,
+                List.of(Component.text("pain"), Component.empty(), Component.empty(), Component.empty()));
+        runtime.onUncheckedSignChange(signChange);
+
+        PaperMenuSession session = (PaperMenuSession) inventory.getHolder(false);
+        assertTrue(signChange.isCancelled());
+        assertFalse(session.custodyTransitioning());
+
+        runNextTick(scheduled);
+
+        Inventory reopened = access.lastOpenedInventory();
+        assertEquals("Search: pain", slotTitle(access, reopened, UtilitySlot.RIGHT_1.resolveSlot(45)));
+        assertEquals(reopened, access.topInventory(player));
+    }
+
+
+    @Test
+    void olderSignRestoreCannotOverwriteANewerPromptAtTheSameBlock() {
+        UUID viewerId = UUID.randomUUID();
+        org.bukkit.World world = org.mockito.Mockito.mock(org.bukkit.World.class);
+        org.bukkit.block.Block block = org.mockito.Mockito.mock(org.bukkit.block.Block.class);
+        org.bukkit.block.data.BlockData liveBlockData =
+                org.mockito.Mockito.mock(org.bukkit.block.data.BlockData.class);
+        org.bukkit.block.data.BlockData restoredBlockData = PaperMenuTestSupport.blockData();
+        org.bukkit.block.TileState restoredTileState = PaperMenuTestSupport.tileState();
+        org.mockito.Mockito.when(world.getBlockAt(
+                org.mockito.ArgumentMatchers.any(Location.class))).thenReturn(block);
+        org.mockito.Mockito.when(block.getBlockData()).thenReturn(liveBlockData);
+        org.mockito.Mockito.when(liveBlockData.clone()).thenReturn(restoredBlockData);
+        org.mockito.Mockito.when(block.getState()).thenReturn(restoredTileState);
+
+        PaperMenuTestSupport.TrackedPlayer trackedPlayer = PaperMenuTestSupport.trackedPlayer(
+                viewerId,
+                new Location(world, 0.0, 64.0, 0.0));
+        Player player = trackedPlayer.player();
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> viewerTasks = new ArrayDeque<>();
+        Deque<Runnable> locationTasks = new ArrayDeque<>();
+        PaperMenuTaskScheduler taskScheduler = PaperMenuTaskScheduler.testing(
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(viewerTasks),
+                (location, action) -> {
+                    locationTasks.addLast(action);
+                    return () -> locationTasks.remove(action);
+                });
+        PaperMenuRuntime.PaperVirtualSignSupport virtualSigns = (request, allowedEditorId) ->
+                new PaperMenuRuntime.PreparedVirtualSign(
+                        PaperMenuTestSupport.blockData(),
+                        PaperMenuTestSupport.tileState());
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                taskScheduler,
+                new MenuTraceController(),
+                message -> { },
+                virtualSigns,
+                (viewer, request, submit, cancel) -> { });
+
+        runtime.open(player, chainedSignPromptMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) inventory.getHolder(false);
+        runtime.onInventoryClick(click(
+                player,
+                inventory,
+                UtilitySlot.RIGHT_1.resolveSlot(45),
+                ClickType.LEFT));
+        runNextTick(viewerTasks);
+        runNextTick(viewerTasks);
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+        runNextTick(viewerTasks);
+
+        Location signLocation = trackedPlayer.state().blockChangeLocations().getFirst();
+        UncheckedSignChangeEvent firstSubmission = new UncheckedSignChangeEvent(
+                player,
+                Position.block(signLocation),
+                Side.FRONT,
+                List.of(Component.text("first"), Component.empty(), Component.empty(), Component.empty()));
+        runtime.onUncheckedSignChange(firstSubmission);
+        assertTrue(firstSubmission.isCancelled());
+        assertEquals(1, locationTasks.size());
+
+        runNextTick(viewerTasks);
+
+        assertTrue(session.custodyTransitioning());
+        assertEquals(2, trackedPlayer.state().openedVirtualSigns().size());
+        assertEquals(2, trackedPlayer.state().blockChanges().size());
+        assertEquals(2, trackedPlayer.state().blockUpdates().size());
+
+        runNextTick(locationTasks);
+        runNextTick(viewerTasks);
+
+        assertEquals(2, trackedPlayer.state().blockChanges().size());
+        assertEquals(2, trackedPlayer.state().blockUpdates().size());
+
+        UncheckedSignChangeEvent secondSubmission = new UncheckedSignChangeEvent(
+                player,
+                Position.block(signLocation),
+                Side.FRONT,
+                List.of(Component.text("final"), Component.empty(), Component.empty(), Component.empty()));
+        runtime.onUncheckedSignChange(secondSubmission);
+
+        assertTrue(secondSubmission.isCancelled());
+        assertFalse(session.custodyTransitioning());
+        assertEquals(1, locationTasks.size());
+
+        runNextTick(locationTasks);
+        while (!viewerTasks.isEmpty()) {
+            runNextTick(viewerTasks);
+        }
+
+        assertEquals(3, trackedPlayer.state().blockChanges().size());
+        assertEquals(restoredBlockData, trackedPlayer.state().blockChanges().getLast());
+        assertEquals(3, trackedPlayer.state().blockUpdates().size());
+        assertEquals(restoredTileState, trackedPlayer.state().blockUpdates().getLast());
+        assertEquals(access.lastOpenedInventory(), access.topInventory(player));
+    }
+
+    @Test
     void promptPromptClosesMenuOpensDialogAndReopensReactiveMenuOnSubmit() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
@@ -294,7 +474,177 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
-    void compiledMenusIgnoreDoubleAndShiftClickVariants() {
+    void promptTimeoutCancelsExactlyOnceIgnoresLateCallbacksAndRestoresTheMenu() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        Deque<Runnable> timeouts = new ArrayDeque<>();
+        AtomicLong timeoutDelay = new AtomicLong();
+        AtomicReference<java.util.function.Consumer<String>> submit = new AtomicReference<>();
+        AtomicReference<Runnable> cancel = new AtomicReference<>();
+        PaperMenuTaskScheduler taskScheduler = PaperMenuTaskScheduler.testing(
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled),
+                (location, action) -> {
+                    action.run();
+                    return MenuTickHandle.noop();
+                },
+                (viewer, delayTicks, action) -> {
+                    timeoutDelay.set(delayTicks);
+                    timeouts.addLast(action);
+                    return () -> timeouts.remove(action);
+                });
+        PaperMenuRuntime.PaperDialogPromptSupport dialogPrompts = (viewer, request, onSubmit, onCancel) -> {
+            submit.set(onSubmit);
+            cancel.set(onCancel);
+        };
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                taskScheduler,
+                new MenuTraceController(),
+                message -> { },
+                PaperMenuRuntime.PaperVirtualSignSupport.live(),
+                dialogPrompts);
+
+        runtime.open(player, timeoutPromptMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        runtime.onInventoryClick(click(player, inventory, UtilitySlot.RIGHT_1.resolveSlot(45), ClickType.LEFT));
+        runNextTick(scheduled);
+        runNextTick(scheduled);
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+        runNextTick(scheduled);
+
+        assertEquals(4L * 60L * 20L, timeoutDelay.get());
+        assertEquals(1, timeouts.size());
+        assertTrue(submit.get() != null);
+        assertTrue(cancel.get() != null);
+        assertNull(access.topInventory(player));
+
+        runNextTick(timeouts);
+        runNextTick(scheduled);
+
+        Inventory reopened = access.lastOpenedInventory();
+        assertEquals("Cancelled: 1", slotTitle(access, reopened, UtilitySlot.RIGHT_1.resolveSlot(45)));
+        assertEquals(reopened, access.topInventory(player));
+        int openedCount = access.openedInventories.size();
+
+        submit.get().accept("late");
+        cancel.get().run();
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        assertEquals(openedCount, access.openedInventories.size());
+        assertEquals("Cancelled: 1", slotTitle(access, reopened, UtilitySlot.RIGHT_1.resolveSlot(45)));
+    }
+
+    @Test
+    void deathDuringPromptCancelsItsTimeoutAndMakesLateCallbacksInert() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        Deque<Runnable> timeouts = new ArrayDeque<>();
+        AtomicReference<java.util.function.Consumer<String>> submit = new AtomicReference<>();
+        AtomicReference<Runnable> cancel = new AtomicReference<>();
+        PaperMenuTaskScheduler taskScheduler = PaperMenuTaskScheduler.testing(
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled),
+                (location, action) -> {
+                    action.run();
+                    return MenuTickHandle.noop();
+                },
+                (viewer, delayTicks, action) -> {
+                    timeouts.addLast(action);
+                    return () -> timeouts.remove(action);
+                });
+        PaperMenuRuntime.PaperDialogPromptSupport dialogPrompts = (viewer, request, onSubmit, onCancel) -> {
+            submit.set(onSubmit);
+            cancel.set(onCancel);
+        };
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                taskScheduler,
+                new MenuTraceController(),
+                message -> { },
+                PaperMenuRuntime.PaperVirtualSignSupport.live(),
+                dialogPrompts);
+
+        runtime.open(player, timeoutPromptMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        runtime.onInventoryClick(click(player, inventory, UtilitySlot.RIGHT_1.resolveSlot(45), ClickType.LEFT));
+        runNextTick(scheduled);
+        runNextTick(scheduled);
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+        runNextTick(scheduled);
+
+        assertEquals(1, timeouts.size());
+        int openedCount = access.openedInventories.size();
+
+        runtime.onPlayerDeath(player, true, new ArrayList<>());
+
+        assertTrue(timeouts.isEmpty());
+        submit.get().accept("late");
+        cancel.get().run();
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        assertNull(access.topInventory(player));
+        assertEquals(openedCount, access.openedInventories.size());
+    }
+
+    @Test
+    void promptCompletionRenderFailureQuarantinesTheClosedSession() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        AtomicReference<java.util.function.Consumer<String>> submit = new AtomicReference<>();
+        AtomicBoolean failNativeRender = new AtomicBoolean();
+        PaperMenuSlotRenderer delegate = renderer();
+        PaperMenuSlotRenderer flakyRenderer = slot -> {
+            if (failNativeRender.get()) {
+                throw new IllegalStateException("native render failed");
+            }
+            return delegate.render(slot);
+        };
+        PaperMenuRuntime.PaperDialogPromptSupport dialogPrompts = (viewer, request, onSubmit, onCancel) ->
+                submit.set(onSubmit);
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                flakyRenderer, new RecordingSoundCueService(),
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(), queuedScheduler(scheduled),
+                new MenuTraceController(), message -> { }, PaperMenuRuntime.PaperVirtualSignSupport.live(), dialogPrompts);
+
+        runtime.open(player, reactivePromptDialogMenu(new PromptState("")));
+        Inventory inventory = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) inventory.getHolder(false);
+        runtime.onInventoryClick(click(player, inventory, UtilitySlot.RIGHT_1.resolveSlot(45), ClickType.LEFT));
+        runNextTick(scheduled);
+        runNextTick(scheduled);
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+        runNextTick(scheduled);
+
+        submit.get().accept("updated");
+        failNativeRender.set(true);
+        assertDoesNotThrow(() -> runNextTick(scheduled));
+
+        failNativeRender.set(false);
+        int openedCount = access.openedInventories.size();
+        assertDoesNotThrow(() -> session.refresh());
+        assertEquals(openedCount, access.openedInventories.size());
+        assertNull(access.topInventory(player));
+    }
+
+    @Test
+    void compiledMenusCancelUnsupportedClickVariants() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
@@ -304,15 +654,32 @@ class PaperMenuRuntimeTest {
         runtime.open(player, counterMenu(count));
         Inventory inventory = access.lastOpenedInventory();
 
-        InventoryClickEvent doubleClick = click(player, inventory, 10, ClickType.DOUBLE_CLICK);
-        runtime.onInventoryClick(doubleClick);
-
-        InventoryClickEvent shifted = click(player, inventory, 10, ClickType.SHIFT_LEFT);
-        runtime.onInventoryClick(shifted);
-
-        assertTrue(doubleClick.isCancelled());
-        assertTrue(shifted.isCancelled());
+        for (ClickType unsupported : List.of(
+                ClickType.SHIFT_LEFT, ClickType.SHIFT_RIGHT, ClickType.NUMBER_KEY,
+                ClickType.DOUBLE_CLICK, ClickType.MIDDLE, ClickType.DROP,
+                ClickType.CONTROL_DROP, ClickType.CREATIVE, ClickType.SWAP_OFFHAND,
+                ClickType.UNKNOWN)) {
+            InventoryClickEvent click = click(player, inventory, 10, unsupported);
+            runtime.onInventoryClick(click);
+            assertTrue(click.isCancelled());
+        }
         assertEquals(0, count.get());
+    }
+
+    @Test
+    void compiledMenusCancelDragsBeforeVanillaCanMoveDisplayItems() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+
+        runtime.open(player, pagedMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        InventoryDragEvent drag = dragEvent(player, inventory, Set.of(10), namedBukkitItem(Material.STONE, Material.STONE.name(), 1));
+
+        runtime.onInventoryDrag(drag);
+
+        assertTrue(drag.isCancelled());
     }
 
     @Test
@@ -377,7 +744,11 @@ class PaperMenuRuntimeTest {
 
         InventoryClickEvent staleClick = click(player, ownedInventory, 53, ClickType.LEFT);
         runtime.onInventoryClick(staleClick);
-        assertFalse(staleClick.isCancelled());
+        assertTrue(staleClick.isCancelled());
+
+        InventoryDragEvent staleDrag = dragEvent(player, ownedInventory, Set.of(10), namedBukkitItem(Material.STONE, Material.STONE.name(), 1));
+        runtime.onInventoryDrag(staleDrag);
+        assertTrue(staleDrag.isCancelled());
     }
 
     @Test
@@ -392,11 +763,520 @@ class PaperMenuRuntimeTest {
 
         InventoryClickEvent click = click(player, access.lastOpenedInventory(), 53, ClickType.LEFT);
         runtime.onInventoryClick(click);
-        assertFalse(click.isCancelled());
+        assertTrue(click.isCancelled());
     }
 
     @Test
-    void childBackUsesHistoryAndTabSwitchesPushFrameHistory() {
+    void runtimeCloseFencesNewOpensAndKeepsOffRegionInventoriesGuarded() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+
+        runtime.open(player, pagedMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        runtime.close();
+
+        assertTrue(runtime.requiresStaleInventoryGuard());
+        assertEquals(inventory, access.topInventory(player));
+        runtime.open(player, counterMenu(new AtomicInteger()));
+        assertEquals(1, access.openedInventories.size());
+
+        InventoryClickEvent staleClick = click(player, inventory, 10, ClickType.LEFT);
+        runtime.onInventoryClick(staleClick);
+
+        assertTrue(staleClick.isCancelled());
+        assertNull(access.topInventory(player));
+    }
+
+    @Test
+    void throwingTickReducerQuarantinesAndCancelsTheSession() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        AtomicReference<Runnable> tickAction = new AtomicReference<>();
+        AtomicBoolean cancelled = new AtomicBoolean();
+        sh.harold.library.menu.core.MenuTickScheduler tickScheduler = (interval, action) -> {
+            tickAction.set(action);
+            return () -> cancelled.set(true);
+        };
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService(), tickScheduler);
+
+        runtime.open(player, throwingTickMenu());
+        assertDoesNotThrow(() -> tickAction.get().run());
+
+        assertTrue(cancelled.get());
+        assertNull(access.topInventory(player));
+        assertEquals(List.of(viewerId), access.closedPlayers);
+        assertDoesNotThrow(() -> tickAction.get().run());
+    }
+
+    @Test
+    void throwingOpenedReducerQuarantinesTheRegisteredSession() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+
+        assertDoesNotThrow(() -> runtime.open(player, throwingOpenedMenu()));
+
+        assertNull(access.topInventory(player));
+        assertEquals(List.of(viewerId), access.closedPlayers);
+    }
+
+    @Test
+    void custodyPolicyRootOpenCannotMoveAStackIntoTheDetachedSession() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        AtomicReference<PaperMenuRuntime> runtimeReference = new AtomicReference<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+        runtimeReference.set(runtime);
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Reentrant Source", 7);
+
+        runtime.open(player, reentrantCustodyMenu(() -> runtimeReference.get().open(player, pagedMenu())));
+        Inventory original = access.lastOpenedInventory();
+        playerInventory(player).setItem(8, source);
+
+        InventoryClickEvent click = click(player, original, original.getSize() + 8, ClickType.LEFT);
+        assertDoesNotThrow(() -> runtime.onInventoryClick(click));
+
+        assertTrue(click.isCancelled());
+        assertEquals(source, playerInventory(player).getItem(8));
+        assertEquals("Custody Target", slotTitle(access, original, 31));
+        assertEquals(original, access.topInventory(player));
+
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        Inventory successor = access.lastOpenedInventory();
+        assertEquals("Profiles (1/3)", inventoryTitle(access, successor));
+        assertEquals(successor, access.topInventory(player));
+        runtime.onInventoryClick(click(player, original, 31, ClickType.LEFT));
+        assertEquals(successor, access.topInventory(player));
+        assertEquals(source, playerInventory(player).getItem(8));
+    }
+
+    @Test
+    void deathWithoutKeepInventoryHandsExactTargetAndCursorCustodyToDropsOnce() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+        ItemStack targetItem = PaperMenuTestSupport.renderedItem(
+                "emerald",
+                7,
+                Component.text("Exact Target"),
+                List.of(Component.text("target lore")),
+                true);
+        ItemStack cursorItem = PaperMenuTestSupport.renderedItem(
+                "diamond",
+                3,
+                Component.text("Exact Cursor"),
+                List.of(Component.text("cursor lore")),
+                true);
+
+        runtime.open(player, reactiveDragInsertMenu(false));
+        Inventory inventory = access.lastOpenedInventory();
+        playerInventory(player).setItem(5, targetItem);
+        playerInventory(player).setItem(6, cursorItem);
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 5, ClickType.SHIFT_LEFT));
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 6, ClickType.LEFT));
+        for (int slot = 0; slot < playerInventory(player).getStorageContents().length; slot++) {
+            if (playerInventory(player).getItem(slot) == null) {
+                playerInventory(player).setItem(slot, namedBukkitItem(Material.STONE, "Filler " + slot, 1));
+            }
+        }
+        List<ItemStack> drops = new ArrayList<>();
+
+        runtime.onPlayerDeath(player, false, drops);
+
+        assertEquals(1L, drops.stream().filter(targetItem::equals).count());
+        assertEquals(1L, drops.stream().filter(cursorItem::equals).count());
+        assertNull(player.getItemOnCursor());
+        assertEquals("Custody Target", slotTitle(access, inventory, 31));
+        int delivered = drops.size();
+
+        runtime.onPlayerDeath(player, false, drops);
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+
+        assertEquals(delivered, drops.size());
+        assertEquals(1L, drops.stream().filter(targetItem::equals).count());
+        assertEquals(1L, drops.stream().filter(cursorItem::equals).count());
+    }
+
+    @Test
+    void deathWithKeepInventorySettlesFullInventoryOverflowExactlyOnce() {
+        UUID viewerId = UUID.randomUUID();
+        org.bukkit.World world = org.mockito.Mockito.mock(org.bukkit.World.class);
+        PaperMenuTestSupport.TrackedPlayer trackedPlayer = PaperMenuTestSupport.trackedPlayer(
+                viewerId,
+                new Location(world, 0.0, 64.0, 0.0));
+        Player player = trackedPlayer.player();
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+        ItemStack exact = PaperMenuTestSupport.renderedItem(
+                "emerald",
+                11,
+                Component.text("Retained Overflow"),
+                List.of(Component.text("exact metadata")),
+                true);
+        ItemStack cursorBlocker = namedBukkitItem(Material.STONE, "Cursor Blocker", 1);
+
+        runtime.open(player, reactiveDragInsertMenu(false));
+        Inventory inventory = access.lastOpenedInventory();
+        playerInventory(player).setItem(5, exact);
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 5, ClickType.SHIFT_LEFT));
+        for (int slot = 0; slot < playerInventory(player).getStorageContents().length; slot++) {
+            playerInventory(player).setItem(slot, namedBukkitItem(Material.STONE, "Filler " + slot, 1));
+        }
+        player.setItemOnCursor(cursorBlocker);
+
+        runtime.onPlayerDeath(player, true, new ArrayList<>());
+        runtime.onPlayerDeath(player, true, new ArrayList<>());
+
+        org.mockito.ArgumentCaptor<ItemStack> delivered = org.mockito.ArgumentCaptor.forClass(ItemStack.class);
+        org.mockito.Mockito.verify(world, org.mockito.Mockito.times(1)).dropItemNaturally(
+                org.mockito.ArgumentMatchers.any(Location.class),
+                delivered.capture());
+        assertEquals(exact, delivered.getValue());
+        assertEquals(cursorBlocker, player.getItemOnCursor());
+        assertEquals("Custody Target", slotTitle(access, inventory, 31));
+    }
+
+    @Test
+    void throwingDeathSettlementReducerCannotDuplicateDeliveredDrop() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+        ItemStack exact = PaperMenuTestSupport.renderedItem(
+                "diamond",
+                5,
+                Component.text("Throwing Settlement"),
+                List.of(Component.text("survives reducer failure")),
+                true);
+
+        runtime.open(player, throwingDeathSettlementMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        playerInventory(player).setItem(5, exact);
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 5, ClickType.SHIFT_LEFT));
+        List<ItemStack> drops = new ArrayList<>();
+
+        assertDoesNotThrow(() -> runtime.onPlayerDeath(player, false, drops));
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+        runtime.onPlayerDeath(player, false, drops);
+
+        assertEquals(1L, drops.stream().filter(exact::equals).count());
+        assertNull(access.topInventory(player));
+    }
+
+    @Test
+    void cancelledKickKeepsTheSessionActiveAndSuccessfulKickCleansOnce() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+        PaperMenuListener listener = new PaperMenuListener(runtime);
+        AtomicInteger clicks = new AtomicInteger();
+
+        runtime.open(player, counterMenu(clicks));
+        Inventory inventory = access.lastOpenedInventory();
+        PlayerKickEvent cancelled = org.mockito.Mockito.mock(PlayerKickEvent.class);
+        org.mockito.Mockito.when(cancelled.getPlayer()).thenReturn(player);
+        org.mockito.Mockito.when(cancelled.isCancelled()).thenReturn(true);
+        listener.onPlayerKick(cancelled);
+        runtime.onInventoryClick(click(player, inventory, 10, ClickType.LEFT));
+
+        assertEquals(1, clicks.get());
+
+        PlayerKickEvent successful = org.mockito.Mockito.mock(PlayerKickEvent.class);
+        org.mockito.Mockito.when(successful.getPlayer()).thenReturn(player);
+        listener.onPlayerKick(successful);
+        assertDoesNotThrow(() -> listener.onPlayerKick(successful));
+        InventoryClickEvent staleClick = click(player, inventory, 10, ClickType.LEFT);
+        runtime.onInventoryClick(staleClick);
+
+        assertTrue(staleClick.isCancelled());
+        assertEquals(1, clicks.get());
+    }
+
+    @Test
+    void rootOpenStateFactoryFailureLeavesThePreviousSessionUsable() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+
+        runtime.open(player, pagedMenu());
+        Inventory original = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) original.getHolder(false);
+
+        assertDoesNotThrow(() -> runtime.open(player, throwingStateFactoryMenu()));
+
+        assertEquals(original, access.topInventory(player));
+        assertEquals(1, access.openedInventories.size());
+        assertFalse(session.custodyTransitioning());
+
+        runtime.onInventoryClick(click(player, original, 53, ClickType.LEFT));
+
+        assertEquals("Profiles (2/3)", inventoryTitle(access, access.lastOpenedInventory()));
+        assertFalse(session.custodyTransitioning());
+    }
+
+    @Test
+    void childStateFactoryFailuresLeaveTheCurrentSessionUsable() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+
+        runtime.open(player, pagedMenu());
+        Inventory original = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) original.getHolder(false);
+
+        assertDoesNotThrow(() -> session.open(throwingStateFactoryMenu()));
+        assertFalse(session.custodyTransitioning());
+        assertDoesNotThrow(() -> session.replace(throwingStateFactoryMenu()));
+
+        assertEquals(original, access.topInventory(player));
+        assertEquals(1, access.openedInventories.size());
+        assertFalse(session.custodyTransitioning());
+
+        runtime.onInventoryClick(click(player, original, 53, ClickType.LEFT));
+
+        assertEquals("Profiles (2/3)", inventoryTitle(access, access.lastOpenedInventory()));
+        assertFalse(session.custodyTransitioning());
+    }
+
+    @Test
+    void malformedFrameActionDoesNotWedgeTheSession() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        AtomicInteger usableAction = new AtomicInteger();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+
+        runtime.open(player, malformedFrameMenu(usableAction));
+        Inventory inventory = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) inventory.getHolder(false);
+
+        assertDoesNotThrow(() -> runtime.onInventoryClick(click(player, inventory, 1, ClickType.LEFT)));
+        assertFalse(session.custodyTransitioning());
+        assertEquals(inventory, access.topInventory(player));
+
+        runtime.onInventoryClick(click(player, inventory, 2, ClickType.LEFT));
+
+        assertEquals(1, usableAction.get());
+        assertFalse(session.custodyTransitioning());
+    }
+
+    @Test
+    void rootBackWithoutHeldCustodyDoesNotRerender() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        AtomicInteger renderCalls = new AtomicInteger();
+        PaperMenuSlotRenderer delegate = renderer();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                slot -> {
+                    renderCalls.incrementAndGet();
+                    return delegate.render(slot);
+                },
+                new RecordingSoundCueService());
+
+        runtime.open(player, settlementNavigationMenu(pagedMenu()));
+        Inventory inventory = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) inventory.getHolder(false);
+        int before = renderCalls.get();
+
+        session.back();
+
+        assertEquals(before, renderCalls.get());
+        assertEquals(inventory, access.topInventory(player));
+        assertFalse(session.custodyTransitioning());
+    }
+
+    @Test
+    void compiledActionNavigationIsDeferredUntilTheCallbackCompletes() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+
+        runtime.open(player, launcherMenu());
+        Inventory original = access.lastOpenedInventory();
+        runtime.onInventoryClick(click(player, original, 10, ClickType.LEFT));
+
+        assertEquals(1, access.openedInventories.size());
+        assertEquals(original, access.topInventory(player));
+
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        assertEquals("Gallery", inventoryTitle(access, access.lastOpenedInventory()));
+        assertEquals(access.lastOpenedInventory(), access.topInventory(player));
+    }
+
+    @Test
+    void throwingCompiledActionDiscardsQueuedNavigation() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+
+        runtime.open(player, throwingQueuedNavigationMenu());
+        Inventory original = access.lastOpenedInventory();
+
+        assertDoesNotThrow(() -> runtime.onInventoryClick(click(player, original, 10, ClickType.LEFT)));
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        assertEquals(1, access.openedInventories.size());
+        assertNull(access.topInventory(player));
+        assertEquals(List.of(viewerId), access.closedPlayers);
+    }
+
+
+    @Test
+    void reactiveReducerRootOpenSupersedesTheOldOutcomeOnTheNextTick() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        AtomicReference<PaperMenuRuntime> runtimeReference = new AtomicReference<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+        runtimeReference.set(runtime);
+
+        runtime.open(player, reentrantClickMenu(() -> runtimeReference.get().open(player, pagedMenu())));
+        Inventory original = access.lastOpenedInventory();
+
+        InventoryClickEvent click = click(player, original, 22, ClickType.LEFT);
+        assertDoesNotThrow(() -> runtime.onInventoryClick(click));
+
+        assertTrue(click.isCancelled());
+        assertEquals(original, access.topInventory(player));
+        assertEquals("Replace Later", slotTitle(access, original, 22));
+
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        Inventory successor = access.lastOpenedInventory();
+        assertEquals("Profiles (1/3)", inventoryTitle(access, successor));
+        assertEquals(successor, access.topInventory(player));
+    }
+
+    @Test
+    void throwingClickReducerQuarantinesTheRegisteredSession() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+
+        runtime.open(player, throwingClickMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        InventoryClickEvent click = click(player, inventory, 22, ClickType.LEFT);
+
+        assertDoesNotThrow(() -> runtime.onInventoryClick(click));
+
+        assertTrue(click.isCancelled());
+        assertNull(access.topInventory(player));
+        assertEquals(List.of(viewerId), access.closedPlayers);
+    }
+
+    @Test
+    void throwingReactiveRendererDuringClickQuarantinesTheRegisteredSession() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+
+        runtime.open(player, throwingClickRendererMenu());
+        Inventory inventory = access.lastOpenedInventory();
+        InventoryClickEvent click = click(player, inventory, 22, ClickType.LEFT);
+
+        assertDoesNotThrow(() -> runtime.onInventoryClick(click));
+
+        assertTrue(click.isCancelled());
+        assertNull(access.topInventory(player));
+        assertEquals(List.of(viewerId), access.closedPlayers);
+    }
+
+
+    @Test
+    void childBackUsesBreadcrumbHistoryWithoutRecordingTabFrames() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
         TestPaperMenuAccess access = new TestPaperMenuAccess();
@@ -421,19 +1301,12 @@ class PaperMenuRuntimeTest {
         runtime.onInventoryClick(switchTab);
 
         assertTrue(switchTab.isCancelled());
+        inventory = access.lastOpenedInventory();
         assertEquals("Profiles", slotTitle(access, inventory, 3));
         assertEquals("Progress", slotTitle(access, inventory, 4));
         assertEquals("Farming XLIX", slotTitle(access, inventory, 19));
 
-        InventoryClickEvent backToPreviousFrame = click(player, inventory, 48, ClickType.LEFT);
-        runtime.onInventoryClick(backToPreviousFrame);
-
-        assertTrue(backToPreviousFrame.isCancelled());
-        Inventory afterFrameBack = access.lastOpenedInventory();
-        assertEquals("Go Back", slotTitle(access, afterFrameBack, 48));
-        assertEquals("Your SkyBlock Profile", slotTitle(access, afterFrameBack, 19));
-
-        InventoryClickEvent backToRoot = click(player, afterFrameBack, 48, ClickType.LEFT);
+        InventoryClickEvent backToRoot = click(player, inventory, 48, ClickType.LEFT);
         runtime.onInventoryClick(backToRoot);
 
         assertTrue(backToRoot.isCancelled());
@@ -463,6 +1336,7 @@ class PaperMenuRuntimeTest {
         runtime.onInventoryClick(scrollRight);
 
         assertTrue(scrollRight.isCancelled());
+        inventory = access.lastOpenedInventory();
         assertEquals("Tab 1", slotTitle(access, inventory, 1));
         assertEquals("Tab 7", slotTitle(access, inventory, 7));
         assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
@@ -471,6 +1345,7 @@ class PaperMenuRuntimeTest {
         runtime.onInventoryClick(jumpEnd);
 
         assertTrue(jumpEnd.isCancelled());
+        inventory = access.lastOpenedInventory();
         assertEquals("Tab 3", slotTitle(access, inventory, 1));
         assertEquals("Tab 9", slotTitle(access, inventory, 7));
         assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
@@ -479,6 +1354,7 @@ class PaperMenuRuntimeTest {
         runtime.onInventoryClick(switchTab);
 
         assertTrue(switchTab.isCancelled());
+        inventory = access.lastOpenedInventory();
         assertEquals("Tab 9 Item 0", slotTitle(access, inventory, 19));
     }
 
@@ -500,6 +1376,7 @@ class PaperMenuRuntimeTest {
         runtime.onInventoryClick(nextPage);
 
         assertTrue(nextPage.isCancelled());
+        inventory = access.lastOpenedInventory();
         assertEquals("Previous Page", slotTitle(access, inventory, 45));
         assertEquals(List.of("Page 1"), slotLore(access, inventory, 45));
         assertEquals("Profile Item 21", slotTitle(access, inventory, 19));
@@ -583,6 +1460,202 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
+    void outsideWindowBorderClicksReturnCursorCustodyToTheExactOrigin() {
+        for (ClickType borderClick : List.of(ClickType.WINDOW_BORDER_LEFT, ClickType.WINDOW_BORDER_RIGHT)) {
+            UUID viewerId = UUID.randomUUID();
+            Player player = player(viewerId);
+            TestPaperMenuAccess access = new TestPaperMenuAccess();
+            PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                    renderer(), new RecordingSoundCueService());
+            ItemStack source = namedBukkitItem(Material.EMERALD, "Border Return", 3);
+
+            runtime.open(player, reactiveDragInsertMenu(false));
+            Inventory inventory = access.lastOpenedInventory();
+            playerInventory(player).setItem(5, source);
+            runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 5, ClickType.LEFT));
+            assertEquals(source, player.getItemOnCursor());
+
+            InventoryClickEvent outside = click(player, inventory, -999, borderClick);
+            runtime.onInventoryClick(outside);
+
+            assertTrue(outside.isCancelled());
+            assertEquals(source, playerInventory(player).getItem(5));
+            assertNull(player.getItemOnCursor());
+        }
+    }
+
+    @Test
+    void externalTargetMutationRejectsWithoutRestoringASecondSourceCopy() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Exact Source", 7);
+
+        runtime.open(player, reactiveClickInsertMenu(false));
+        Inventory inventory = access.lastOpenedInventory();
+        playerInventory(player).setItem(5, source);
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 5, ClickType.LEFT));
+        assertNull(playerInventory(player).getItem(5));
+
+        ItemStack external = namedBukkitItem(Material.DIAMOND, "External Mutation", 1);
+        inventory.setItem(31, external);
+        runtime.onInventoryClick(click(player, inventory, 31, ClickType.LEFT));
+
+        assertNull(playerInventory(player).getItem(5));
+        assertEquals(external, inventory.getItem(31));
+
+        inventory.setItem(31, source.clone());
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+
+        assertEquals(source, playerInventory(player).getItem(5));
+        assertEquals("Click An Inventory Stack", slotTitle(access, inventory, 31));
+    }
+
+    @Test
+    void refreshAfterExternalTargetRemovalQuarantinesWithoutRecreatingTheStack() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Moved Elsewhere", 7);
+
+        runtime.open(player, reactiveClickInsertMenu(false));
+        Inventory inventory = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) inventory.getHolder(false);
+        playerInventory(player).setItem(5, source);
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 5, ClickType.LEFT));
+        assertEquals(source, inventory.getItem(31));
+
+        inventory.setItem(31, null);
+        runtime.refresh(session);
+
+        assertNull(inventory.getItem(31));
+        assertNull(playerInventory(player).getItem(5));
+        assertNull(access.topInventory(player));
+        int openedCount = access.openedInventories.size();
+        runtime.refresh(session);
+        assertEquals(openedCount, access.openedInventories.size());
+    }
+
+    @Test
+    void titleRebuildSettlesCustodyBeforeOpeningTheReplacementInventory() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+        AtomicBoolean alternateTitle = new AtomicBoolean();
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Rebuild Source", 4);
+
+        runtime.open(player, reactiveCustodyTitleMenu(alternateTitle));
+        Inventory original = access.lastOpenedInventory();
+        playerInventory(player).setItem(6, source);
+        runtime.onInventoryClick(click(player, original, original.getSize() + 6, ClickType.LEFT));
+        assertNull(playerInventory(player).getItem(6));
+        assertEquals(source, original.getItem(31));
+
+        alternateTitle.set(true);
+        runtime.refresh((PaperMenuSession) original.getHolder(false));
+
+        Inventory replacement = access.lastOpenedInventory();
+        assertNotSame(original, replacement);
+        assertEquals("Custody B", inventoryTitle(access, replacement));
+        assertEquals(source, playerInventory(player).getItem(6));
+        assertEquals("Custody Target", slotTitle(access, original, 31));
+        assertEquals("Custody Target", slotTitle(access, replacement, 31));
+        assertNull(player.getItemOnCursor());
+    }
+
+    @Test
+    void ordinaryRefreshLeavesOccupiedTargetUntouchedAndAdvancesItsBase() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+        AtomicBoolean alternateBase = new AtomicBoolean();
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Occupied Target", 4);
+
+        runtime.open(player, reactiveCustodyBaseMenu(alternateBase));
+        Inventory inventory = access.lastOpenedInventory();
+        playerInventory(player).setItem(6, source);
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 6, ClickType.LEFT));
+
+        alternateBase.set(true);
+        runtime.refresh((PaperMenuSession) inventory.getHolder(false));
+
+        assertEquals(source, inventory.getItem(31));
+        runtime.onInventoryClick(click(player, inventory, 31, ClickType.LEFT));
+        assertEquals(source, playerInventory(player).getItem(6));
+        assertEquals("New Target Base", slotTitle(access, inventory, 31));
+    }
+
+    @Test
+    void rootReplacementSettlesTargetCustodyExactlyOnce() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Navigation Source", 5);
+
+        runtime.open(player, reactiveClickInsertMenu(false));
+        Inventory original = access.lastOpenedInventory();
+        playerInventory(player).setItem(7, source);
+        runtime.onInventoryClick(click(player, original, original.getSize() + 7, ClickType.LEFT));
+
+        runtime.open(player, pagedMenu());
+
+        assertEquals(source, playerInventory(player).getItem(7));
+        assertNull(player.getItemOnCursor());
+        assertEquals("Click An Inventory Stack", slotTitle(access, original, 31));
+        assertEquals("Profiles (1/3)", inventoryTitle(access, access.lastOpenedInventory()));
+    }
+
+    @Test
+    void forcedCloseLeavesExactCursorCustodyForTheHostToResolve() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Host Cursor", 2);
+
+        runtime.open(player, reactiveDragInsertMenu(false));
+        Inventory inventory = access.lastOpenedInventory();
+        playerInventory(player).setItem(4, source);
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 4, ClickType.LEFT));
+
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, inventory)));
+
+        assertNull(playerInventory(player).getItem(4));
+        assertEquals(source, player.getItemOnCursor());
+    }
+
+    @Test
+    void disconnectReturnsExactCursorCustodyToStorage() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null,
+                renderer(), new RecordingSoundCueService());
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Disconnect Cursor", 2);
+
+        runtime.open(player, reactiveDragInsertMenu(false));
+        Inventory inventory = access.lastOpenedInventory();
+        playerInventory(player).setItem(4, source);
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 4, ClickType.LEFT));
+
+        runtime.onPlayerDisconnect(player);
+
+        assertEquals(source, playerInventory(player).getItem(4));
+        assertNull(player.getItemOnCursor());
+    }
+
+    @Test
     void reactiveMenusCanMoveDraggedStacksWithoutDuplicatingThem() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
@@ -618,6 +1691,29 @@ class PaperMenuRuntimeTest {
     }
 
     @Test
+    void reactiveMenusCancelBottomOnlyDragsWhileOwningTheCursor() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(access, id -> id.equals(viewerId) ? player : null, renderer(), new RecordingSoundCueService());
+
+        runtime.open(player, reactiveDragInsertMenu(false));
+        Inventory inventory = access.lastOpenedInventory();
+        int topSize = inventory.getSize();
+        ItemStack sourceItem = namedBukkitItem(Material.EMERALD, "Cursor Item", 2);
+        playerInventory(player).setItem(4, sourceItem);
+
+        runtime.onInventoryClick(click(player, inventory, topSize + 4, ClickType.LEFT));
+        InventoryDragEvent drag = dragEvent(player, inventory, Set.of(topSize + 8), player.getItemOnCursor());
+        runtime.onInventoryDrag(drag);
+
+        assertTrue(drag.isCancelled());
+        assertNull(playerInventory(player).getItem(4));
+        assertEquals("Cursor Item", itemTitle(player.getItemOnCursor()));
+        assertNull(playerInventory(player).getItem(8));
+    }
+
+    @Test
     void reactiveMenusCanPlacePickedUpCenterStacksIntoEmptyInventorySlots() {
         UUID viewerId = UUID.randomUUID();
         Player player = player(viewerId);
@@ -647,7 +1743,7 @@ class PaperMenuRuntimeTest {
         assertTrue(placeIntoInventory.isCancelled());
         assertEquals("Dragged Item", itemTitle(playerInventory(player).getItem(8)));
         assertNull(player.getItemOnCursor());
-        assertNull(inventory.getItem(31));
+        assertEquals("Custody Target", itemTitle(inventory.getItem(31)));
     }
 
     @Test
@@ -747,11 +1843,177 @@ class PaperMenuRuntimeTest {
         assertEquals(1, access.openedInventories.size());
         assertEquals(2, scheduled.size());
 
+        InventoryClickEvent secondPacket = click(player, rootInventory, 10, ClickType.LEFT);
+        runtime.onInventoryClick(secondPacket);
+
+        assertTrue(secondPacket.isCancelled());
+        assertEquals(2, scheduled.size());
+
         runNextTick(scheduled);
         runNextTick(scheduled);
 
         assertEquals(2, access.openedInventories.size());
         assertEquals("Gallery", inventoryTitle(access, access.lastOpenedInventory()));
+    }
+
+    @Test
+    void manualCloseCancelsAQueuedNavigationInsteadOfLeavingAHeadlessSession() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+
+        runtime.open(player, launcherMenu());
+        Inventory original = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) original.getHolder(false);
+        runtime.onInventoryClick(click(player, original, 10, ClickType.LEFT));
+
+        assertFalse(session.custodyTransitioning());
+        access.closeInventory(player);
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, original)));
+
+        assertFalse(session.custodyTransitioning());
+        assertNull(access.topInventory(player));
+
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        assertEquals(1, access.openedInventories.size());
+        assertNull(access.topInventory(player));
+
+        session.refresh();
+
+        assertEquals(1, access.openedInventories.size());
+        assertNull(access.topInventory(player));
+    }
+
+    @Test
+    void manualCloseCancelsAQueuedReactiveRebuildInsteadOfReopeningIt() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                sh.harold.library.menu.core.MenuTickScheduler.unsupported(),
+                queuedScheduler(scheduled));
+
+        runtime.open(player, reactiveTitleChangingMenu());
+        Inventory original = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) original.getHolder(false);
+        runtime.onInventoryClick(click(player, original, 22, ClickType.LEFT));
+
+        assertTrue(session.custodyTransitioning());
+        assertEquals(1, access.openedInventories.size());
+
+        access.closeInventory(player);
+        runtime.onInventoryClose(new InventoryCloseEvent(view(player, original)));
+
+        assertFalse(session.custodyTransitioning());
+
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        assertEquals(1, access.openedInventories.size());
+        assertNull(access.topInventory(player));
+
+        session.refresh();
+
+        assertEquals(1, access.openedInventories.size());
+        assertNull(access.topInventory(player));
+    }
+
+    @Test
+    void queuedNavigationSuspendsTicksAndRefreshesUntilItCommits() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        AtomicReference<Runnable> tickAction = new AtomicReference<>();
+        AtomicInteger tickCalls = new AtomicInteger();
+        sh.harold.library.menu.core.MenuTickScheduler tickScheduler = (interval, action) -> {
+            tickAction.set(action);
+            return MenuTickHandle.noop();
+        };
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService(),
+                tickScheduler,
+                queuedScheduler(scheduled));
+        Menu successor = pagedMenu();
+
+        runtime.open(player, tickingNavigationMenu(successor, tickCalls));
+        Inventory original = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) original.getHolder(false);
+        runtime.onInventoryClick(click(player, original, 22, ClickType.LEFT));
+
+        assertTrue(session.custodyTransitioning());
+
+        session.refresh();
+        tickAction.get().run();
+
+        assertEquals(0, tickCalls.get());
+
+        while (!scheduled.isEmpty()) {
+            runNextTick(scheduled);
+        }
+
+        assertEquals(2, access.openedInventories.size());
+        assertEquals("Profiles (1/3)", inventoryTitle(access, access.lastOpenedInventory()));
+        assertEquals(access.lastOpenedInventory(), access.topInventory(player));
+        assertEquals(successor, session.state().menu());
+        assertFalse(session.custodyTransitioning());
+    }
+
+    @Test
+    void rejectedChildNavigationRendersTheStateCommittedByCustodySettlement() {
+        UUID viewerId = UUID.randomUUID();
+        Player player = player(viewerId);
+        TestPaperMenuAccess access = new TestPaperMenuAccess();
+        PaperMenuRuntime runtime = new PaperMenuRuntime(
+                access,
+                id -> id.equals(viewerId) ? player : null,
+                renderer(),
+                new RecordingSoundCueService());
+        ReactiveMenu menu = settlementNavigationMenu(pagedMenu());
+
+        runtime.open(player, menu);
+        Inventory inventory = access.lastOpenedInventory();
+        PaperMenuSession session = (PaperMenuSession) inventory.getHolder(false);
+        for (int depth = 0; depth < 32; depth++) {
+            session.state().openChild(menu);
+        }
+        session.refresh(player);
+        ItemStack source = namedBukkitItem(Material.EMERALD, "Exact Source", 7);
+        playerInventory(player).setItem(5, source);
+
+        runtime.onInventoryClick(click(player, inventory, inventory.getSize() + 5, ClickType.LEFT));
+        runtime.onInventoryClick(click(player, inventory, 22, ClickType.LEFT));
+
+        assertEquals(source, playerInventory(player).getItem(5));
+        assertEquals("Settled Target", slotTitle(access, inventory, 31));
+        assertEquals("Use Settled Action", slotTitle(access, inventory, 22));
+        assertEquals(inventory, access.topInventory(player));
+        assertEquals(menu, session.state().menu());
+        assertFalse(session.custodyTransitioning());
+
+        runtime.onInventoryClick(click(player, inventory, 22, ClickType.LEFT));
+
+        assertEquals("Settled Action Used", slotTitle(access, inventory, 22));
     }
 
     @Test
@@ -874,6 +2136,7 @@ class PaperMenuRuntimeTest {
         Inventory inventory = access.lastOpenedInventory();
         runtime.onInventoryClick(click(player, inventory, 8, ClickType.RIGHT));
 
+        inventory = access.lastOpenedInventory();
         assertEquals("Tab 3", slotTitle(access, inventory, 1));
         assertEquals("Tab 0 Item 0", slotTitle(access, inventory, 19));
 
@@ -1035,12 +2298,46 @@ class PaperMenuRuntimeTest {
                 state -> ReactiveTextPromptRequest.prompt("prompt-search", "Search", state.query()));
     }
 
+    private static ReactiveMenu timeoutPromptMenu() {
+        return new StandardMenuService().reactiveList()
+                .stateFactory(() -> new TimeoutPromptState(0, ""))
+                .render(state -> ReactiveListView.builder("Timed Prompt")
+                        .utility(UtilitySlot.RIGHT_1, MenuButton.builder(MenuIcon.vanilla("oak_sign"))
+                                .name(!state.submission().isBlank()
+                                        ? "Submitted: " + state.submission()
+                                        : state.cancellations() > 0
+                                        ? "Cancelled: " + state.cancellations()
+                                        : "Open Timed Prompt")
+                                .emit(ActionVerb.BROWSE, "prompt", "open-prompt")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click click
+                            && "open-prompt".equals(click.message())) {
+                        return ReactiveMenuResult.effect(new ReactiveMenuEffect.RequestTextPrompt(
+                                ReactiveTextPromptRequest.prompt("timed-prompt", "Timed Prompt", "")));
+                    }
+                    if (input instanceof ReactiveMenuInput.TextPromptCancelled cancelled
+                            && "timed-prompt".equals(cancelled.key())) {
+                        return ReactiveMenuResult.update(
+                                new TimeoutPromptState(state.cancellations() + 1, state.submission()));
+                    }
+                    if (input instanceof ReactiveMenuInput.TextPromptSubmitted submitted
+                            && "timed-prompt".equals(submitted.key())) {
+                        return ReactiveMenuResult.update(
+                                new TimeoutPromptState(state.cancellations(), submitted.value()));
+                    }
+                    return ReactiveMenuResult.unchanged();
+                })
+                .build();
+    }
+
     private static ReactiveMenu reactivePromptMenu(
             PromptState initialState,
             java.util.function.Function<PromptState, ReactiveTextPromptRequest> promptFactory
     ) {
         return new StandardMenuService().reactiveList()
-                .state(initialState)
+                .stateFactory(() -> initialState)
                 .render(state -> ReactiveListView.builder("Reactive Prompt")
                         .addItem(MenuDisplayItem.builder(MenuIcon.vanilla("book"))
                                 .name(state.query().isBlank() ? "No Query" : "Query: " + state.query())
@@ -1052,18 +2349,50 @@ class PaperMenuRuntimeTest {
                         .build())
                 .reduce((state, input) -> {
                     if (input instanceof ReactiveMenuInput.Click click && "open-search".equals(click.message())) {
-                        return ReactiveMenuResult.of(state, new ReactiveMenuEffect.RequestTextPrompt(
+                        return ReactiveMenuResult.effect(new ReactiveMenuEffect.RequestTextPrompt(
                                 promptFactory.apply(state)));
                     }
                     if (input instanceof ReactiveMenuInput.TextPromptSubmitted submitted
                             && submitted.key().equals("prompt-search")) {
-                        return ReactiveMenuResult.stay(new PromptState(submitted.value()));
+                        return ReactiveMenuResult.update(new PromptState(submitted.value()));
                     }
                     if (input instanceof ReactiveMenuInput.TextPromptCancelled cancelled
                             && cancelled.key().equals("prompt-search")) {
-                        return ReactiveMenuResult.stay(state);
+                        return ReactiveMenuResult.unchanged();
                     }
-                    return ReactiveMenuResult.stay(state);
+                    return ReactiveMenuResult.unchanged();
+                })
+                .build();
+    }
+
+    private static ReactiveMenu chainedSignPromptMenu() {
+        return new StandardMenuService().reactiveList()
+                .stateFactory(() -> new PromptState(""))
+                .render(state -> ReactiveListView.builder("Chained Sign Prompt")
+                        .addItem(MenuDisplayItem.builder(MenuIcon.vanilla("book"))
+                                .name(state.query().isBlank() ? "No Query" : "Query: " + state.query())
+                                .build())
+                        .utility(UtilitySlot.RIGHT_1, MenuButton.builder(MenuIcon.vanilla("oak_sign"))
+                                .name("Open Prompt")
+                                .emit(ActionVerb.BROWSE, "prompt", "open-first")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click click
+                            && "open-first".equals(click.message())) {
+                        return ReactiveMenuResult.effect(new ReactiveMenuEffect.RequestTextPrompt(
+                                ReactiveTextPromptRequest.sign("first-sign", "First", "")));
+                    }
+                    if (input instanceof ReactiveMenuInput.TextPromptSubmitted submitted
+                            && submitted.key().equals("first-sign")) {
+                        return ReactiveMenuResult.effect(new ReactiveMenuEffect.RequestTextPrompt(
+                                ReactiveTextPromptRequest.sign("second-sign", "Second", submitted.value())));
+                    }
+                    if (input instanceof ReactiveMenuInput.TextPromptSubmitted submitted
+                            && submitted.key().equals("second-sign")) {
+                        return ReactiveMenuResult.update(new PromptState(submitted.value()));
+                    }
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
     }
@@ -1076,6 +2405,77 @@ class PaperMenuRuntimeTest {
                         .action(ActionVerb.OPEN, context -> context.open(galleryMenu()))
                         .build())
                 .build();
+    }
+
+    private static Menu throwingQueuedNavigationMenu() {
+        return new StandardMenuService().list()
+                .title("Throwing Navigation")
+                .addItem(MenuButton.builder(MenuIcon.vanilla("stone"))
+                        .name("Queue Then Throw")
+                        .action(ActionVerb.OPEN, context -> {
+                            context.open(galleryMenu());
+                            throw new IllegalStateException("compiled action failed");
+                        })
+                        .build())
+                .build();
+    }
+
+    private static Menu malformedFrameMenu(AtomicInteger usableAction) {
+        MenuFrame root = new MenuFrame(
+                Component.text("Malformed Frame"),
+                List.of(
+                        new MenuSlot(
+                                1,
+                                MenuIcon.vanilla("barrier"),
+                                Component.text("Missing Frame"),
+                                List.of(),
+                                false,
+                                Map.of(MenuClick.LEFT, MenuInteraction.of(
+                                        ActionVerb.OPEN,
+                                        new MenuSlotAction.OpenFrame("missing")))),
+                        new MenuSlot(
+                                2,
+                                MenuIcon.vanilla("stone"),
+                                Component.text("Still Usable"),
+                                List.of(),
+                                false,
+                                Map.of(MenuClick.LEFT, MenuInteraction.of(
+                                        ActionVerb.VIEW,
+                                        new MenuSlotAction.Execute(context -> usableAction.incrementAndGet()))))));
+        return new Menu() {
+            @Override
+            public Component title() {
+                return Component.text("Malformed Frame");
+            }
+
+            @Override
+            public String initialFrameId() {
+                return "root";
+            }
+
+            @Override
+            public Set<String> frameIds() {
+                return Set.of("root");
+            }
+
+            @Override
+            public MenuFrame frame(String frameId) {
+                if (!"root".equals(frameId)) {
+                    throw new IllegalArgumentException("Unknown frame: " + frameId);
+                }
+                return root;
+            }
+
+            @Override
+            public MenuGeometry geometry() {
+                return MenuGeometry.CANVAS;
+            }
+
+            @Override
+            public int rows() {
+                return 1;
+            }
+        };
     }
 
     private static Menu galleryMenu() {
@@ -1192,44 +2592,140 @@ class PaperMenuRuntimeTest {
 
     private static ReactiveMenu reactiveClickInsertMenu(boolean locked) {
         return new StandardMenuService().reactiveCanvas()
-                .state(new ClickInsertState(null, -1, locked))
+                .stateFactory(() -> locked)
+                .custodyTarget("center", 31)
+                .custodyPolicy((state, gesture, snapshot) -> {
+                    if (state) {
+                        return MenuCustodyDecision.reject();
+                    }
+                    if (gesture instanceof MenuCustodyGesture.ViewerClick viewer
+                            && viewer.slot().item() != null
+                            && snapshot.cursor().isEmpty()
+                            && !snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.target("center"));
+                    }
+                    if (gesture instanceof MenuCustodyGesture.TargetClick
+                            && snapshot.targets().containsKey("center")
+                            && snapshot.cursor().isEmpty()) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.origin());
+                    }
+                    return MenuCustodyDecision.reject();
+                })
                 .render(state -> ReactiveMenuView.builder("Reactive Click")
                         .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("hopper"))
                                 .name("Click Insert")
                                 .description("Click a bottom inventory stack to load it into the center slot, then click the loaded slot to return it to the same source slot.")
                                 .build())
-                        .place(31, state.stored() != null
-                                ? state.stored()
-                                : MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
+                        .place(31, MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
                                         .name("Click An Inventory Stack")
                                         .description("The source slot clears when the stack loads.")
                                         .build())
                         .build())
-                .reduce((state, input) -> {
-                    if (input instanceof ReactiveMenuInput.InventoryClick click && click.item() != null) {
-                        if (state.locked() || state.stored() != null) {
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        return ReactiveMenuResult.of(
-                                new ClickInsertState(click.item(), click.slot(), false),
-                                new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build();
+    }
+
+    private static ReactiveMenu settlementNavigationMenu(Menu successor) {
+        return new StandardMenuService().reactiveCanvas()
+                .fillWithBlackPane(false)
+                .stateFactory(() -> new SettlementNavigationState(false, false))
+                .custodyTarget("center", 31)
+                .custodyPolicy((state, gesture, snapshot) -> {
+                    if (gesture instanceof MenuCustodyGesture.ViewerClick viewer
+                            && viewer.slot().item() != null
+                            && !snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.target("center"));
                     }
-                    if (input instanceof ReactiveMenuInput.Click click && click.slot() == 31) {
-                        if (state.locked() || state.stored() == null) {
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        return ReactiveMenuResult.of(
-                                new ClickInsertState(null, -1, false),
-                                new ReactiveMenuEffect.SetViewerInventorySlot(state.storedSourceSlot(), state.stored()));
-                    }
-                    return ReactiveMenuResult.stay(state);
+                    return MenuCustodyDecision.reject();
                 })
+                .render(state -> ReactiveMenuView.builder("Settlement Navigation")
+                        .place(22, MenuButton.builder(MenuIcon.vanilla("book"))
+                                .name(state.actionUsed()
+                                        ? "Settled Action Used"
+                                        : state.settled()
+                                        ? "Use Settled Action"
+                                        : "Open Child")
+                                .emit(ActionVerb.OPEN, "open",
+                                        state.settled() ? "use-settled-action" : "open-child")
+                                .build())
+                        .place(31, MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
+                                .name(state.settled() ? "Settled Target" : "Custody Target")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.CustodyCommitted committed
+                            && committed.gesture() instanceof MenuCustodyGesture.Settle) {
+                        return ReactiveMenuResult.update(
+                                new SettlementNavigationState(true, state.actionUsed()));
+                    }
+                    if (input instanceof ReactiveMenuInput.Click click
+                            && "open-child".equals(click.message())) {
+                        return ReactiveMenuResult.effect(new ReactiveMenuEffect.Open(successor));
+                    }
+                    if (input instanceof ReactiveMenuInput.Click click
+                            && "use-settled-action".equals(click.message())) {
+                        return ReactiveMenuResult.update(new SettlementNavigationState(true, true));
+                    }
+                    return ReactiveMenuResult.unchanged();
+                })
+                .build();
+    }
+
+    private static ReactiveMenu reactiveCustodyTitleMenu(AtomicBoolean alternateTitle) {
+        return new StandardMenuService().reactiveCanvas()
+                .fillWithBlackPane(false)
+                .stateFactory(() -> false)
+                .custodyTarget("center", 31)
+                .custodyPolicy((state, gesture, snapshot) -> {
+                    if (gesture instanceof MenuCustodyGesture.ViewerClick viewer
+                            && viewer.slot().item() != null
+                            && !snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.target("center"));
+                    }
+                    if (gesture instanceof MenuCustodyGesture.TargetClick
+                            && snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.origin());
+                    }
+                    return MenuCustodyDecision.reject();
+                })
+                .render(state -> ReactiveMenuView.builder(alternateTitle.get() ? "Custody B" : "Custody A")
+                        .place(31, MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
+                                .name("Custody Target")
+                                .build())
+                        .build())
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build();
+    }
+
+    private static ReactiveMenu reactiveCustodyBaseMenu(AtomicBoolean alternateBase) {
+        return new StandardMenuService().reactiveCanvas()
+                .fillWithBlackPane(false)
+                .stateFactory(() -> false)
+                .custodyTarget("center", 31)
+                .custodyPolicy((state, gesture, snapshot) -> {
+                    if (gesture instanceof MenuCustodyGesture.ViewerClick viewer
+                            && viewer.slot().item() != null
+                            && !snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.target("center"));
+                    }
+                    if (gesture instanceof MenuCustodyGesture.TargetClick
+                            && snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.origin());
+                    }
+                    return MenuCustodyDecision.reject();
+                })
+                .render(state -> ReactiveMenuView.builder("Custody Base")
+                        .place(31, MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
+                                .name(alternateBase.get() ? "New Target Base" : "Old Target Base")
+                                .build())
+                        .build())
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
                 .build();
     }
 
     private static ReactiveMenu reactiveRefreshMenu(AtomicBoolean enabled) {
         return new StandardMenuService().reactiveCanvas()
-                .state(enabled)
+                .stateFactory(() -> enabled)
                 .render(state -> ReactiveMenuView.builder("Reactive Refresh")
                         .place(22, MenuButton.builder(MenuIcon.vanilla("lever"))
                                 .name(state.get() ? "Reactive Refresh: On" : "Reactive Refresh: Off")
@@ -1239,95 +2735,255 @@ class PaperMenuRuntimeTest {
                                 })
                                 .build())
                         .build())
-                .reduce((state, input) -> ReactiveMenuResult.stay(state))
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build();
+    }
+
+    private static ReactiveMenu reactiveTitleChangingMenu() {
+        return new StandardMenuService().reactiveCanvas()
+                .stateFactory(() -> false)
+                .render(changed -> ReactiveMenuView.builder(changed ? "Reactive Rebuild B" : "Reactive Rebuild A")
+                        .place(22, MenuButton.builder(MenuIcon.vanilla("lever"))
+                                .name("Change Title")
+                                .emit(ActionVerb.TOGGLE, "title", "change-title")
+                                .build())
+                        .build())
+                .reduce((state, input) -> input instanceof ReactiveMenuInput.Click
+                        ? ReactiveMenuResult.update(true)
+                        : ReactiveMenuResult.unchanged())
+                .build();
+    }
+
+    private static ReactiveMenu tickingNavigationMenu(Menu successor, AtomicInteger tickCalls) {
+        return new StandardMenuService().reactiveCanvas()
+                .stateFactory(() -> false)
+                .tickEvery(1L)
+                .render(state -> ReactiveMenuView.builder("Ticking Navigation")
+                        .place(22, MenuButton.builder(MenuIcon.vanilla("stone"))
+                                .name("Open Successor")
+                                .emit(ActionVerb.OPEN, "open", "open-successor")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Tick) {
+                        tickCalls.incrementAndGet();
+                        return ReactiveMenuResult.unchanged();
+                    }
+                    if (input instanceof ReactiveMenuInput.Click) {
+                        return ReactiveMenuResult.effect(new ReactiveMenuEffect.Open(successor));
+                    }
+                    return ReactiveMenuResult.unchanged();
+                })
+                .build();
+    }
+
+    private static ReactiveMenu throwingTickMenu() {
+        return new StandardMenuService().reactiveCanvas()
+                .stateFactory(() -> false)
+                .tickEvery(1L)
+                .render(state -> ReactiveMenuView.builder("Throwing Tick").build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Tick) {
+                        throw new IllegalStateException("tick reducer failed");
+                    }
+                    return ReactiveMenuResult.unchanged();
+                })
+                .build();
+    }
+
+    private static ReactiveMenu reentrantCustodyMenu(Runnable openSuccessor) {
+        return new StandardMenuService().reactiveCanvas()
+                .fillWithBlackPane(false)
+                .stateFactory(() -> false)
+                .custodyTarget("center", 31)
+                .custodyPolicy((state, gesture, snapshot) -> {
+                    if (gesture instanceof MenuCustodyGesture.ViewerClick viewer
+                            && viewer.slot().item() != null
+                            && !snapshot.targets().containsKey("center")) {
+                        openSuccessor.run();
+                        return MenuCustodyDecision.move(MenuCustodyDestination.target("center"));
+                    }
+                    return MenuCustodyDecision.reject();
+                })
+                .render(state -> ReactiveMenuView.builder("Reentrant Custody")
+                        .place(31, MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
+                                .name("Custody Target")
+                                .build())
+                        .build())
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build();
+    }
+
+    private static ReactiveMenu throwingStateFactoryMenu() {
+        return new StandardMenuService().reactiveCanvas()
+                .stateFactory(() -> {
+                    throw new IllegalStateException("state factory failed");
+                })
+                .render(state -> ReactiveMenuView.builder("Never Rendered").build())
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build();
+    }
+
+
+    private static ReactiveMenu reentrantClickMenu(Runnable openSuccessor) {
+        return new StandardMenuService().reactiveCanvas()
+                .stateFactory(() -> false)
+                .render(replaced -> ReactiveMenuView.builder("Reentrant Click")
+                        .place(22, MenuButton.builder(MenuIcon.vanilla("stone"))
+                                .name(replaced ? "Stale Outcome" : "Replace Later")
+                                .emit(ActionVerb.OPEN, "replace", "replace")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click) {
+                        openSuccessor.run();
+                        return ReactiveMenuResult.update(true);
+                    }
+                    return ReactiveMenuResult.unchanged();
+                })
+                .build();
+    }
+
+    private static ReactiveMenu throwingClickMenu() {
+        return new StandardMenuService().reactiveCanvas()
+                .stateFactory(() -> false)
+                .render(state -> ReactiveMenuView.builder("Throwing Click")
+                        .place(22, MenuButton.builder(MenuIcon.vanilla("stone"))
+                                .name("Throw")
+                                .emit(ActionVerb.VIEW, "throw", "throw")
+                                .build())
+                        .build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click) {
+                        throw new IllegalStateException("click reducer failed");
+                    }
+                    return ReactiveMenuResult.unchanged();
+                })
+                .build();
+    }
+
+    private static ReactiveMenu throwingClickRendererMenu() {
+        return new StandardMenuService().reactiveCanvas()
+                .stateFactory(() -> false)
+                .render(throwNow -> {
+                    if (throwNow) {
+                        throw new IllegalStateException("reactive renderer failed");
+                    }
+                    return ReactiveMenuView.builder("Throwing Renderer")
+                            .place(22, MenuButton.builder(MenuIcon.vanilla("stone"))
+                                    .name("Throw During Render")
+                                    .emit(ActionVerb.VIEW, "throw", "throw")
+                                    .build())
+                            .build();
+                })
+                .reduce((state, input) -> input instanceof ReactiveMenuInput.Click
+                        ? ReactiveMenuResult.update(true)
+                        : ReactiveMenuResult.unchanged())
+                .build();
+    }
+
+
+    private static ReactiveMenu throwingOpenedMenu() {
+        return new StandardMenuService().reactiveCanvas()
+                .stateFactory(() -> false)
+                .render(state -> ReactiveMenuView.builder("Throwing Opened").build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Opened) {
+                        throw new IllegalStateException("opened reducer failed");
+                    }
+                    return ReactiveMenuResult.unchanged();
+                })
                 .build();
     }
 
     private static ReactiveMenu reactiveDragInsertMenu(boolean locked) {
         return new StandardMenuService().reactiveCanvas()
                 .fillWithBlackPane(false)
-                .state(new DragInsertState(null, -1, null, -1, locked))
-                .render(state -> {
-                    ReactiveMenuView.Builder builder = ReactiveMenuView.builder("Reactive Drag")
-                            .cursor(state.cursor())
+                .stateFactory(() -> locked)
+                .custodyTarget("center", 31)
+                .custodyPolicy((state, gesture, snapshot) -> {
+                    if (state) {
+                        return MenuCustodyDecision.reject();
+                    }
+                    if (gesture instanceof MenuCustodyGesture.ViewerClick viewer) {
+                        if (viewer.slot().item() != null && snapshot.cursor().isEmpty()) {
+                            return MenuCustodyDecision.move(viewer.shift()
+                                    ? MenuCustodyDestination.target("center")
+                                    : MenuCustodyDestination.cursor());
+                        }
+                        if (viewer.slot().item() == null && snapshot.cursor().isPresent()) {
+                            return MenuCustodyDecision.move(MenuCustodyDestination.viewerSlot(viewer.slot()));
+                        }
+                    }
+                    if (gesture instanceof MenuCustodyGesture.TargetDrag
+                            && snapshot.cursor().isPresent()
+                            && !snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.target("center"));
+                    }
+                    if (gesture instanceof MenuCustodyGesture.TargetClick target
+                            && snapshot.targets().containsKey("center")
+                            && snapshot.cursor().isEmpty()) {
+                        return MenuCustodyDecision.move(target.shift()
+                                ? MenuCustodyDestination.origin()
+                                : MenuCustodyDestination.cursor());
+                    }
+                    if (gesture instanceof MenuCustodyGesture.TargetClick
+                            && snapshot.cursor().isPresent()
+                            && !snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.target("center"));
+                    }
+                    if (gesture instanceof MenuCustodyGesture.OutsideClick
+                            && snapshot.cursor().isPresent()) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.origin());
+                    }
+                    return MenuCustodyDecision.reject();
+                })
+                .render(state -> ReactiveMenuView.builder("Reactive Drag")
                             .place(13, MenuDisplayItem.builder(MenuIcon.vanilla("hopper"))
                                     .name("Shift Or Drag")
-                                    .description("Shift-click or click a bottom inventory stack to claim it by source slot, then drag or click it into the center slot.")
-                                    .build());
-                    if (state.stored() != null) {
-                        builder.place(31, state.stored());
+                                    .description("Move an exact native stack through runtime-owned custody, then drag or click it into the center slot.")
+                                    .build())
+                            .place(31, MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
+                                    .name("Custody Target")
+                                    .build())
+                            .build())
+                .reduce((state, input) -> ReactiveMenuResult.unchanged())
+                .build();
+    }
+
+    private static ReactiveMenu throwingDeathSettlementMenu() {
+        return new StandardMenuService().reactiveCanvas()
+                .fillWithBlackPane(false)
+                .stateFactory(() -> false)
+                .custodyTarget("center", 31)
+                .custodyPolicy((state, gesture, snapshot) -> {
+                    if (gesture instanceof MenuCustodyGesture.ViewerClick viewer
+                            && viewer.shift()
+                            && viewer.slot().item() != null
+                            && !snapshot.targets().containsKey("center")) {
+                        return MenuCustodyDecision.move(MenuCustodyDestination.target("center"));
                     }
-                    return builder.build();
+                    return MenuCustodyDecision.reject();
                 })
+                .render(state -> ReactiveMenuView.builder("Throwing Death Settlement")
+                        .place(31, MenuDisplayItem.builder(MenuIcon.vanilla("stone_button"))
+                                .name("Custody Target")
+                                .build())
+                        .build())
                 .reduce((state, input) -> {
-                    if (input instanceof ReactiveMenuInput.InventoryClick click) {
-                        if (state.cursor() != null) {
-                            if (click.item() == null) {
-                                return ReactiveMenuResult.of(
-                                        new DragInsertState(state.stored(), state.storedSourceSlot(), null, -1, state.locked()),
-                                        new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), state.cursor()));
-                            }
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        if (click.item() == null) {
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        if (state.locked()) {
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        if (click.shift()) {
-                            if (state.stored() != null) {
-                                return ReactiveMenuResult.stay(state);
-                            }
-                            return ReactiveMenuResult.of(
-                                    new DragInsertState(click.item(), click.slot(), state.cursor(), state.cursorSourceSlot(), false),
-                                    new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
-                        }
-                        return ReactiveMenuResult.of(
-                                new DragInsertState(state.stored(), state.storedSourceSlot(), click.item(), click.slot(), false),
-                                new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
+                    if (input instanceof ReactiveMenuInput.CustodyCommitted committed
+                            && committed.gesture() instanceof MenuCustodyGesture.Settle settle
+                            && settle.reason() == MenuCustodyGesture.SettleReason.DEATH) {
+                        throw new IllegalStateException("death settlement reducer failed");
                     }
-                    if (input instanceof ReactiveMenuInput.Drag drag
-                            && drag.cursor() != null
-                            && drag.slots().contains(31)) {
-                        if (state.locked() || state.cursor() == null || state.stored() != null) {
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        return ReactiveMenuResult.stay(new DragInsertState(state.cursor(), state.cursorSourceSlot(), null, -1, false));
-                    }
-                    if (input instanceof ReactiveMenuInput.Click click && click.slot() == 31) {
-                        if (state.locked()) {
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        if (state.cursor() != null) {
-                            return ReactiveMenuResult.stay(new DragInsertState(state.cursor(), state.cursorSourceSlot(), null, -1, false));
-                        }
-                        if (state.stored() == null) {
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        if (click.shift()) {
-                            return ReactiveMenuResult.of(
-                                    new DragInsertState(null, -1, null, -1, false),
-                                    new ReactiveMenuEffect.SetViewerInventorySlot(state.storedSourceSlot(), state.stored()));
-                        }
-                        return ReactiveMenuResult.stay(new DragInsertState(null, -1, state.stored(), state.storedSourceSlot(), false));
-                    }
-                    if (input instanceof ReactiveMenuInput.DropCursor) {
-                        if (state.cursor() == null) {
-                            return ReactiveMenuResult.stay(state);
-                        }
-                        return ReactiveMenuResult.of(
-                                new DragInsertState(state.stored(), state.storedSourceSlot(), null, -1, state.locked()),
-                                new ReactiveMenuEffect.SetViewerInventorySlot(state.cursorSourceSlot(), state.cursor()));
-                    }
-                    return ReactiveMenuResult.stay(state);
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
     }
 
     private static ReactiveMenu reactiveClickRoutingMenu() {
         return new StandardMenuService().reactiveCanvas()
-                .state(new StoredState(null))
+                .stateFactory(() -> new StoredState(null))
                 .render(state -> ReactiveMenuView.builder("Reactive Routing")
                         .place(22, MenuDisplayItem.builder(MenuIcon.vanilla("stone"))
                                 .name("Placed Clicks: " + (state.stored() == null ? 0 : state.stored().amount()))
@@ -1341,38 +2997,38 @@ class PaperMenuRuntimeTest {
                                 .name("Count " + nextCount)
                                 .amount(nextCount)
                                 .build();
-                        return ReactiveMenuResult.stay(new StoredState(counter));
+                        return ReactiveMenuResult.update(new StoredState(counter));
                     }
-                    return ReactiveMenuResult.stay(state);
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
     }
 
     private static ReactiveMenu reactiveListMenu(int pageIndex) {
         return new StandardMenuService().reactiveList()
-                .state(pageIndex)
+                .stateFactory(() -> pageIndex)
                 .render(currentPage -> ReactiveListView.builder("Profiles")
                         .page(currentPage)
                         .addItems(sampleReactiveButtons("Item", 29))
                         .build())
                 .reduce((currentPage, input) -> {
                     if (!(input instanceof ReactiveMenuInput.Click click)) {
-                        return ReactiveMenuResult.stay(currentPage);
+                        return ReactiveMenuResult.unchanged();
                     }
                     if (click.message() instanceof ReactiveGeometryAction.PreviousPage) {
-                        return ReactiveMenuResult.stay(currentPage - 1);
+                        return ReactiveMenuResult.update(currentPage - 1);
                     }
                     if (click.message() instanceof ReactiveGeometryAction.NextPage) {
-                        return ReactiveMenuResult.stay(currentPage + 1);
+                        return ReactiveMenuResult.update(currentPage + 1);
                     }
-                    return ReactiveMenuResult.stay(currentPage);
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
     }
 
     private static ReactiveMenu reactiveTabsMenu(String activeTabId, int navStart, int pageIndex) {
         return new StandardMenuService().reactiveTabs()
-                .state(new ReactiveTabsState(activeTabId, navStart, pageIndex))
+                .stateFactory(() -> new ReactiveTabsState(activeTabId, navStart, pageIndex))
                 .render(state -> ReactiveTabsView.builder("Reactive Tabs")
                         .activeTab(state.activeTabId())
                         .navStart(state.navStart())
@@ -1387,36 +3043,36 @@ class PaperMenuRuntimeTest {
                         .build())
                 .reduce((state, input) -> {
                     if (!(input instanceof ReactiveMenuInput.Click click)) {
-                        return ReactiveMenuResult.stay(state);
+                        return ReactiveMenuResult.unchanged();
                     }
                     if (click.message() instanceof ReactiveGeometryAction.PreviousTabs) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                        return ReactiveMenuResult.update(new ReactiveTabsState(
                                 state.activeTabId(),
                                 Math.max(0, state.navStart() - 1),
                                 state.pageIndex()));
                     }
                     if (click.message() instanceof ReactiveGeometryAction.NextTabs) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                        return ReactiveMenuResult.update(new ReactiveTabsState(
                                 state.activeTabId(),
                                 state.navStart() + 1,
                                 state.pageIndex()));
                     }
                     if (click.message() instanceof ReactiveGeometryAction.PreviousPage) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                        return ReactiveMenuResult.update(new ReactiveTabsState(
                                 state.activeTabId(),
                                 state.navStart(),
                                 Math.max(0, state.pageIndex() - 1)));
                     }
                     if (click.message() instanceof ReactiveGeometryAction.NextPage) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(
+                        return ReactiveMenuResult.update(new ReactiveTabsState(
                                 state.activeTabId(),
                                 state.navStart(),
                                 state.pageIndex() + 1));
                     }
                     if (click.message() instanceof ReactiveGeometryAction.SwitchTab switchTab) {
-                        return ReactiveMenuResult.stay(new ReactiveTabsState(switchTab.tabId(), state.navStart(), 0));
+                        return ReactiveMenuResult.update(new ReactiveTabsState(switchTab.tabId(), state.navStart(), 0));
                     }
-                    return ReactiveMenuResult.stay(state);
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
     }
@@ -1501,6 +3157,12 @@ class PaperMenuRuntimeTest {
     }
 
     private record PromptState(String query) {
+    }
+
+    private record TimeoutPromptState(int cancellations, String submission) {
+    }
+
+    private record SettlementNavigationState(boolean settled, boolean actionUsed) {
     }
 
     private static void runNextTick(Deque<Runnable> scheduled) {
@@ -1739,13 +3401,6 @@ class PaperMenuRuntimeTest {
         public org.bukkit.inventory.MenuType getMenuType() {
             return null;
         }
-    }
-
-    private record ClickInsertState(MenuStack stored, int storedSourceSlot, boolean locked) {
-    }
-
-    private record DragInsertState(MenuStack stored, int storedSourceSlot, MenuStack cursor, int cursorSourceSlot,
-                                   boolean locked) {
     }
 
     private record StoredState(MenuStack stored) {

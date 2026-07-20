@@ -40,9 +40,13 @@ final class PaperMenuTestSupport {
     }
 
     static TrackedPlayer trackedPlayer(UUID uuid) {
+        return trackedPlayer(uuid, new Location(null, 0.0, 64.0, 0.0));
+    }
+
+    static TrackedPlayer trackedPlayer(UUID uuid, Location location) {
         AtomicReference<ItemStack> cursor = new AtomicReference<>();
         InventoryState inventoryState = new InventoryState(36);
-        PlayerState playerState = new PlayerState(new Location(null, 0.0, 64.0, 0.0));
+        PlayerState playerState = new PlayerState(location);
         Player player = proxy(Player.class, new PlayerHandler(uuid, inventoryState, cursor, playerState));
         inventoryState.holder = player;
         return new TrackedPlayer(player, playerState);
@@ -468,6 +472,19 @@ final class PaperMenuTestSupport {
         public FakeItemStack clone() {
             return new FakeItemStack(type, amount, meta.copy());
         }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof FakeItemStack item
+                    && type == item.type
+                    && amount == item.amount
+                    && meta.sameAs(item.meta);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(type, amount, meta.displayName, meta.lore, meta.glint, meta.itemFlags);
+        }
     }
 
     private static final class MetaState implements InvocationHandler {
@@ -515,6 +532,13 @@ final class PaperMenuTestSupport {
             return displayName != null || lore != null || glint != null || !itemFlags.isEmpty();
         }
 
+        private boolean sameAs(MetaState other) {
+            return Objects.equals(displayName, other.displayName)
+                    && Objects.equals(lore, other.lore)
+                    && Objects.equals(glint, other.glint)
+                    && itemFlags.equals(other.itemFlags);
+        }
+
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) {
             String name = method.getName();
@@ -557,10 +581,15 @@ final class PaperMenuTestSupport {
                 return copy().proxy();
             }
             if (name.equals("equals")) {
-                return proxy == args[0];
+                Object other = args[0];
+                if (other == null || !Proxy.isProxyClass(other.getClass())) {
+                    return false;
+                }
+                InvocationHandler handler = Proxy.getInvocationHandler(other);
+                return handler instanceof MetaState state && sameAs(state);
             }
             if (name.equals("hashCode")) {
-                return System.identityHashCode(proxy);
+                return Objects.hash(displayName, lore, glint, itemFlags);
             }
             if (name.equals("toString")) {
                 return "FakeItemMeta";
