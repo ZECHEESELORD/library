@@ -34,8 +34,17 @@ import sh.harold.library.sound.core.StandardSoundCueService;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+/**
+ * Minestom menu adapter with runtime-owned inventory and custody lifecycle.
+ *
+ * <p>Menu custody is settled synchronously when {@code PlayerDeathEvent} reaches
+ * this platform's runtime node. Minestom does not automatically drop or clear the
+ * player's inventory on death. Consumer handlers that do so must run after menu
+ * settlement, or explicitly own event ordering and item restitution themselves.
+ */
 public final class MinestomMenuPlatform implements AutoCloseable {
 
     private final MenuService menus;
@@ -45,6 +54,7 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     private final SoundCueService sounds;
     private final boolean closeSounds;
     private final MenuTraceController traceController;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     public MinestomMenuPlatform() {
         this(new StandardMenuService(), MinecraftServer.getGlobalEventHandler(), defaultSounds(), true);
@@ -155,6 +165,9 @@ public final class MinestomMenuPlatform implements AutoCloseable {
     }
 
     public void open(Player player, MenuDefinition menu) {
+        if (closed.get()) {
+            throw new IllegalStateException("MinestomMenuPlatform is closed");
+        }
         runtime.open(Objects.requireNonNull(player, "player"), Objects.requireNonNull(menu, "menu"));
     }
 
@@ -164,6 +177,9 @@ public final class MinestomMenuPlatform implements AutoCloseable {
 
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         runtime.close();
         parentNode.removeChild(runtimeNode);
         if (closeSounds) {
