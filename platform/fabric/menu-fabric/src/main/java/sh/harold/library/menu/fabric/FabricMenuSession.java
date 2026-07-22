@@ -2,38 +2,49 @@ package sh.harold.library.menu.fabric;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.ItemStack;
 import sh.harold.library.menu.MenuContext;
 import sh.harold.library.menu.MenuDefinition;
 import sh.harold.library.menu.MenuFrame;
 import sh.harold.library.menu.MenuSlot;
-import sh.harold.library.menu.MenuStack;
 import sh.harold.library.menu.core.MenuTrace;
 import sh.harold.library.menu.core.MenuSessionState;
 import sh.harold.library.menu.core.MenuTickHandle;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 final class FabricMenuSession implements MenuContext.SessionControls {
 
     private final FabricMenuRuntime runtime;
     private final ServerPlayer viewer;
     private final MenuSessionState state;
+    private final FabricMenuCallbackGate callbackGate;
     private final AtomicLong actionVersion = new AtomicLong();
     private volatile FabricMenuContainer container;
     private volatile net.kyori.adventure.text.Component title;
     private volatile List<MenuSlot> renderedSlots = List.of();
-    private volatile MenuStack renderedCursor;
-    private volatile MenuTickHandle tickHandle = MenuTickHandle.noop();
+    private volatile FabricMenuCustody custody;
+    private final Map<String, ItemStack> custodyBaseItems = new HashMap<>();
+    private volatile long custodyObservationId;
+    private final FabricMenuTickController tickController;
+    private final SettledCustodyView settledCustodyView = new SettledCustodyView();
+    private final DeathAttempt deathAttempt = new DeathAttempt();
     private volatile MenuTickHandle inputGateHandle = MenuTickHandle.noop();
-    private volatile long tickIntervalTicks;
     private volatile Object acceptedInput;
 
     FabricMenuSession(FabricMenuRuntime runtime, ServerPlayer viewer, MenuSessionState state) {
         this.runtime = Objects.requireNonNull(runtime, "runtime");
         this.viewer = Objects.requireNonNull(viewer, "viewer");
         this.state = Objects.requireNonNull(state, "state");
+        this.callbackGate = new FabricMenuCallbackGate(action -> runtime.scheduleNextTick(action));
+        this.tickController = new FabricMenuTickController(runtime.tickScheduler(), () -> runtime.onTick(this));
+        this.custody = new FabricMenuCustody(state.custodyTargets());
     }
 
     ServerPlayer viewer() {
@@ -48,6 +59,10 @@ final class FabricMenuSession implements MenuContext.SessionControls {
         return container;
     }
 
+    net.kyori.adventure.text.Component renderedTitle() {
+        return title;
+    }
+
     void attachContainer(FabricMenuContainer container) {
         this.container = Objects.requireNonNull(container, "container");
     }
@@ -60,6 +75,74 @@ final class FabricMenuSession implements MenuContext.SessionControls {
 
     long actionVersion() {
         return actionVersion.get();
+    }
+
+    long callbackGeneration() {
+        return callbackGate.generation();
+    }
+
+    boolean callbackGenerationUnchanged(long expectedGeneration) {
+        return callbackGate.unchanged(expectedGeneration);
+    }
+
+    boolean deferLifecycle(Runnable lifecycle) {
+        return callbackGate.defer(lifecycle);
+    }
+
+    <T> T invokeUserCallback(Supplier<T> callback) {
+        return callbackGate.invoke(callback);
+    }
+
+    void invokeUserCallback(Runnable callback) {
+        callbackGate.invoke(callback);
+    }
+
+    FabricMenuCustody custody() {
+        return custody;
+    }
+
+    boolean custodyEnabled() {
+        return custody.enabled();
+    }
+
+    long nextCustodyObservationId() {
+        return ++custodyObservationId;
+    }
+
+    List<MenuSlot> renderedSlots() {
+        return renderedSlots;
+    }
+
+    ItemStack custodyBaseItem(String key) {
+        return custodyBaseItems.get(key);
+    }
+
+    void cacheCustodyBaseItem(String key, ItemStack item) {
+        custodyBaseItems.put(key, item == null || item.isEmpty() ? ItemStack.EMPTY : item.copy());
+    }
+
+    void resetCustody() {
+        if (!custody.empty()) {
+            throw new IllegalStateException("Cannot replace a non-empty custody ledger");
+        }
+        custody = new FabricMenuCustody(state.custodyTargets());
+        custodyBaseItems.clear();
+    }
+
+    void markSettledCustodyViewDirty() {
+        settledCustodyView.markDirty();
+    }
+
+    boolean restoreSettledCustodyView() {
+        return settledCustodyView.restore(() -> renderCurrentView(true));
+    }
+
+    long beginDeathAttempt() {
+        return deathAttempt.begin();
+    }
+
+    boolean consumeDeathAttempt(long token) {
+        return deathAttempt.consume(token);
     }
 
     boolean matches(ServerPlayer player, FabricMenuContainer container) {
@@ -81,43 +164,157 @@ final class FabricMenuSession implements MenuContext.SessionControls {
     }
 
     void renderCurrentView() {
+        renderCurrentView(false);
+    }
+
+    boolean renderCurrentView(boolean trustedCustodyMutation) {
+        if (!runtime.active(this)) {
+            return false;
+        }
         actionVersion.incrementAndGet();
-        MenuFrame frame = state.currentFrame();
+        long callbackGeneration = callbackGeneration();
+        MenuFrame frame = invokeUserCallback(state::currentFrame);
+        if (!runtime.activeAfterCallback(this, callbackGeneration)) {
+            return false;
+        }
         FabricMenuContainer current = container;
         net.kyori.adventure.text.Component nextTitle = frame.title();
         int nextRows = state.menu().rows();
         List<MenuSlot> nextSlots = frame.slots();
-        MenuStack nextCursor = state.cursor();
 
-        if (current == null || current.closed() || current.rows() != nextRows) {
-            SimpleContainer nextInventory = new SimpleContainer(nextRows * 9);
-            runtime.render(nextInventory, null, nextSlots, viewer.level().registryAccess());
-            title = nextTitle;
-            renderedSlots = nextSlots;
-            FabricMenuContainer nextContainer = runtime.openMenu(this, viewer, nextRows, nextTitle, nextInventory);
-            if (nextContainer != null) {
-                runtime.syncCursor(nextContainer, renderedCursor, nextCursor, viewer.level().registryAccess());
-            }
-            renderedCursor = nextCursor;
-            updateTicking();
-            return;
+        if (current != null && !current.closed() && !trustedCustodyMutation
+                && !runtime.validateCustodyView(this, current)) {
+            return false;
         }
 
-        // Reopening a Fabric container recreates the vanilla screen and recenters the client cursor.
-        // Keep same-row menu transitions in-place; title changes become visible on the next real open.
-        runtime.render(current.topContainer(), renderedSlots, nextSlots, viewer.level().registryAccess());
+        if (current != null
+                && !current.closed()
+                && containerMetadataChanged(current.rows(), title, nextRows, nextTitle)
+                && !custody.empty()) {
+            if (!runtime.settleForRebuild(this)) {
+                return false;
+            }
+            callbackGeneration = callbackGeneration();
+            frame = invokeUserCallback(state::currentFrame);
+            if (!runtime.activeAfterCallback(this, callbackGeneration)) {
+                return false;
+            }
+            nextTitle = frame.title();
+            nextRows = state.menu().rows();
+            nextSlots = frame.slots();
+        }
+
+        if (current == null || current.closed() || containerMetadataChanged(current.rows(), title, nextRows, nextTitle)) {
+            SimpleContainer nextInventory = new SimpleContainer(nextRows * 9);
+            runtime.render(this, nextInventory, null, nextSlots, viewer.level().registryAccess());
+            FabricMenuContainer nextContainer = runtime.openMenu(this, viewer, nextRows, nextTitle, nextInventory);
+            if (nextContainer == null) {
+                if (current == null || current.closed()) {
+                    throw new IllegalStateException("Fabric menu container did not open");
+                }
+                return false;
+            }
+            if (!runtime.active(this)) {
+                return false;
+            }
+            title = nextTitle;
+            renderedSlots = nextSlots;
+            custodyBaseItems.clear();
+            boolean changed = runtime.renderCustody(this, nextInventory, null, nextSlots,
+                    viewer.level().registryAccess());
+            changed |= runtime.syncCustodyCursor(this, nextContainer);
+            if (!runtime.active(this)) {
+                return false;
+            }
+            if (changed) {
+                nextContainer.broadcastChanges();
+            }
+            if (!runtime.active(this)) {
+                return false;
+            }
+            settledCustodyView.rendered();
+            updateTicking();
+            return true;
+        }
+
+        boolean changed = runtime.render(this, current.topContainer(), renderedSlots, nextSlots,
+                viewer.level().registryAccess());
         title = nextTitle;
+        List<MenuSlot> previousSlots = renderedSlots;
         renderedSlots = nextSlots;
-        runtime.syncCursor(current, renderedCursor, nextCursor, viewer.level().registryAccess());
-        renderedCursor = nextCursor;
-        current.broadcastFullState();
+        changed |= runtime.renderCustody(this, current.topContainer(), previousSlots, nextSlots,
+                viewer.level().registryAccess());
+        changed |= runtime.syncCustodyCursor(this, current);
+        if (!runtime.active(this)) {
+            return false;
+        }
+        if (changed || trustedCustodyMutation) {
+            current.broadcastChanges();
+        }
+        settledCustodyView.rendered();
         updateTicking();
+        return true;
+    }
+
+    boolean applyTransition(MenuSessionState.PreparedTransition transition) {
+        Objects.requireNonNull(transition, "transition");
+        if (!runtime.active(this)) {
+            return false;
+        }
+        long callbackGeneration = callbackGeneration();
+        MenuFrame frame = invokeUserCallback(transition::currentFrame);
+        if (!runtime.activeAfterCallback(this, callbackGeneration)) {
+            return false;
+        }
+        int rows = transition.menu().rows();
+        SimpleContainer nextInventory = new SimpleContainer(rows * 9);
+        runtime.render(this, nextInventory, null, frame.slots(), viewer.level().registryAccess());
+        FabricMenuContainer nextContainer = runtime.openMenu(this, viewer, rows, frame.title(), nextInventory);
+        if (nextContainer == null) {
+            return false;
+        }
+        try {
+            transition.commit();
+        } catch (RuntimeException exception) {
+            nextContainer.markTransitionClose();
+            clearContainer(nextContainer);
+            if (viewer.containerMenu == nextContainer) {
+                viewer.closeContainer();
+            }
+            throw exception;
+        }
+        resetCustody();
+        title = frame.title();
+        renderedSlots = frame.slots();
+        custodyBaseItems.clear();
+        boolean changed = runtime.renderCustody(this, nextInventory, null, frame.slots(),
+                viewer.level().registryAccess());
+        changed |= runtime.syncCustodyCursor(this, nextContainer);
+        if (!runtime.active(this)) {
+            return false;
+        }
+        if (changed) {
+            nextContainer.broadcastChanges();
+        }
+        settledCustodyView.rendered();
+        updateTicking();
+        return true;
     }
 
     void detach() {
-        state.closed();
+        callbackGate.retire();
+        deathAttempt.retire();
         stopTicking();
         stopInputGate();
+    }
+
+    void suspendTickingForPrompt() {
+        stopTicking();
+    }
+
+    static boolean containerMetadataChanged(int currentRows, net.kyori.adventure.text.Component currentTitle,
+                                            int nextRows, net.kyori.adventure.text.Component nextTitle) {
+        return currentRows != nextRows || !Objects.equals(currentTitle, nextTitle);
     }
 
     @Override
@@ -148,23 +345,11 @@ final class FabricMenuSession implements MenuContext.SessionControls {
     private void updateTicking() {
         long nextInterval = state.tickIntervalTicks();
         MenuTrace.field("tickInterval", nextInterval);
-        if (nextInterval <= 0L) {
-            stopTicking();
-            return;
-        }
-        if (tickIntervalTicks == nextInterval) {
-            return;
-        }
-        stopTicking();
-        tickHandle = MenuTrace.time("runtime.tickSchedule",
-                () -> runtime.tickScheduler().schedule(nextInterval, () -> runtime.onTick(this)));
-        tickIntervalTicks = nextInterval;
+        MenuTrace.time("runtime.tickSchedule", () -> tickController.update(nextInterval));
     }
 
     private void stopTicking() {
-        MenuTrace.time("runtime.tickCancel", tickHandle::cancel);
-        tickHandle = MenuTickHandle.noop();
-        tickIntervalTicks = 0L;
+        MenuTrace.time("runtime.tickCancel", tickController::stop);
     }
 
     private void rearmInputGate() {
@@ -182,5 +367,61 @@ final class FabricMenuSession implements MenuContext.SessionControls {
         ACCEPTED,
         DUPLICATE,
         TICK_CAP
+    }
+
+    static final class SettledCustodyView {
+
+        private volatile boolean dirty;
+
+        void markDirty() {
+            dirty = true;
+        }
+
+        boolean restore(BooleanSupplier render) {
+            Objects.requireNonNull(render, "render");
+            if (!dirty) {
+                return true;
+            }
+            if (!render.getAsBoolean()) {
+                return false;
+            }
+            dirty = false;
+            return true;
+        }
+
+        void rendered() {
+            dirty = false;
+        }
+
+        boolean dirty() {
+            return dirty;
+        }
+    }
+
+    static final class DeathAttempt {
+
+        private long nextToken;
+        private long pendingToken;
+
+        synchronized long begin() {
+            if (pendingToken != 0L) {
+                return 0L;
+            }
+            pendingToken = ++nextToken;
+            return pendingToken;
+        }
+
+        synchronized boolean consume(long token) {
+            if (token == 0L || pendingToken != token) {
+                return false;
+            }
+            pendingToken = 0L;
+            return true;
+        }
+
+        synchronized void retire() {
+            pendingToken = 0L;
+            nextToken++;
+        }
     }
 }

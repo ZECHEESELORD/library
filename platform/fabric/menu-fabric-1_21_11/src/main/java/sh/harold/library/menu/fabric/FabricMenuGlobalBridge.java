@@ -2,6 +2,7 @@ package sh.harold.library.menu.fabric;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -38,6 +39,17 @@ final class FabricMenuGlobalBridge {
         ServerTickEvents.START_SERVER_TICK.register(server -> RUNTIMES.forEach(FabricMenuRuntime::onServerTick));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 RUNTIMES.forEach(runtime -> runtime.onPlayerDisconnect(handler.getPlayer())));
+        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
+            if (entity instanceof ServerPlayer player) {
+                RUNTIMES.forEach(runtime -> runtime.onPlayerAllowDeath(player));
+            }
+            return true;
+        });
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+            if (entity instanceof ServerPlayer player) {
+                RUNTIMES.forEach(runtime -> runtime.onPlayerDeath(player));
+            }
+        });
         ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, sender, params) -> {
             for (FabricMenuRuntime runtime : RUNTIMES) {
                 if (runtime.handleChatMessage(sender, message.signedContent())) {

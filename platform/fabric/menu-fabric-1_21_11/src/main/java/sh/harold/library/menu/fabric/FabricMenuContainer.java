@@ -24,8 +24,10 @@ final class FabricMenuContainer extends ChestMenu {
     private final Set<Integer> dragSlots = new LinkedHashSet<>();
     private volatile boolean transitionClosing;
     private volatile boolean promptClosing;
+    private volatile boolean nativeDriftClosing;
     private volatile boolean closed;
     private volatile MenuClick dragButton;
+    private volatile boolean dragInvalid;
 
     FabricMenuContainer(FabricMenuRuntime runtime, FabricMenuSession session, int containerId, Inventory playerInventory,
                         SimpleContainer topContainer, int rows) {
@@ -60,12 +62,24 @@ final class FabricMenuContainer extends ChestMenu {
         return promptClosing;
     }
 
+    boolean nativeDriftClosing() {
+        return nativeDriftClosing;
+    }
+
     void markTransitionClose() {
         this.transitionClosing = true;
     }
 
+    void clearTransitionClose() {
+        this.transitionClosing = false;
+    }
+
     void markPromptClose() {
         this.promptClosing = true;
+    }
+
+    void markNativeDriftClose() {
+        this.nativeDriftClosing = true;
     }
 
     @Override
@@ -94,7 +108,7 @@ final class FabricMenuContainer extends ChestMenu {
         }
         if (slotId == SLOT_CLICKED_OUTSIDE) {
             MenuClick menuClick = toMenuClick(button);
-            if (input == ClickType.THROW && menuClick != null) {
+            if (input == ClickType.PICKUP && menuClick != null) {
                 runtime.onDropCursor(this, serverPlayer, menuClick);
             }
             return;
@@ -119,6 +133,9 @@ final class FabricMenuContainer extends ChestMenu {
     @Override
     public void removed(Player player) {
         closed = true;
+        if (player instanceof ServerPlayer serverPlayer) {
+            runtime.beforeContainerRemoved(this, serverPlayer);
+        }
         boolean softClose = transitionClosing || promptClosing;
         if (!softClose) {
             super.removed(player);
@@ -143,22 +160,26 @@ final class FabricMenuContainer extends ChestMenu {
             case QUICKCRAFT_HEADER_START -> {
                 dragSlots.clear();
                 dragButton = menuClick;
+                dragInvalid = false;
             }
             case QUICKCRAFT_HEADER_CONTINUE -> {
                 if (dragButton != menuClick || slotId < 0 || slotId >= topContainer.getContainerSize()) {
+                    dragInvalid = true;
                     return;
                 }
                 dragSlots.add(slotId);
             }
             case QUICKCRAFT_HEADER_END -> {
-                if (dragButton != menuClick || dragSlots.isEmpty()) {
+                if (dragButton != menuClick || dragInvalid || dragSlots.isEmpty()) {
                     dragSlots.clear();
                     dragButton = null;
+                    dragInvalid = false;
                     return;
                 }
                 runtime.onDrag(this, player, menuClick, dragSlots.stream().sorted().toList());
                 dragSlots.clear();
                 dragButton = null;
+                dragInvalid = false;
             }
             default -> {
             }

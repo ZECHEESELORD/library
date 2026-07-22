@@ -28,6 +28,7 @@ import sh.harold.library.sound.fabric.FabricServerSoundCuePlatform;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class FabricMenuPlatform implements AutoCloseable {
 
@@ -36,6 +37,7 @@ public final class FabricMenuPlatform implements AutoCloseable {
     private final FabricServerSoundCuePlatform sounds;
     private final boolean closeSounds;
     private final MenuTraceController traceController;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     public FabricMenuPlatform() {
         this(new StandardMenuService(), new FabricServerSoundCuePlatform(), true);
@@ -139,6 +141,9 @@ public final class FabricMenuPlatform implements AutoCloseable {
     }
 
     public void open(ServerPlayer player, MenuDefinition menu) {
+        if (closed.get()) {
+            throw new IllegalStateException("FabricMenuPlatform is closed");
+        }
         runtime.open(Objects.requireNonNull(player, "player"), Objects.requireNonNull(menu, "menu"));
     }
 
@@ -148,6 +153,9 @@ public final class FabricMenuPlatform implements AutoCloseable {
 
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         runtime.close();
         FabricMenuGlobalBridge.unregister(runtime);
         if (closeSounds) {
