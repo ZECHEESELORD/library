@@ -7,16 +7,19 @@ import sh.harold.library.menu.AccentFamily;
 import sh.harold.library.menu.ActionVerb;
 import sh.harold.library.menu.Menu;
 import sh.harold.library.menu.MenuButton;
+import sh.harold.library.menu.MenuCustodyDecision;
+import sh.harold.library.menu.MenuCustodyDestination;
+import sh.harold.library.menu.MenuCustodyFailure;
+import sh.harold.library.menu.MenuCustodyGesture;
+import sh.harold.library.menu.MenuCustodySnapshot;
 import sh.harold.library.menu.MenuDefinition;
 import sh.harold.library.menu.MenuDisplayItem;
 import sh.harold.library.menu.MenuItem;
 import sh.harold.library.menu.MenuPair;
-import sh.harold.library.menu.MenuStack;
 import sh.harold.library.menu.MenuTab;
 import sh.harold.library.menu.MenuTabContent;
 import sh.harold.library.menu.MenuTabGroup;
 import sh.harold.library.menu.ReactiveGeometryAction;
-import sh.harold.library.menu.ReactiveMenuEffect;
 import sh.harold.library.menu.ReactiveMenu;
 import sh.harold.library.menu.ReactiveMenuInput;
 import sh.harold.library.menu.ReactiveMenuResult;
@@ -38,6 +41,7 @@ final class MinestomMenuExampleMenus {
     static final String LOCK_CLICK_TITLE = "Reactive Click Demo";
 
     private static final String TOGGLE_LOCK = "toggle-lock";
+    private static final String LOCK_TARGET = "center";
     private static final int TAB_CANVAS_LEFT_SLOT = 29;
     private static final int TAB_CANVAS_CENTER_SLOT = 31;
     private static final int TAB_CANVAS_RIGHT_SLOT = 33;
@@ -48,7 +52,6 @@ final class MinestomMenuExampleMenus {
     private static final int SNAKE_BOARD_ROWS = 5;
     private static final int SNAKE_BOARD_LIMIT = SNAKE_BOARD_COLUMNS * SNAKE_BOARD_ROWS;
     private static final int NO_PREVIOUS_SNAKE_SLOT = -1;
-    private static final int NO_VIEWER_SLOT = -1;
 
     private final MinestomMenuPlatform menus;
     private final Menu profilePreviewMenu;
@@ -346,7 +349,7 @@ final class MinestomMenuExampleMenus {
 
     private ReactiveMenu buildReactiveListDemo() {
         return menus.reactiveList()
-                .state(new ReactiveListState(0, 3))
+                .stateFactory(() -> new ReactiveListState(0, 3))
                 .render(state -> ReactiveListView.builder("Reactive List Browser")
                         .page(state.pageIndex())
                         .addItems(reactiveListItems(state.highlightedIndex()))
@@ -357,7 +360,7 @@ final class MinestomMenuExampleMenus {
 
     private ReactiveMenu buildReactiveTabsDemo() {
         return menus.reactiveTabs()
-                .state(new ReactiveTabsState("overview", 0, 0, 1))
+                .stateFactory(() -> new ReactiveTabsState("overview", 0, 0, 1))
                 .render(state -> ReactiveTabsView.builder("Reactive Tabs Switchboard")
                         .activeTab(state.activeTabId())
                         .navStart(state.navStart())
@@ -403,29 +406,30 @@ final class MinestomMenuExampleMenus {
 
     private ReactiveMenu buildSnakeDemo() {
         return menus.reactiveCanvas()
-                .state(new SnakeState(0, NO_PREVIOUS_SNAKE_SLOT, 0x51A7E5L))
+                .stateFactory(() -> new SnakeState(0, NO_PREVIOUS_SNAKE_SLOT, 0x51A7E5L))
                 .tickEvery(4L)
                 .render(state -> ReactiveMenuView.builder("Reactive Snake")
                         .place(TRUE_CANVAS_CENTER_SLOT, snakeInfoDisplay)
                         .place(state.slot(), snakeHeadDisplay)
                         .build())
                 .reduce((state, input) -> input instanceof ReactiveMenuInput.Tick
-                        ? ReactiveMenuResult.stay(nextSnakeState(state))
-                        : ReactiveMenuResult.stay(state))
+                        ? ReactiveMenuResult.update(nextSnakeState(state))
+                        : ReactiveMenuResult.unchanged())
                 .build();
     }
 
     private ReactiveMenu buildLockDragDemo() {
         return menus.reactiveCanvas()
                 .utility(UtilitySlot.LEFT_1, lockToggleUtilityButton)
-                .state(new DragLockState(null, NO_VIEWER_SLOT, null, NO_VIEWER_SLOT, false,
+                .custodyTarget(LOCK_TARGET, TRUE_CANVAS_CENTER_SLOT)
+                .stateFactory(() -> new DragLockState(false,
                         "Click an inventory stack to pick it up, or shift-click one to insert it directly."))
                 .render(state -> ReactiveMenuView.builder(LOCK_DRAG_TITLE)
-                        .cursor(state.cursor())
                         .place(TRUE_CANVAS_LEFT_SLOT, dragLockInfoDisplay)
-                        .place(TRUE_CANVAS_CENTER_SLOT, dragLockTarget(state))
+                        .place(TRUE_CANVAS_CENTER_SLOT, dragLockEmptyDisplay)
                         .place(TRUE_CANVAS_RIGHT_SLOT, dragLockStatus(state))
                         .build())
+                .custodyPolicy(this::decideDragLockCustody)
                 .reduce(this::reduceDragLockState)
                 .build();
     }
@@ -433,13 +437,15 @@ final class MinestomMenuExampleMenus {
     private ReactiveMenu buildLockClickDemo() {
         return menus.reactiveCanvas()
                 .utility(UtilitySlot.LEFT_1, lockToggleUtilityButton)
-                .state(new ClickLockState(null, NO_VIEWER_SLOT, false,
+                .custodyTarget(LOCK_TARGET, TRUE_CANVAS_CENTER_SLOT)
+                .stateFactory(() -> new ClickLockState(false,
                         "Click an inventory stack to move it into the center slot."))
                 .render(state -> ReactiveMenuView.builder(LOCK_CLICK_TITLE)
                         .place(TRUE_CANVAS_LEFT_SLOT, clickLockInfoDisplay)
-                        .place(TRUE_CANVAS_CENTER_SLOT, clickLockTarget(state))
+                        .place(TRUE_CANVAS_CENTER_SLOT, clickLockEmptyDisplay)
                         .place(TRUE_CANVAS_RIGHT_SLOT, clickLockStatus(state))
                         .build())
+                .custodyPolicy(this::decideClickLockCustody)
                 .reduce(this::reduceClickLockState)
                 .build();
     }
@@ -447,49 +453,61 @@ final class MinestomMenuExampleMenus {
     private ReactiveMenuResult<ReactiveListState> reduceReactiveListState(ReactiveListState state, ReactiveMenuInput input) {
         if (input instanceof ReactiveMenuInput.Click click) {
             if (click.message() instanceof ReactiveGeometryAction.PreviousPage) {
-                return ReactiveMenuResult.stay(new ReactiveListState(Math.max(0, state.pageIndex() - 1), state.highlightedIndex()));
+                return updateIfChanged(state,
+                        new ReactiveListState(Math.max(0, state.pageIndex() - 1), state.highlightedIndex()));
             }
             if (click.message() instanceof ReactiveGeometryAction.NextPage) {
-                return ReactiveMenuResult.stay(new ReactiveListState(state.pageIndex() + 1, state.highlightedIndex()));
+                return updateIfChanged(state,
+                        new ReactiveListState(state.pageIndex() + 1, state.highlightedIndex()));
             }
             if (click.message() instanceof String message && message.startsWith("focus:")) {
                 int index = Integer.parseInt(message.substring("focus:".length()));
-                return ReactiveMenuResult.stay(new ReactiveListState(state.pageIndex(), index));
+                return updateIfChanged(state, new ReactiveListState(state.pageIndex(), index));
             }
         }
-        return ReactiveMenuResult.stay(state);
+        return ReactiveMenuResult.unchanged();
     }
 
     private ReactiveMenuResult<ReactiveTabsState> reduceReactiveTabsState(ReactiveTabsState state, ReactiveMenuInput input) {
         if (input instanceof ReactiveMenuInput.Click click) {
             Object message = click.message();
             if (message instanceof ReactiveGeometryAction.SwitchTab switchTab) {
-                return ReactiveMenuResult.stay(new ReactiveTabsState(switchTab.tabId(), state.navStart(), state.pageIndex(), state.focusedIndex()));
+                return updateIfChanged(state, new ReactiveTabsState(
+                        switchTab.tabId(), state.navStart(), state.pageIndex(), state.focusedIndex()));
             }
             if (message instanceof ReactiveGeometryAction.PreviousTabs) {
-                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), Math.max(0, state.navStart() - 1), state.pageIndex(), state.focusedIndex()));
+                return updateIfChanged(state, new ReactiveTabsState(
+                        state.activeTabId(), Math.max(0, state.navStart() - 1),
+                        state.pageIndex(), state.focusedIndex()));
             }
             if (message instanceof ReactiveGeometryAction.NextTabs) {
-                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), state.navStart() + 1, state.pageIndex(), state.focusedIndex()));
+                return updateIfChanged(state, new ReactiveTabsState(
+                        state.activeTabId(), state.navStart() + 1, state.pageIndex(), state.focusedIndex()));
             }
             if (message instanceof ReactiveGeometryAction.JumpToFirstTabs) {
-                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), 0, state.pageIndex(), state.focusedIndex()));
+                return updateIfChanged(state, new ReactiveTabsState(
+                        state.activeTabId(), 0, state.pageIndex(), state.focusedIndex()));
             }
             if (message instanceof ReactiveGeometryAction.JumpToLastTabs) {
-                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), Integer.MAX_VALUE, state.pageIndex(), state.focusedIndex()));
+                return updateIfChanged(state, new ReactiveTabsState(
+                        state.activeTabId(), Integer.MAX_VALUE, state.pageIndex(), state.focusedIndex()));
             }
             if (message instanceof ReactiveGeometryAction.PreviousPage) {
-                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), state.navStart(), Math.max(0, state.pageIndex() - 1), state.focusedIndex()));
+                return updateIfChanged(state, new ReactiveTabsState(
+                        state.activeTabId(), state.navStart(), Math.max(0, state.pageIndex() - 1),
+                        state.focusedIndex()));
             }
             if (message instanceof ReactiveGeometryAction.NextPage) {
-                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), state.navStart(), state.pageIndex() + 1, state.focusedIndex()));
+                return updateIfChanged(state, new ReactiveTabsState(
+                        state.activeTabId(), state.navStart(), state.pageIndex() + 1, state.focusedIndex()));
             }
             if (message instanceof String focus && focus.startsWith("focus:")) {
                 int index = Integer.parseInt(focus.substring("focus:".length()));
-                return ReactiveMenuResult.stay(new ReactiveTabsState(state.activeTabId(), state.navStart(), state.pageIndex(), index));
+                return updateIfChanged(state, new ReactiveTabsState(
+                        state.activeTabId(), state.navStart(), state.pageIndex(), index));
             }
         }
-        return ReactiveMenuResult.stay(state);
+        return ReactiveMenuResult.unchanged();
     }
 
     private List<MenuItem> reactiveListItems(int highlightedIndex) {
@@ -570,155 +588,260 @@ final class MinestomMenuExampleMenus {
                         .build());
     }
 
+    private MenuCustodyDecision decideDragLockCustody(
+            DragLockState state,
+            MenuCustodyGesture gesture,
+            MenuCustodySnapshot custody
+    ) {
+        boolean targetOccupied = custody.targets().containsKey(LOCK_TARGET);
+        boolean cursorOccupied = custody.cursor().isPresent();
+        if (gesture instanceof MenuCustodyGesture.ViewerClick viewerClick) {
+            if (cursorOccupied) {
+                return viewerClick.slot().item() == null
+                        ? MenuCustodyDecision.move(MenuCustodyDestination.viewerSlot(viewerClick.slot()))
+                        : MenuCustodyDecision.reject();
+            }
+            if (viewerClick.slot().item() == null) {
+                return MenuCustodyDecision.reject();
+            }
+            if (!viewerClick.shift()) {
+                return MenuCustodyDecision.move(MenuCustodyDestination.cursor());
+            }
+            return state.locked() || targetOccupied
+                    ? MenuCustodyDecision.reject()
+                    : MenuCustodyDecision.move(MenuCustodyDestination.target(LOCK_TARGET));
+        }
+        if (gesture instanceof MenuCustodyGesture.TargetClick targetClick) {
+            if (!LOCK_TARGET.equals(targetClick.targetKey())
+                    || state.locked()
+                    || targetOccupied == cursorOccupied) {
+                return MenuCustodyDecision.reject();
+            }
+            if (!targetOccupied) {
+                return MenuCustodyDecision.move(MenuCustodyDestination.target(LOCK_TARGET));
+            }
+            return MenuCustodyDecision.move(targetClick.shift()
+                    ? MenuCustodyDestination.origin()
+                    : MenuCustodyDestination.cursor());
+        }
+        if (gesture instanceof MenuCustodyGesture.TargetDrag targetDrag) {
+            return !state.locked()
+                    && !targetOccupied
+                    && cursorOccupied
+                    && targetDrag.targetKeys().size() == 1
+                    && LOCK_TARGET.equals(targetDrag.targetKeys().getFirst())
+                    ? MenuCustodyDecision.move(MenuCustodyDestination.target(LOCK_TARGET))
+                    : MenuCustodyDecision.reject();
+        }
+        if (gesture instanceof MenuCustodyGesture.OutsideClick) {
+            return cursorOccupied
+                    ? MenuCustodyDecision.move(MenuCustodyDestination.origin())
+                    : MenuCustodyDecision.reject();
+        }
+        if (gesture instanceof MenuCustodyGesture.Settle) {
+            return MenuCustodyDecision.move(MenuCustodyDestination.origin());
+        }
+        return MenuCustodyDecision.reject();
+    }
+
+    private MenuCustodyDecision decideClickLockCustody(
+            ClickLockState state,
+            MenuCustodyGesture gesture,
+            MenuCustodySnapshot custody
+    ) {
+        boolean targetOccupied = custody.targets().containsKey(LOCK_TARGET);
+        if (gesture instanceof MenuCustodyGesture.ViewerClick viewerClick) {
+            return !state.locked()
+                    && !targetOccupied
+                    && custody.cursor().isEmpty()
+                    && viewerClick.slot().item() != null
+                    ? MenuCustodyDecision.move(MenuCustodyDestination.target(LOCK_TARGET))
+                    : MenuCustodyDecision.reject();
+        }
+        if (gesture instanceof MenuCustodyGesture.TargetClick targetClick) {
+            return !state.locked()
+                    && targetOccupied
+                    && custody.cursor().isEmpty()
+                    && LOCK_TARGET.equals(targetClick.targetKey())
+                    ? MenuCustodyDecision.move(MenuCustodyDestination.origin())
+                    : MenuCustodyDecision.reject();
+        }
+        if (gesture instanceof MenuCustodyGesture.OutsideClick && custody.cursor().isPresent()) {
+            return MenuCustodyDecision.move(MenuCustodyDestination.origin());
+        }
+        if (gesture instanceof MenuCustodyGesture.Settle) {
+            return MenuCustodyDecision.move(MenuCustodyDestination.origin());
+        }
+        return MenuCustodyDecision.reject();
+    }
+
     private ReactiveMenuResult<DragLockState> reduceDragLockState(DragLockState state, ReactiveMenuInput input) {
         if (input instanceof ReactiveMenuInput.Click click && TOGGLE_LOCK.equals(click.message())) {
             boolean locked = !state.locked();
-            return ReactiveMenuResult.stay(new DragLockState(state.stored(), state.storedSourceSlot(), state.cursor(), state.cursorSourceSlot(), locked,
+            return ReactiveMenuResult.update(new DragLockState(
+                    locked,
                     locked ? "Locked the center slot." : "Unlocked the center slot."));
         }
-        if (input instanceof ReactiveMenuInput.InventoryClick click) {
-            if (state.cursor() != null) {
-                if (click.item() == null) {
-                    return placeCursorIntoViewerSlot(state, click.slot(), "Placed the carried stack into that inventory slot.");
-                }
-                return ReactiveMenuResult.stay(new DragLockState(state.stored(), state.storedSourceSlot(), state.cursor(), state.cursorSourceSlot(), state.locked(),
-                        "Pick an empty inventory slot before placing the carried stack."));
-            }
-            if (click.item() == null) {
-                return ReactiveMenuResult.stay(state);
-            }
-            if (click.shift()) {
-                if (state.locked()) {
-                    return ReactiveMenuResult.stay(new DragLockState(state.stored(), state.storedSourceSlot(), state.cursor(), state.cursorSourceSlot(), true,
-                            "Unlock the center slot before shift-inserting a stack."));
-                }
-                if (state.stored() != null) {
-                    return ReactiveMenuResult.stay(new DragLockState(state.stored(), state.storedSourceSlot(), state.cursor(), state.cursorSourceSlot(), false,
-                            "The center slot already holds a stack."));
-                }
-                return ReactiveMenuResult.of(
-                        new DragLockState(click.item(), click.slot(), state.cursor(), state.cursorSourceSlot(), false,
-                                "Shift-clicked the stack directly into the center slot."),
-                        new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
-            }
-            return ReactiveMenuResult.of(
-                    new DragLockState(state.stored(), state.storedSourceSlot(), click.item(), click.slot(), state.locked(),
-                            "Picked up the clicked stack from your inventory."),
-                    new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
+        if (input instanceof ReactiveMenuInput.CustodyCommitted committed) {
+            return updateDragStatus(state, dragCommitStatus(committed));
         }
-        if (input instanceof ReactiveMenuInput.Drag drag
-                && drag.slots().contains(TRUE_CANVAS_CENTER_SLOT)) {
-            return insertFromCursor(state, "Dragged the carried stack onto the center slot.");
+        if (input instanceof ReactiveMenuInput.CustodyRejected rejected) {
+            return updateDragStatus(state, dragRejectStatus(state, rejected));
         }
-        if (input instanceof ReactiveMenuInput.Click click && click.slot() == TRUE_CANVAS_CENTER_SLOT) {
-            if (state.cursor() != null) {
-                return insertFromCursor(state, "Placed the carried stack into the center slot.");
-            }
-            if (state.stored() == null) {
-                return ReactiveMenuResult.stay(new DragLockState(null, NO_VIEWER_SLOT, null, NO_VIEWER_SLOT, state.locked(),
-                        "Pick up a stack from your inventory first."));
-            }
-            if (state.locked()) {
-                return ReactiveMenuResult.stay(new DragLockState(state.stored(), state.storedSourceSlot(), state.cursor(), state.cursorSourceSlot(), true,
-                        "Unlock the center slot before removing the stored stack."));
-            }
-            if (click.shift()) {
-                return returnStoredToViewerSlot(state, "Returned the stored stack to its original inventory slot.");
-            }
-            return ReactiveMenuResult.stay(new DragLockState(null, NO_VIEWER_SLOT, state.stored(), state.storedSourceSlot(), false,
-                    "Picked the stored stack back up."));
-        }
-        if (input instanceof ReactiveMenuInput.DropCursor) {
-            if (state.cursor() != null) {
-                return returnCursorToViewerSlot(state, "Returned the carried stack to its original inventory slot.");
-            }
-        }
-        return ReactiveMenuResult.stay(state);
+        return ReactiveMenuResult.unchanged();
     }
 
     private ReactiveMenuResult<ClickLockState> reduceClickLockState(ClickLockState state, ReactiveMenuInput input) {
         if (input instanceof ReactiveMenuInput.Click click && TOGGLE_LOCK.equals(click.message())) {
             boolean locked = !state.locked();
-            return ReactiveMenuResult.stay(new ClickLockState(state.stored(), state.storedSourceSlot(), locked,
+            return ReactiveMenuResult.update(new ClickLockState(
+                    locked,
                     locked ? "Locked the center slot." : "Unlocked the center slot."));
         }
-        if (input instanceof ReactiveMenuInput.InventoryClick click && click.item() != null) {
-            if (state.locked()) {
-                return ReactiveMenuResult.stay(new ClickLockState(state.stored(), state.storedSourceSlot(), true,
-                        "Unlock the center slot before inserting a stack."));
-            }
-            if (state.stored() != null) {
-                return ReactiveMenuResult.stay(new ClickLockState(state.stored(), state.storedSourceSlot(), false,
-                        "Return the loaded stack before inserting another one."));
-            }
-            return ReactiveMenuResult.of(
-                    new ClickLockState(click.item(), click.slot(), false,
-                            "Moved the clicked inventory stack into the center slot."),
-                    new ReactiveMenuEffect.SetViewerInventorySlot(click.slot(), null));
+        if (input instanceof ReactiveMenuInput.CustodyCommitted committed) {
+            return updateClickStatus(state, clickCommitStatus(committed.gesture()));
         }
-        if (input instanceof ReactiveMenuInput.Click click && click.slot() == TRUE_CANVAS_CENTER_SLOT) {
-            if (state.stored() == null) {
-                return ReactiveMenuResult.stay(new ClickLockState(null, NO_VIEWER_SLOT, state.locked(),
-                        "Click an inventory stack to load it into the center slot."));
-            }
-            if (state.locked()) {
-                return ReactiveMenuResult.stay(new ClickLockState(state.stored(), state.storedSourceSlot(), true,
-                        "Unlock the center slot before returning the stored stack."));
-            }
-            return returnClickStoredToViewerSlot(state, "Returned the stored stack to its original inventory slot.");
+        if (input instanceof ReactiveMenuInput.CustodyRejected rejected) {
+            return updateClickStatus(state, clickRejectStatus(state, rejected));
         }
-        return ReactiveMenuResult.stay(state);
+        return ReactiveMenuResult.unchanged();
     }
 
-    private ReactiveMenuResult<DragLockState> insertFromCursor(DragLockState state, String success) {
-        if (state.cursor() == null) {
-            return ReactiveMenuResult.stay(state);
+    private String dragCommitStatus(ReactiveMenuInput.CustodyCommitted committed) {
+        MenuCustodyGesture gesture = committed.gesture();
+        if (gesture instanceof MenuCustodyGesture.ViewerClick viewerClick) {
+            if (viewerClick.slot().item() == null) {
+                return "Placed the carried stack into that inventory slot.";
+            }
+            return viewerClick.shift()
+                    ? "Shift-clicked the stack directly into the center slot."
+                    : "Picked up the clicked stack from your inventory.";
+        }
+        if (gesture instanceof MenuCustodyGesture.TargetDrag) {
+            return "Dragged the carried stack onto the center slot.";
+        }
+        if (gesture instanceof MenuCustodyGesture.TargetClick targetClick) {
+            if (committed.snapshot().cursor().isPresent()) {
+                return "Picked the stored stack back up.";
+            }
+            if (committed.snapshot().targets().containsKey(targetClick.targetKey())) {
+                return "Placed the carried stack into the center slot.";
+            }
+            return "Returned the stored stack to its original inventory slot.";
+        }
+        if (gesture instanceof MenuCustodyGesture.OutsideClick) {
+            return "Returned the carried stack to its original inventory slot.";
+        }
+        return "Returned all held stacks before leaving the menu.";
+    }
+
+    private String clickCommitStatus(MenuCustodyGesture gesture) {
+        if (gesture instanceof MenuCustodyGesture.ViewerClick) {
+            return "Moved the clicked inventory stack into the center slot.";
+        }
+        if (gesture instanceof MenuCustodyGesture.TargetClick) {
+            return "Returned the stored stack to its original inventory slot.";
+        }
+        return "Returned the stored stack before leaving the menu.";
+    }
+
+    private String dragRejectStatus(
+            DragLockState state,
+            ReactiveMenuInput.CustodyRejected rejected
+    ) {
+        MenuCustodyGesture gesture = rejected.gesture();
+        MenuCustodySnapshot custody = rejected.snapshot();
+        if (state.locked() && gestureTargetsCenter(gesture)) {
+            if (gesture instanceof MenuCustodyGesture.ViewerClick) {
+                return "Unlock the center slot before shift-inserting a stack.";
+            }
+            return custody.cursor().isPresent()
+                    ? "Unlock the center slot before placing the carried stack."
+                    : "Unlock the center slot before removing the stored stack.";
+        }
+        if (rejected.failure() == MenuCustodyFailure.OCCUPIED_DESTINATION
+                || custody.targets().containsKey(LOCK_TARGET)
+                && (custody.cursor().isPresent()
+                || gesture instanceof MenuCustodyGesture.TargetDrag
+                || gesture instanceof MenuCustodyGesture.ViewerClick viewerClick && viewerClick.shift())) {
+            return gesture instanceof MenuCustodyGesture.ViewerClick && custody.cursor().isPresent()
+                    ? "Pick an empty inventory slot before placing the carried stack."
+                    : "The center slot already holds a stack.";
+        }
+        if (rejected.failure() == MenuCustodyFailure.UNSUPPORTED_GESTURE) {
+            return "Drag the carried stack only across the center slot.";
+        }
+        if (rejected.failure() == MenuCustodyFailure.STALE_INPUT) {
+            return "That stack changed before the transfer; nothing moved.";
+        }
+        if (rejected.failure() == MenuCustodyFailure.NATIVE_MUTATION_FAILED) {
+            return "The transfer failed and the original inventory state was restored.";
+        }
+        if (rejected.failure() == MenuCustodyFailure.TRANSITION_IN_PROGRESS) {
+            return "Wait for the current menu transition to finish.";
+        }
+        if (gesture instanceof MenuCustodyGesture.ViewerClick viewerClick
+                && viewerClick.slot().item() == null) {
+            return "Pick up a stack from your inventory first.";
+        }
+        if (gesture instanceof MenuCustodyGesture.TargetClick
+                || gesture instanceof MenuCustodyGesture.TargetDrag) {
+            return "Pick up a stack from your inventory first.";
+        }
+        return "That whole-stack transfer is not available.";
+    }
+
+    private String clickRejectStatus(
+            ClickLockState state,
+            ReactiveMenuInput.CustodyRejected rejected
+    ) {
+        MenuCustodyGesture gesture = rejected.gesture();
+        if (gesture instanceof MenuCustodyGesture.ViewerClick viewerClick
+                && viewerClick.slot().item() == null) {
+            return "Click an inventory stack to load it into the center slot.";
         }
         if (state.locked()) {
-            return ReactiveMenuResult.stay(new DragLockState(state.stored(), state.storedSourceSlot(), state.cursor(), state.cursorSourceSlot(), true,
-                    "Unlock the center slot before placing the carried stack."));
+            return gesture instanceof MenuCustodyGesture.TargetClick
+                    ? "Unlock the center slot before returning the stored stack."
+                    : "Unlock the center slot before inserting a stack.";
         }
-        if (state.stored() != null) {
-            return ReactiveMenuResult.stay(new DragLockState(state.stored(), state.storedSourceSlot(), state.cursor(), state.cursorSourceSlot(), false,
-                    "The center slot already holds a stack."));
+        if (rejected.snapshot().targets().containsKey(LOCK_TARGET)) {
+            return "Return the loaded stack before inserting another one.";
         }
-        return ReactiveMenuResult.stay(new DragLockState(state.cursor(), state.cursorSourceSlot(), null, NO_VIEWER_SLOT, false, success));
+        if (rejected.failure() == MenuCustodyFailure.STALE_INPUT) {
+            return "That stack changed before the transfer; nothing moved.";
+        }
+        if (rejected.failure() == MenuCustodyFailure.NATIVE_MUTATION_FAILED) {
+            return "The transfer failed and the original inventory state was restored.";
+        }
+        if (rejected.failure() == MenuCustodyFailure.TRANSITION_IN_PROGRESS) {
+            return "Wait for the current menu transition to finish.";
+        }
+        return "Click an inventory stack to load it into the center slot.";
     }
 
-    private ReactiveMenuResult<DragLockState> returnStoredToViewerSlot(DragLockState state, String success) {
-        if (state.stored() == null || state.storedSourceSlot() == NO_VIEWER_SLOT) {
-            return ReactiveMenuResult.stay(state);
-        }
-        return ReactiveMenuResult.of(
-                new DragLockState(null, NO_VIEWER_SLOT, null, NO_VIEWER_SLOT, state.locked(), success),
-                new ReactiveMenuEffect.SetViewerInventorySlot(state.storedSourceSlot(), state.stored()));
+    private static boolean gestureTargetsCenter(MenuCustodyGesture gesture) {
+        return gesture instanceof MenuCustodyGesture.TargetClick
+                || gesture instanceof MenuCustodyGesture.TargetDrag
+                || gesture instanceof MenuCustodyGesture.ViewerClick viewerClick && viewerClick.shift();
     }
 
-    private ReactiveMenuResult<DragLockState> returnCursorToViewerSlot(DragLockState state, String success) {
-        if (state.cursor() == null || state.cursorSourceSlot() == NO_VIEWER_SLOT) {
-            return ReactiveMenuResult.stay(state);
-        }
-        return ReactiveMenuResult.of(
-                new DragLockState(state.stored(), state.storedSourceSlot(), null, NO_VIEWER_SLOT, state.locked(), success),
-                new ReactiveMenuEffect.SetViewerInventorySlot(state.cursorSourceSlot(), state.cursor()));
+    private static ReactiveMenuResult<DragLockState> updateDragStatus(DragLockState state, String status) {
+        return state.status().equals(status)
+                ? ReactiveMenuResult.unchanged()
+                : ReactiveMenuResult.update(new DragLockState(state.locked(), status));
     }
 
-    private ReactiveMenuResult<DragLockState> placeCursorIntoViewerSlot(DragLockState state, int slot, String success) {
-        if (state.cursor() == null) {
-            return ReactiveMenuResult.stay(state);
-        }
-        return ReactiveMenuResult.of(
-                new DragLockState(state.stored(), state.storedSourceSlot(), null, NO_VIEWER_SLOT, state.locked(), success),
-                new ReactiveMenuEffect.SetViewerInventorySlot(slot, state.cursor()));
+    private static ReactiveMenuResult<ClickLockState> updateClickStatus(ClickLockState state, String status) {
+        return state.status().equals(status)
+                ? ReactiveMenuResult.unchanged()
+                : ReactiveMenuResult.update(new ClickLockState(state.locked(), status));
     }
 
-    private ReactiveMenuResult<ClickLockState> returnClickStoredToViewerSlot(ClickLockState state, String success) {
-        if (state.stored() == null || state.storedSourceSlot() == NO_VIEWER_SLOT) {
-            return ReactiveMenuResult.stay(state);
-        }
-        return ReactiveMenuResult.of(
-                new ClickLockState(null, NO_VIEWER_SLOT, state.locked(), success),
-                new ReactiveMenuEffect.SetViewerInventorySlot(state.storedSourceSlot(), state.stored()));
+    private static <S> ReactiveMenuResult<S> updateIfChanged(S current, S next) {
+        return current.equals(next)
+                ? ReactiveMenuResult.unchanged()
+                : ReactiveMenuResult.update(next);
     }
 
     private SnakeState nextSnakeState(SnakeState state) {
@@ -764,13 +887,6 @@ final class MinestomMenuExampleMenus {
         neighbors.add(slot);
     }
 
-    private MenuItem dragLockTarget(DragLockState state) {
-        if (state.stored() != null) {
-            return state.stored();
-        }
-        return dragLockEmptyDisplay;
-    }
-
     private MenuDisplayItem dragLockStatus(DragLockState state) {
         return menus.display(state.locked() ? Material.REDSTONE_TORCH : Material.LIME_DYE)
                 .name(state.locked()
@@ -778,20 +894,9 @@ final class MinestomMenuExampleMenus {
                         : FakeSkyBlockMenuTitles.success("Slot Unlocked"))
                 .description(state.status())
                 .pairs(
-                        MenuPair.of("Stored", state.stored() == null
-                                ? FakeSkyBlockMenuValues.inactive("Empty")
-                                : FakeSkyBlockMenuValues.ready("Loaded")),
-                        MenuPair.of("Cursor", state.cursor() == null
-                                ? FakeSkyBlockMenuValues.inactive("Empty")
-                                : FakeSkyBlockMenuValues.tracked("Holding a stack")))
+                        MenuPair.of("Custody", FakeSkyBlockMenuValues.ready("Runtime managed")),
+                        MenuPair.of("Movement", FakeSkyBlockMenuValues.tracked("Whole stacks only")))
                 .build();
-    }
-
-    private MenuItem clickLockTarget(ClickLockState state) {
-        if (state.stored() != null) {
-            return state.stored();
-        }
-        return clickLockEmptyDisplay;
     }
 
     private MenuDisplayItem clickLockStatus(ClickLockState state) {
@@ -801,12 +906,8 @@ final class MinestomMenuExampleMenus {
                         : FakeSkyBlockMenuTitles.success("Slot Unlocked"))
                 .description(state.status())
                 .pairs(
-                        MenuPair.of("Stored", state.stored() == null
-                                ? FakeSkyBlockMenuValues.inactive("Empty")
-                                : FakeSkyBlockMenuValues.ready("Loaded")),
-                        MenuPair.of("Return", state.stored() == null
-                                ? FakeSkyBlockMenuValues.inactive("Waiting")
-                                : FakeSkyBlockMenuValues.tracked("Original slot")))
+                        MenuPair.of("Custody", FakeSkyBlockMenuValues.ready("Runtime managed")),
+                        MenuPair.of("Return", FakeSkyBlockMenuValues.tracked("Original slot first")))
                 .build();
     }
 
@@ -1167,16 +1268,9 @@ final class MinestomMenuExampleMenus {
     private record ReactiveTabsState(String activeTabId, int navStart, int pageIndex, int focusedIndex) {
     }
 
-    private record DragLockState(
-            MenuStack stored,
-            int storedSourceSlot,
-            MenuStack cursor,
-            int cursorSourceSlot,
-            boolean locked,
-            String status
-    ) {
+    private record DragLockState(boolean locked, String status) {
     }
 
-    private record ClickLockState(MenuStack stored, int storedSourceSlot, boolean locked, String status) {
+    private record ClickLockState(boolean locked, String status) {
     }
 }

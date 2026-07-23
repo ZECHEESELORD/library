@@ -80,7 +80,7 @@ public final class FabricExampleMod implements ModInitializer {
 
     private ReactiveMenu reactivePromptMenu(PromptState initialState) {
         return menus.reactiveList()
-                .state(initialState)
+                .stateFactory(() -> initialState)
                 .render(state -> ReactiveListView.builder("Fabric Prompt")
                         .addItem(MenuDisplayItem.builder(MenuIcon.vanilla("book"))
                                 .name(state.query().isBlank() ? "No Query" : "Query: " + state.query())
@@ -93,16 +93,16 @@ public final class FabricExampleMod implements ModInitializer {
                         .build())
                 .reduce((state, input) -> {
                     if (input instanceof ReactiveMenuInput.Click click && "open-search".equals(click.message())) {
-                        return ReactiveMenuResult.of(state, new ReactiveMenuEffect.RequestTextPrompt(
+                        return ReactiveMenuResult.effect(new ReactiveMenuEffect.RequestTextPrompt(
                                 ReactiveTextPromptRequest.prompt("prompt-search", "Search", state.query())));
                     }
                     if (input instanceof ReactiveMenuInput.TextPromptSubmitted submitted && submitted.key().equals("prompt-search")) {
-                        return ReactiveMenuResult.stay(new PromptState(submitted.value()));
+                        return ReactiveMenuResult.update(new PromptState(submitted.value()));
                     }
                     if (input instanceof ReactiveMenuInput.TextPromptCancelled cancelled && cancelled.key().equals("prompt-search")) {
-                        return ReactiveMenuResult.stay(state);
+                        return ReactiveMenuResult.unchanged();
                     }
-                    return ReactiveMenuResult.stay(state);
+                    return ReactiveMenuResult.unchanged();
                 })
                 .build();
     }
