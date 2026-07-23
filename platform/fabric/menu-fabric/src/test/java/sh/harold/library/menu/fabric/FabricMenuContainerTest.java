@@ -1,8 +1,11 @@
 package sh.harold.library.menu.fabric;
 
+import net.kyori.adventure.text.Component;
 import net.minecraft.world.inventory.ContainerInput;
 import org.junit.jupiter.api.Test;
 import sh.harold.library.menu.MenuClick;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -10,6 +13,26 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FabricMenuContainerTest {
+
+    @Test
+    void dialogPromptCannotEscapeWithoutCompleting() {
+        assertFalse(FabricMenuRuntime.PROMPT_CAN_CLOSE_WITH_ESCAPE);
+    }
+
+    @Test
+    void custodySettlementOnlyScansOrdinaryPlayerStorage() {
+        assertEquals(36, FabricMenuRuntime.STORAGE_SLOT_COUNT);
+    }
+
+    @Test
+    void titleOrRowChangeRequiresContainerRebuild() {
+        assertFalse(FabricMenuSession.containerMetadataChanged(
+                3, Component.text("Stable"), 3, Component.text("Stable")));
+        assertTrue(FabricMenuSession.containerMetadataChanged(
+                3, Component.text("Before"), 3, Component.text("After")));
+        assertTrue(FabricMenuSession.containerMetadataChanged(
+                3, Component.text("Stable"), 4, Component.text("Stable")));
+    }
 
     @Test
     void resolveClickAcceptsLiteralAndShiftVariantsOnly() {
@@ -35,5 +58,15 @@ class FabricMenuContainerTest {
         assertNull(FabricMenuContainer.resolveClick(ContainerInput.CLONE, 0));
         assertNull(FabricMenuContainer.resolveClick(ContainerInput.THROW, 0));
         assertNull(FabricMenuContainer.resolveClick(ContainerInput.PICKUP, 2));
+    }
+
+    @Test
+    void unchangedDispatchSkipsTheEntireRenderSyncAndBroadcastPath() {
+        AtomicInteger renders = new AtomicInteger();
+
+        assertFalse(FabricMenuRuntime.renderIfStateChanged(12L, 12L, renders::incrementAndGet));
+        assertEquals(0, renders.get());
+        assertTrue(FabricMenuRuntime.renderIfStateChanged(12L, 13L, renders::incrementAndGet));
+        assertEquals(1, renders.get());
     }
 }

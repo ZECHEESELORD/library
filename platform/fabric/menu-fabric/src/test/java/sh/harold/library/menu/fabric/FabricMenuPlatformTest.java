@@ -23,6 +23,8 @@ import sh.harold.library.menu.MenuTooltipBehavior;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FabricMenuPlatformTest {
@@ -73,6 +75,15 @@ class FabricMenuPlatformTest {
             assertTrue(stack.glow());
             assertStyledText(stack.name(), "Styled Name", 0xFFAA00, true);
         }
+    }
+
+    @Test
+    void closedPlatformCannotOpenAnUnmanagedInventory() {
+        FabricMenuPlatform menus = new FabricMenuPlatform();
+        menus.close();
+
+        assertThrows(IllegalStateException.class, () -> menus.open(null, null));
+        assertDoesNotThrow(menus::close);
     }
 
     private static ItemStack styledStack() {
