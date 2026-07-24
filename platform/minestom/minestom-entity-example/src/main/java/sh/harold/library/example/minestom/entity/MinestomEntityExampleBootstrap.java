@@ -8,6 +8,8 @@ import net.minestom.server.instance.InstanceContainer;
 import net.minestom.server.instance.block.Block;
 import net.minestom.server.timer.TaskSchedule;
 import sh.harold.library.entity.CommonEntityFlags;
+import sh.harold.library.entity.EntityInteractionHandler;
+import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypes;
@@ -45,7 +47,11 @@ public final class MinestomEntityExampleBootstrap {
         ManagedEntity nativeVillager = platform.spawn(instance, EntitySpec.builder(EntityTypes.VILLAGER)
                 .transform(new EntityTransform(spawn.x() + 2.0, spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()))
                 .flags(CommonEntityFlags.builder().customName(Component.text("Entity Example Villager")).customNameVisible(true).build())
-                .interactionHandler(context -> log("Native villager interaction: " + context.kind() + " by " + context.interactor().uniqueId()))
+                .interactionHandler(EntityInteractionHandler.observing(
+                        context -> log("Native villager interaction: " + context.action()
+                                + " by " + context.interactor().uniqueId()),
+                        EntityInteractionResult.PASS
+                ))
                 .build());
 
         ManagedEntity temporaryStand = platform.spawn(instance, EntitySpec.builder(EntityTypes.ARMOR_STAND)

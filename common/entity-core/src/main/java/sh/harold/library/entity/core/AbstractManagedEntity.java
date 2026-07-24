@@ -3,12 +3,14 @@ package sh.harold.library.entity.core;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import sh.harold.library.entity.CommonEntityFlags;
+import sh.harold.library.entity.EntityInteractionAction;
 import sh.harold.library.entity.EntityInteractionContext;
 import sh.harold.library.entity.EntityInteractionHandler;
+import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypeKey;
-import sh.harold.library.entity.InteractionKind;
+import sh.harold.library.entity.InteractionHand;
 import sh.harold.library.entity.InteractorRef;
 import sh.harold.library.entity.ManagedEntity;
 
@@ -17,20 +19,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 
 public abstract class AbstractManagedEntity implements ManagedEntity {
-    private static final long INTERNAL_INTERACTION_DEBOUNCE_TICKS = 5L;
-    private static final long MILLIS_PER_TICK = 50L;
-    private static final long INTERNAL_INTERACTION_DEBOUNCE_NANOS =
-            TimeUnit.MILLISECONDS.toNanos(INTERNAL_INTERACTION_DEBOUNCE_TICKS * MILLIS_PER_TICK);
+    private static final long NANOS_PER_TICK = 50_000_000L;
 
     private final UUID id;
     private final EntityTypeKey type;
     private final Set<Key> tags;
     private final EntityCapabilityRegistry capabilityRegistry = new EntityCapabilityRegistry();
-    private final Map<UUID, Long> lastInteractionNanosByInteractor = new HashMap<>();
+    private final Map<UUID, UseDelivery> lastUseDeliveryByInteractor = new HashMap<>();
 
     private volatile boolean spawned = true;
     private volatile EntityTransform transform;
@@ -195,8 +193,17 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
     @Override
     public final void teleport(EntityTransform transform) {
         requireMutable();
+        EntityTransform requested = Objects.requireNonNull(transform, "transform");
+        doTeleport(requested);
+        publishTransform(requested);
+    }
+
+    /**
+     * Publishes a transform already applied by an asynchronous native platform operation.
+     */
+    protected final void publishTransform(EntityTransform transform) {
+        requireMutable();
         this.transform = Objects.requireNonNull(transform, "transform");
-        doTeleport(transform);
     }
 
     @Override
@@ -221,23 +228,79 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
         return capabilityRegistry.find(capabilityType);
     }
 
-    public final void handleInteraction(InteractorRef interactor, InteractionKind kind) {
+    public final EntityInteractionResult handleInteraction(
+            InteractorRef interactor,
+            EntityInteractionAction action,
+            Optional<InteractionHand> hand
+    ) {
         requireMutable();
+        EntityInteractionContext context = new EntityInteractionContext(this, interactor, action, hand);
+        long tick = interactionTick();
+        if (action == EntityInteractionAction.USE) {
+            UseDelivery prior = lastUseDeliveryByInteractor.get(interactor.uniqueId());
+            if (prior != null && prior.tick() == tick) {
+                return prior.result();
+            }
+        }
+
+        EntityInteractionResult result = Objects.requireNonNull(
+                observeInteraction(context),
+                "observeInteraction returned null"
+        );
         EntityInteractionHandler handler = interactionHandler;
-        if (handler == null) {
-            return;
+        if (handler != null) {
+            result = result.or(Objects.requireNonNull(
+                    handler.onInteract(context),
+                    "EntityInteractionHandler returned null"
+            ));
         }
-        long now = interactionNowNanos();
-        Long last = lastInteractionNanosByInteractor.get(interactor.uniqueId());
-        if (last != null && now - last < INTERNAL_INTERACTION_DEBOUNCE_NANOS) {
-            return;
+        if (action == EntityInteractionAction.USE) {
+            lastUseDeliveryByInteractor.put(interactor.uniqueId(), new UseDelivery(tick, result));
         }
-        lastInteractionNanosByInteractor.put(interactor.uniqueId(), now);
-        handler.onInteract(new EntityInteractionContext(this, interactor, kind));
+        return result;
+    }
+
+    public final EntityInteractionResult handleInteraction(
+            InteractorRef interactor,
+            EntityInteractionAction action,
+            InteractionHand hand
+    ) {
+        return handleInteraction(interactor, action, Optional.of(Objects.requireNonNull(hand, "hand")));
+    }
+
+    public final EntityInteractionResult handleUse(InteractorRef interactor, InteractionHand hand) {
+        return handleInteraction(interactor, EntityInteractionAction.USE, hand);
+    }
+
+    public final EntityInteractionResult handleAttack(InteractorRef interactor) {
+        return handleInteraction(interactor, EntityInteractionAction.ATTACK, Optional.empty());
+    }
+
+    /**
+     * Runs before the application handler. Platform behavior integrations override this to observe and consume safely.
+     */
+    protected EntityInteractionResult observeInteraction(EntityInteractionContext context) {
+        return EntityInteractionResult.PASS;
+    }
+
+    public final void clearInteractionDebounce(UUID interactorId) {
+        requireMutable();
+        lastUseDeliveryByInteractor.remove(Objects.requireNonNull(interactorId, "interactorId"));
+    }
+
+    protected final void clearInteractionDebounce() {
+        lastUseDeliveryByInteractor.clear();
     }
 
     protected long interactionNowNanos() {
         return System.nanoTime();
+    }
+
+    /**
+     * Platforms with a native server tick counter may override this for exact dual-hand deduplication.
+     */
+    protected long interactionTick() {
+        return Math.floorDiv(interactionNowNanos(), NANOS_PER_TICK);
     }
 
     @Override
@@ -247,6 +310,7 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
         }
         assertOwnerThread();
         doDespawn();
+        clearInteractionDebounce();
         spawned = false;
     }
 
@@ -267,4 +331,7 @@ public abstract class AbstractManagedEntity implements ManagedEntity {
     protected abstract void doInvulnerable(boolean invulnerable);
 
     protected abstract void doDespawn();
+
+    private record UseDelivery(long tick, EntityInteractionResult result) {
+    }
 }

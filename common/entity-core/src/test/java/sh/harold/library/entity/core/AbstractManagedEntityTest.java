@@ -4,10 +4,13 @@ import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import org.junit.jupiter.api.Test;
 import sh.harold.library.entity.CommonEntityFlags;
+import sh.harold.library.entity.EntityInteractionAction;
+import sh.harold.library.entity.EntityInteractionHandler;
+import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypes;
-import sh.harold.library.entity.InteractionKind;
+import sh.harold.library.entity.InteractionHand;
 import sh.harold.library.entity.InteractorRef;
 
 import java.util.ArrayList;
@@ -44,8 +47,10 @@ class AbstractManagedEntityTest {
 
         assertFalse(entity.spawned());
         assertThrows(IllegalStateException.class, () -> entity.glowing(true));
-        assertThrows(IllegalStateException.class, () -> entity.interactionHandler(context -> {
-        }));
+        assertThrows(IllegalStateException.class, () -> entity.interactionHandler(
+                EntityInteractionHandler.observing(context -> {
+                }, EntityInteractionResult.PASS)
+        ));
     }
 
     @Test
@@ -53,28 +58,36 @@ class AbstractManagedEntityTest {
         TestManagedEntity entity = new TestManagedEntity();
         List<String> calls = new ArrayList<>();
 
-        entity.interactionHandler(context -> calls.add("first"));
-        entity.interactionHandler(context -> calls.add("second"));
-        entity.handleInteraction(new InteractorRef(UUID.randomUUID()), InteractionKind.PRIMARY);
+        entity.interactionHandler(EntityInteractionHandler.observing(context -> calls.add("first"), EntityInteractionResult.PASS));
+        entity.interactionHandler(EntityInteractionHandler.observing(context -> calls.add("second"), EntityInteractionResult.PASS));
+        entity.handleUse(new InteractorRef(UUID.randomUUID()), InteractionHand.MAIN_HAND);
 
         assertEquals(List.of("second"), calls);
     }
 
     @Test
-    void repeatedInteractionsFromSameInteractorAreDebouncedForFiveTicks() {
+    void sameTickDualHandUseIsDeduplicatedWithoutSuppressingAttack() {
         TestManagedEntity entity = new TestManagedEntity();
-        List<InteractionKind> calls = new ArrayList<>();
+        List<EntityInteractionAction> calls = new ArrayList<>();
         InteractorRef interactor = new InteractorRef(UUID.randomUUID());
 
-        entity.interactionHandler(context -> calls.add(context.kind()));
+        entity.interactionHandler(EntityInteractionHandler.observing(
+                context -> calls.add(context.action()),
+                EntityInteractionResult.CONSUME
+        ));
         entity.interactionNowNanos(1_000L);
-        entity.handleInteraction(interactor, InteractionKind.PRIMARY);
-        entity.interactionNowNanos(1_000L + 249_000_000L);
-        entity.handleInteraction(interactor, InteractionKind.ATTACK);
-        entity.interactionNowNanos(1_000L + 250_000_000L);
-        entity.handleInteraction(interactor, InteractionKind.SECONDARY);
+        assertEquals(EntityInteractionResult.CONSUME, entity.handleUse(interactor, InteractionHand.MAIN_HAND));
+        entity.interactionNowNanos(2_000L);
+        assertEquals(EntityInteractionResult.CONSUME, entity.handleUse(interactor, InteractionHand.OFF_HAND));
+        assertEquals(EntityInteractionResult.CONSUME, entity.handleAttack(interactor));
+        entity.interactionNowNanos(50_001_000L);
+        entity.handleUse(interactor, InteractionHand.OFF_HAND);
 
-        assertEquals(List.of(InteractionKind.PRIMARY, InteractionKind.SECONDARY), calls);
+        assertEquals(List.of(
+                EntityInteractionAction.USE,
+                EntityInteractionAction.ATTACK,
+                EntityInteractionAction.USE
+        ), calls);
     }
 
     @Test
@@ -84,11 +97,14 @@ class AbstractManagedEntityTest {
         InteractorRef first = new InteractorRef(UUID.randomUUID());
         InteractorRef second = new InteractorRef(UUID.randomUUID());
 
-        entity.interactionHandler(context -> calls.add(context.interactor().uniqueId()));
+        entity.interactionHandler(EntityInteractionHandler.observing(
+                context -> calls.add(context.interactor().uniqueId()),
+                EntityInteractionResult.PASS
+        ));
         entity.interactionNowNanos(5_000L);
-        entity.handleInteraction(first, InteractionKind.PRIMARY);
+        entity.handleUse(first, InteractionHand.MAIN_HAND);
         entity.interactionNowNanos(6_000L);
-        entity.handleInteraction(second, InteractionKind.PRIMARY);
+        entity.handleUse(second, InteractionHand.MAIN_HAND);
 
         assertEquals(List.of(first.uniqueId(), second.uniqueId()), calls);
     }

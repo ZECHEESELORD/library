@@ -20,7 +20,8 @@ import org.bukkit.plugin.Plugin;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypes;
-import sh.harold.library.entity.InteractionKind;
+import sh.harold.library.entity.EntityInteractionResult;
+import sh.harold.library.entity.InteractionHand;
 import sh.harold.library.entity.InteractorRef;
 import sh.harold.library.entity.ManagedEntity;
 import sh.harold.library.entity.SkinTexture;
@@ -83,10 +84,18 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
         AtomicReference<HouseServiceEntity> reference = new AtomicReference<>(serviceEntity);
         if (serviceSpec.clickHandler().isPresent() || serviceSpec.entitySpec().interactionHandler().isPresent()) {
             anchor.interactionHandler(context -> {
-                serviceSpec.entitySpec().interactionHandler().ifPresent(handler -> handler.onInteract(context));
+                EntityInteractionResult result = serviceSpec.entitySpec().interactionHandler()
+                        .map(handler -> handler.onInteract(context))
+                        .orElse(EntityInteractionResult.PASS);
                 serviceSpec.clickHandler().ifPresent(handler -> handler.onClick(
-                        new HouseServiceClickContext(reference.get(), context.interactor(), context.kind())
+                        new HouseServiceClickContext(
+                                reference.get(),
+                                context.interactor(),
+                                context.action(),
+                                context.hand()
+                        )
                 ));
+                return serviceSpec.clickHandler().isPresent() ? EntityInteractionResult.CONSUME : result;
             });
         }
         return serviceEntity;
@@ -110,7 +119,13 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
     public void onRightClick(NPCRightClickEvent event) {
         CitizensManagedEntity entity = entities.get(event.getNPC().getUniqueId());
         if (entity != null) {
-            entity.handleInteraction(new InteractorRef(event.getClicker().getUniqueId()), InteractionKind.SECONDARY);
+            EntityInteractionResult result = entity.handleUse(
+                    new InteractorRef(event.getClicker().getUniqueId()),
+                    InteractionHand.MAIN_HAND
+            );
+            if (result == EntityInteractionResult.CONSUME) {
+                event.setCancelled(true);
+            }
         }
     }
 
@@ -118,7 +133,12 @@ public final class PaperCitizensEntityPlatform implements Listener, AutoCloseabl
     public void onLeftClick(NPCLeftClickEvent event) {
         CitizensManagedEntity entity = entities.get(event.getNPC().getUniqueId());
         if (entity != null) {
-            entity.handleInteraction(new InteractorRef(event.getClicker().getUniqueId()), InteractionKind.ATTACK);
+            EntityInteractionResult result = entity.handleAttack(
+                    new InteractorRef(event.getClicker().getUniqueId())
+            );
+            if (result == EntityInteractionResult.CONSUME) {
+                event.setCancelled(true);
+            }
         }
     }
 

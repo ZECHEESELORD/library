@@ -34,11 +34,13 @@ import net.minestom.server.item.Material;
 import net.minestom.server.network.player.ResolvableProfile;
 import net.minestom.server.thread.AcquirableOwnershipException;
 import sh.harold.library.entity.BlockDescriptor;
+import sh.harold.library.entity.EntityInteractionAction;
+import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypeKey;
 import sh.harold.library.entity.EntityTypes;
-import sh.harold.library.entity.InteractionKind;
+import sh.harold.library.entity.InteractionHand;
 import sh.harold.library.entity.InteractorRef;
 import sh.harold.library.entity.ItemDescriptor;
 import sh.harold.library.entity.ManagedEntity;
@@ -69,6 +71,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -107,10 +110,13 @@ public final class MinestomEntityPlatform implements AutoCloseable {
         AtomicReference<HouseServiceEntity> reference = new AtomicReference<>(serviceEntity);
         if (serviceSpec.clickHandler().isPresent() || serviceSpec.entitySpec().interactionHandler().isPresent()) {
             anchor.interactionHandler(context -> {
-                serviceSpec.entitySpec().interactionHandler().ifPresent(handler -> handler.onInteract(context));
+                EntityInteractionResult result = serviceSpec.entitySpec().interactionHandler()
+                        .map(handler -> handler.onInteract(context))
+                        .orElse(EntityInteractionResult.PASS);
                 serviceSpec.clickHandler().ifPresent(handler -> handler.onClick(
-                        new HouseServiceClickContext(reference.get(), context.interactor(), context.kind())
+                        new HouseServiceClickContext(reference.get(), context.interactor(), context.action(), context.hand())
                 ));
+                return serviceSpec.clickHandler().isPresent() ? EntityInteractionResult.CONSUME : result;
             });
         }
         return serviceEntity;
@@ -132,15 +138,25 @@ public final class MinestomEntityPlatform implements AutoCloseable {
     private void onInteract(PlayerEntityInteractEvent event) {
         MinestomManagedEntity entity = entities.get(event.getTarget().getUuid());
         if (entity != null) {
-            InteractionKind kind = event.getHand() == PlayerHand.MAIN ? InteractionKind.PRIMARY : InteractionKind.SECONDARY;
-            entity.handleInteraction(new InteractorRef(event.getPlayer().getUuid()), kind);
+            InteractionHand hand = event.getHand() == PlayerHand.MAIN
+                    ? InteractionHand.MAIN_HAND
+                    : InteractionHand.OFF_HAND;
+            entity.handleInteraction(
+                    new InteractorRef(event.getPlayer().getUuid()),
+                    EntityInteractionAction.USE,
+                    Optional.of(hand)
+            );
         }
     }
 
     private void onAttack(EntityAttackEvent event) {
         MinestomManagedEntity entity = entities.get(event.getTarget().getUuid());
         if (entity != null && event.getEntity() instanceof net.minestom.server.entity.Player player) {
-            entity.handleInteraction(new InteractorRef(player.getUuid()), InteractionKind.ATTACK);
+            entity.handleInteraction(
+                    new InteractorRef(player.getUuid()),
+                    EntityInteractionAction.ATTACK,
+                    Optional.empty()
+            );
         }
     }
 

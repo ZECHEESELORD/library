@@ -29,12 +29,14 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import sh.harold.library.entity.BlockDescriptor;
+import sh.harold.library.entity.EntityInteractionAction;
+import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypeKey;
 import sh.harold.library.entity.EntityTypes;
 import sh.harold.library.entity.EquipmentSlot;
-import sh.harold.library.entity.InteractionKind;
+import sh.harold.library.entity.InteractionHand;
 import sh.harold.library.entity.InteractorRef;
 import sh.harold.library.entity.ItemDescriptor;
 import sh.harold.library.entity.ManagedEntity;
@@ -66,6 +68,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -103,13 +106,20 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
         StandardHouseServiceEntity serviceEntity = new StandardHouseServiceEntity(anchor, presentation, renderer);
 
         AtomicReference<HouseServiceEntity> reference = new AtomicReference<>(serviceEntity);
-        serviceSpec.entitySpec().interactionHandler().ifPresent(anchor::interactionHandler);
         if (serviceSpec.clickHandler().isPresent() || serviceSpec.entitySpec().interactionHandler().isPresent()) {
             anchor.interactionHandler(context -> {
-                serviceSpec.entitySpec().interactionHandler().ifPresent(handler -> handler.onInteract(context));
+                EntityInteractionResult result = serviceSpec.entitySpec().interactionHandler()
+                        .map(handler -> handler.onInteract(context))
+                        .orElse(EntityInteractionResult.PASS);
                 serviceSpec.clickHandler().ifPresent(handler -> handler.onClick(
-                        new HouseServiceClickContext(reference.get(), context.interactor(), context.kind())
+                        new HouseServiceClickContext(
+                                reference.get(),
+                                context.interactor(),
+                                context.action(),
+                                context.hand()
+                        )
                 ));
+                return serviceSpec.clickHandler().isPresent() ? EntityInteractionResult.CONSUME : result;
             });
         }
         return serviceEntity;
@@ -133,7 +143,17 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
     public void onInteract(PlayerInteractEntityEvent event) {
         PaperManagedEntity entity = entities.get(event.getRightClicked().getUniqueId());
         if (entity != null) {
-            entity.handleInteraction(new InteractorRef(event.getPlayer().getUniqueId()), InteractionKind.SECONDARY);
+            InteractionHand hand = event.getHand() == org.bukkit.inventory.EquipmentSlot.HAND
+                    ? InteractionHand.MAIN_HAND
+                    : InteractionHand.OFF_HAND;
+            EntityInteractionResult result = entity.handleInteraction(
+                    new InteractorRef(event.getPlayer().getUniqueId()),
+                    EntityInteractionAction.USE,
+                    Optional.of(hand)
+            );
+            if (result == EntityInteractionResult.CONSUME) {
+                event.setCancelled(true);
+            }
         }
     }
 
@@ -141,7 +161,14 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
     public void onDamage(EntityDamageByEntityEvent event) {
         PaperManagedEntity entity = entities.get(event.getEntity().getUniqueId());
         if (entity != null && event.getDamager() instanceof Player player) {
-            entity.handleInteraction(new InteractorRef(player.getUniqueId()), InteractionKind.ATTACK);
+            EntityInteractionResult result = entity.handleInteraction(
+                    new InteractorRef(player.getUniqueId()),
+                    EntityInteractionAction.ATTACK,
+                    Optional.empty()
+            );
+            if (result == EntityInteractionResult.CONSUME) {
+                event.setCancelled(true);
+            }
         }
     }
 

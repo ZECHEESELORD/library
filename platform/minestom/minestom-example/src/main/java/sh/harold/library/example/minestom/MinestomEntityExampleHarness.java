@@ -6,10 +6,11 @@ import net.minestom.server.coordinate.Pos;
 import net.minestom.server.entity.Player;
 import net.minestom.server.instance.InstanceContainer;
 import sh.harold.library.entity.CommonEntityFlags;
+import sh.harold.library.entity.EntityInteractionHandler;
+import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypes;
-import sh.harold.library.entity.InteractionKind;
 import sh.harold.library.entity.InteractorRef;
 import sh.harold.library.entity.ManagedEntity;
 import sh.harold.library.entity.house.HouseServiceEntity;
@@ -70,17 +71,17 @@ final class MinestomEntityExampleHarness implements AutoCloseable {
                         .customName(Component.text("Entity Example Villager"))
                         .customNameVisible(true)
                         .build())
-                .interactionHandler(context -> {
-                    log("Native villager interaction: " + context.kind() + " by " + context.interactor().uniqueId());
+                .interactionHandler(EntityInteractionHandler.observing(context -> {
+                    log("Native villager interaction: " + context.action() + " by " + context.interactor().uniqueId());
                     withInteractor(context.interactor(), player -> {
                         sounds.play(player, SoundCueKeys.INTERACTION_NPC);
                         feedback.info(
                                 player,
                                 "Interacted with the native villager using {kind}.",
-                                Message.slot("kind", interactionLabel(context.kind()))
+                                Message.slot("kind", context.action().name().toLowerCase(java.util.Locale.ROOT))
                         );
                     });
-                })
+                }, EntityInteractionResult.PASS))
                 .build());
 
         temporaryStand = platform.spawn(instance, EntitySpec.builder(EntityTypes.ARMOR_STAND)
@@ -158,14 +159,6 @@ final class MinestomEntityExampleHarness implements AutoCloseable {
         if (entity != null) {
             entity.despawn();
         }
-    }
-
-    private static String interactionLabel(InteractionKind kind) {
-        return switch (kind) {
-            case PRIMARY -> "primary click";
-            case SECONDARY -> "secondary click";
-            case ATTACK -> "attack";
-        };
     }
 
     private static EntityTransform transform(double x, double y, double z, float yaw, float pitch) {

@@ -6,6 +6,8 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.library.entity.CommonEntityFlags;
+import sh.harold.library.entity.EntityInteractionHandler;
+import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypes;
@@ -34,7 +36,11 @@ public final class PaperEntityExamplePlugin extends JavaPlugin {
         nativeVillager = nativePlatform.spawn(world, EntitySpec.builder(EntityTypes.VILLAGER)
                 .transform(new EntityTransform(spawn.getX() + 2.0, spawn.getY(), spawn.getZ(), spawn.getYaw(), spawn.getPitch()))
                 .flags(CommonEntityFlags.builder().customName(Component.text("Entity Example Villager")).customNameVisible(true).build())
-                .interactionHandler(context -> getLogger().info("Native villager interaction: " + context.kind() + " by " + context.interactor().uniqueId()))
+                .interactionHandler(EntityInteractionHandler.observing(
+                        context -> getLogger().info("Native villager interaction: " + context.action()
+                                + " by " + context.interactor().uniqueId()),
+                        EntityInteractionResult.PASS
+                ))
                 .build());
 
         temporaryStand = nativePlatform.spawn(world, EntitySpec.builder(EntityTypes.ARMOR_STAND)

@@ -2,11 +2,14 @@ package sh.harold.library.entity.core;
 
 import net.kyori.adventure.text.Component;
 import org.junit.jupiter.api.Test;
+import sh.harold.library.entity.EntityInteractionAction;
 import sh.harold.library.entity.EntityInteractionContext;
+import sh.harold.library.entity.EntityInteractionHandler;
+import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypes;
-import sh.harold.library.entity.InteractionKind;
+import sh.harold.library.entity.InteractionHand;
 import sh.harold.library.entity.InteractorRef;
 
 import java.util.UUID;
@@ -38,30 +41,34 @@ class ManagedEntityContractTest {
         AtomicInteger calls = new AtomicInteger();
         InteractorRef interactor = new InteractorRef(UUID.randomUUID());
 
-        entity.interactionHandler(context -> {
+        entity.interactionHandler(EntityInteractionHandler.observing(context -> {
             seen.set(context);
             calls.incrementAndGet();
-        });
-        entity.handleInteraction(interactor, InteractionKind.SECONDARY);
+        }, EntityInteractionResult.CONSUME));
+        assertEquals(EntityInteractionResult.CONSUME, entity.handleUse(interactor, InteractionHand.OFF_HAND));
         entity.clearInteractionHandler();
-        entity.handleInteraction(interactor, InteractionKind.ATTACK);
+        assertEquals(EntityInteractionResult.PASS, entity.handleAttack(interactor));
 
         assertEquals(1, calls.get());
-        assertEquals(InteractionKind.SECONDARY, seen.get().kind());
+        assertEquals(EntityInteractionAction.USE, seen.get().action());
+        assertEquals(InteractionHand.OFF_HAND, seen.get().hand().orElseThrow());
         assertEquals(interactor, seen.get().interactor());
     }
 
     @Test
-    void interactionDebounceDoesNotBlockAfterWindowExpires() {
+    void useDeduplicationDoesNotBlockNextTick() {
         ContractEntity entity = new ContractEntity();
         AtomicInteger calls = new AtomicInteger();
         InteractorRef interactor = new InteractorRef(UUID.randomUUID());
 
-        entity.interactionHandler(context -> calls.incrementAndGet());
+        entity.interactionHandler(EntityInteractionHandler.observing(
+                context -> calls.incrementAndGet(),
+                EntityInteractionResult.PASS
+        ));
         entity.interactionNowNanos(100L);
-        entity.handleInteraction(interactor, InteractionKind.SECONDARY);
-        entity.interactionNowNanos(100L + 250_000_000L);
-        entity.handleInteraction(interactor, InteractionKind.ATTACK);
+        entity.handleUse(interactor, InteractionHand.OFF_HAND);
+        entity.interactionNowNanos(50_000_100L);
+        entity.handleUse(interactor, InteractionHand.MAIN_HAND);
 
         assertEquals(2, calls.get());
     }
