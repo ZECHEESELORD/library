@@ -6,16 +6,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public record ReactiveMenuView(Component title, Map<Integer, MenuItem> placements, MenuStack cursor,
-                               Boolean fillWithBlackPane) {
+public record ReactiveMenuView(Component title, Map<Integer, MenuItem> placements, Boolean fillWithBlackPane) {
 
     public ReactiveMenuView {
         title = Objects.requireNonNull(title, "title");
         placements = copyPlacements(placements);
-    }
-
-    public ReactiveMenuView(Component title, Map<Integer, MenuItem> placements, Boolean fillWithBlackPane) {
-        this(title, placements, null, fillWithBlackPane);
     }
 
     public static Builder builder(String title) {
@@ -43,7 +38,6 @@ public record ReactiveMenuView(Component title, Map<Integer, MenuItem> placement
 
         private Component title;
         private final Map<Integer, MenuItem> placements = new LinkedHashMap<>();
-        private MenuStack cursor;
         private Boolean fillWithBlackPane;
 
         private Builder(Component title) {
@@ -73,13 +67,8 @@ public record ReactiveMenuView(Component title, Map<Integer, MenuItem> placement
             return this;
         }
 
-        public Builder cursor(MenuStack cursor) {
-            this.cursor = cursor;
-            return this;
-        }
-
         public ReactiveMenuView build() {
-            return new ReactiveMenuView(title, placements, cursor, fillWithBlackPane);
+            return new ReactiveMenuView(title, placements, fillWithBlackPane);
         }
     }
 }

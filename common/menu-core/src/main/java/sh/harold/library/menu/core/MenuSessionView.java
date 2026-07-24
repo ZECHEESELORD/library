@@ -3,14 +3,13 @@ package sh.harold.library.menu.core;
 import net.kyori.adventure.text.Component;
 import sh.harold.library.menu.MenuFrame;
 import sh.harold.library.menu.MenuSlot;
-import sh.harold.library.menu.MenuStack;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
 import java.util.Set;
 
-record MenuSessionView(Component title, List<MenuSlot> slots, MenuStack cursor, Set<Integer> reactiveClickTargets) {
+record MenuSessionView(Component title, List<MenuSlot> slots, Set<Integer> reactiveClickTargets) {
 
     MenuSessionView {
         title = Objects.requireNonNull(title, "title");
@@ -19,15 +18,7 @@ record MenuSessionView(Component title, List<MenuSlot> slots, MenuStack cursor, 
     }
 
     MenuSessionView(Component title, List<MenuSlot> slots) {
-        this(title, slots, null, Set.of());
-    }
-
-    MenuSessionView(Component title, List<MenuSlot> slots, MenuStack cursor) {
-        this(title, slots, cursor, Set.of());
-    }
-
-    MenuSessionView(Component title, List<MenuSlot> slots, Set<Integer> reactiveClickTargets) {
-        this(title, slots, null, reactiveClickTargets);
+        this(title, slots, Set.of());
     }
 
     MenuFrame frame() {

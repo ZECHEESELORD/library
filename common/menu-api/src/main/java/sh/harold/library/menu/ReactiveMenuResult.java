@@ -1,29 +1,18 @@
 package sh.harold.library.menu;
 
 import java.util.Objects;
-import java.util.List;
 import java.util.Optional;
 
 public final class ReactiveMenuResult<S> {
 
     private final S state;
-    private final List<ReactiveMenuEffect> effects;
+    private final ReactiveMenuEffect effect;
     private final boolean stateChanged;
 
-    private ReactiveMenuResult(S state, Object effectOrEffects, boolean stateChanged) {
+    private ReactiveMenuResult(S state, ReactiveMenuEffect effect, boolean stateChanged) {
         this.state = state;
-        this.effects = normalizeEffects(effectOrEffects);
+        this.effect = effect;
         this.stateChanged = stateChanged;
-    }
-
-    private static List<ReactiveMenuEffect> normalizeEffects(Object effectOrEffects) {
-        if (effectOrEffects == null) {
-            return List.of();
-        }
-        if (effectOrEffects instanceof List<?> list) {
-            return list.stream().map(ReactiveMenuEffect.class::cast).toList();
-        }
-        return List.of(ReactiveMenuEffect.class.cast(effectOrEffects));
     }
 
     public S state() {
@@ -31,11 +20,7 @@ public final class ReactiveMenuResult<S> {
     }
 
     public Optional<ReactiveMenuEffect> effect() {
-        return effects.stream().findFirst();
-    }
-
-    public List<ReactiveMenuEffect> effects() {
-        return effects;
+        return Optional.ofNullable(effect);
     }
 
     public boolean stateChanged() {
@@ -56,13 +41,5 @@ public final class ReactiveMenuResult<S> {
 
     public static <S> ReactiveMenuResult<S> update(S state, ReactiveMenuEffect effect) {
         return new ReactiveMenuResult<>(state, Objects.requireNonNull(effect, "effect"), true);
-    }
-
-    public static <S> ReactiveMenuResult<S> stay(S state) {
-        return new ReactiveMenuResult<>(state, List.of(), true);
-    }
-
-    public static <S> ReactiveMenuResult<S> of(S state, ReactiveMenuEffect... effects) {
-        return new ReactiveMenuResult<>(state, List.of(effects), true);
     }
 }

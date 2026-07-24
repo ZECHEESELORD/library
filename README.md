@@ -75,7 +75,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | `message` | Adventure text with click and hover actions plus pagination | Paper, Minestom, Velocity, Fabric |
 | `sound` | Sound playback API | Paper, Minestom, Fabric |
 | `scoreboard` | Sidebar scoreboards built from sections, with viewer overrides and temporary sections | Paper, Minestom |
-| `menu` | Inventory menus with list and canvas builders, actions, and accent families | Paper, Minestom, Fabric |
+| `menu` | Compiled and reactive list, tabs, and canvas menus with adapter-owned whole-stack custody | Paper, Minestom, Fabric |
 | `ui-values` | A small text value with an optional color, shared across the UI modules | common |
 
 ### Entities
@@ -87,6 +87,9 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 
 > [!NOTE]
 > Paper has an optional `entity-paper-citizens` bridge for NPCs backed by Citizens. Velocity has no scoreboard adapter because a proxy cannot render a Minecraft sidebar.
+
+> [!NOTE]
+> `menu-paper` uses viewer- and region-aware scheduling and is compatible with Folia during normal operation. A consuming plugin must still declare `folia-supported: true` in its own plugin descriptor; this does not imply Folia support for unrelated Paper adapters. Folia hot-disable or reload with active menu sessions is unsupported because owner-thread work can no longer be scheduled after disable; disable only after those sessions are gone. Reactive runtimes skip native rendering after an unchanged reducer result. Keep high-frequency reactive titles stable: Paper and Fabric must rebuild and reopen the native inventory when a title changes.
 
 ### Observability
 

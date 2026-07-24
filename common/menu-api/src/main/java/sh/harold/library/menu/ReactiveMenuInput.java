@@ -1,17 +1,12 @@
 package sh.harold.library.menu;
 
-import java.util.List;
 import java.util.Objects;
 
-public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, ReactiveMenuInput.Closed,
-        ReactiveMenuInput.CustodyCommitted, ReactiveMenuInput.CustodyRejected, ReactiveMenuInput.Drag,
-        ReactiveMenuInput.DropCursor, ReactiveMenuInput.InventoryClick, ReactiveMenuInput.Opened,
+public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click,
+        ReactiveMenuInput.CustodyCommitted, ReactiveMenuInput.CustodyRejected, ReactiveMenuInput.Opened,
         ReactiveMenuInput.TextPromptCancelled, ReactiveMenuInput.TextPromptSubmitted, ReactiveMenuInput.Tick {
 
     record Opened() implements ReactiveMenuInput {
-    }
-
-    record Closed() implements ReactiveMenuInput {
     }
 
     record CustodyCommitted(long operationId, MenuCustodyGesture gesture, MenuCustodySnapshot snapshot)
@@ -71,59 +66,13 @@ public sealed interface ReactiveMenuInput permits ReactiveMenuInput.Click, React
         }
     }
 
-    record Click(int slot, MenuClick button, boolean shift, Object message, MenuStack cursor, MenuStack slotItem)
-            implements ReactiveMenuInput {
+    record Click(int slot, MenuClick button, boolean shift, Object message) implements ReactiveMenuInput {
 
         public Click {
             Objects.requireNonNull(button, "button");
             if (slot < 0 || slot > 53) {
                 throw new IllegalArgumentException("slot must be between 0 and 53");
             }
-        }
-
-        public Click(int slot, MenuClick button, boolean shift, Object message) {
-            this(slot, button, shift, message, null, null);
-        }
-    }
-
-    record InventoryClick(int slot, MenuClick button, boolean shift, MenuStack item) implements ReactiveMenuInput {
-
-        public InventoryClick {
-            Objects.requireNonNull(button);
-            if (slot < 0) {
-                throw new IllegalArgumentException();
-            }
-        }
-    }
-
-    record Drag(MenuClick button, List<Integer> slots, MenuStack cursor) implements ReactiveMenuInput {
-
-        public Drag {
-            button = Objects.requireNonNull(button);
-            slots = List.copyOf(slots);
-            if (slots.isEmpty()) {
-                throw new IllegalArgumentException();
-            }
-            for (Integer slot : slots) {
-                if (slot == null || slot < 0 || slot > 53) {
-                    throw new IllegalArgumentException();
-                }
-            }
-        }
-
-        public Drag(MenuClick button, List<Integer> slots) {
-            this(button, slots, null);
-        }
-    }
-
-    record DropCursor(MenuClick button, MenuStack cursor) implements ReactiveMenuInput {
-
-        public DropCursor {
-            button = Objects.requireNonNull(button);
-        }
-
-        public DropCursor(MenuClick button) {
-            this(button, null);
         }
     }
 }

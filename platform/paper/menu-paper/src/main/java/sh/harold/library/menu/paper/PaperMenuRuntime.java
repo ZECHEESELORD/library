@@ -2029,7 +2029,6 @@ final class PaperMenuRuntime implements AutoCloseable {
                     replaceCurrent(session, replace.menu());
                     return true;
                 }
-                case ReactiveMenuEffect.SetViewerInventorySlot ignored -> throw new IllegalStateException();
                 case ReactiveMenuEffect.Close ignored -> {
                     close(session);
                     return true;

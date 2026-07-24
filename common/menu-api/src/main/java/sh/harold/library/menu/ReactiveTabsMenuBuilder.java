@@ -4,8 +4,6 @@ import java.util.function.Supplier;
 
 public interface ReactiveTabsMenuBuilder<S> {
 
-    <T> ReactiveTabsMenuBuilder<T> state(T state);
-
     <T> ReactiveTabsMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory);
 
     ReactiveTabsMenuBuilder<S> utility(UtilitySlot slot, MenuItem item);

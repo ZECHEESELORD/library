@@ -481,12 +481,6 @@ public final class StandardMenuService implements MenuService {
         private ReactiveMenuCustodyPolicy<?> custodyPolicy;
 
         @Override
-        public <T> ReactiveCanvasMenuBuilder<T> state(T state) {
-            this.stateFactory = () -> state;
-            return (ReactiveCanvasMenuBuilder<T>) this;
-        }
-
-        @Override
         @SuppressWarnings("unchecked")
         public <T> ReactiveCanvasMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory) {
             this.stateFactory = Objects.requireNonNull(stateFactory, "stateFactory");
@@ -615,12 +609,6 @@ public final class StandardMenuService implements MenuService {
         private ReactiveMenuReducer<?> reducer;
 
         @Override
-        public <T> ReactiveListMenuBuilder<T> state(T state) {
-            this.stateFactory = () -> state;
-            return (ReactiveListMenuBuilder<T>) this;
-        }
-
-        @Override
         @SuppressWarnings("unchecked")
         public <T> ReactiveListMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory) {
             this.stateFactory = Objects.requireNonNull(stateFactory, "stateFactory");
@@ -680,12 +668,6 @@ public final class StandardMenuService implements MenuService {
         private Supplier<?> stateFactory = () -> null;
         private ReactiveTabsRenderer<?> renderer;
         private ReactiveMenuReducer<?> reducer;
-
-        @Override
-        public <T> ReactiveTabsMenuBuilder<T> state(T state) {
-            this.stateFactory = () -> state;
-            return (ReactiveTabsMenuBuilder<T>) this;
-        }
 
         @Override
         @SuppressWarnings("unchecked")

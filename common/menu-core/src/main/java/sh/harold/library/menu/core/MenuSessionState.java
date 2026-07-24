@@ -16,7 +16,6 @@ import sh.harold.library.menu.MenuCustodyGesture;
 import sh.harold.library.menu.MenuCustodySnapshot;
 import sh.harold.library.menu.MenuSlot;
 import sh.harold.library.menu.MenuSlotAction;
-import sh.harold.library.menu.MenuStack;
 import sh.harold.library.menu.ReactiveMenu;
 import sh.harold.library.menu.ReactiveMenuEffect;
 import sh.harold.library.menu.ReactiveMenuInput;
@@ -100,10 +99,6 @@ public final class MenuSessionState {
 
     public boolean acceptsReactiveClick(int slot) {
         return currentView().acceptsReactiveClick(slot);
-    }
-
-    public MenuStack cursor() {
-        return currentView().cursor();
     }
 
     public Map<String, Integer> custodyTargets() {
@@ -214,10 +209,6 @@ public final class MenuSessionState {
         return MenuTrace.time("state.opened", () -> dispatchLifecycle(new ReactiveMenuInput.Opened()));
     }
 
-    public void closed() {
-        dispatchLifecycle(new ReactiveMenuInput.Closed());
-    }
-
     public List<ReactiveMenuEffect> tick() {
         if (!(current instanceof ReactiveEntry reactive)) {
             return List.of();
@@ -261,7 +252,7 @@ public final class MenuSessionState {
                 reactive,
                 nextEntry,
                 nextView,
-                result.effects(),
+                result.effect().stream().toList(),
                 result.stateChanged());
     }
 
@@ -338,7 +329,7 @@ public final class MenuSessionState {
         }
         List<MenuSlot> slots = new ArrayList<>(view.slots());
         slots.set(backSlot, backButton(backSlot, previousTitle));
-        return new MenuSessionView(view.title(), slots, view.cursor(), view.reactiveClickTargets());
+        return new MenuSessionView(view.title(), slots, view.reactiveClickTargets());
     }
 
     private static MenuSlot backButton(int slot, Component previousMenuTitle) {

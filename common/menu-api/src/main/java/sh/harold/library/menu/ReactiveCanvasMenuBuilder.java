@@ -5,9 +5,6 @@ import java.util.function.Supplier;
 public interface ReactiveCanvasMenuBuilder<S> extends ReactiveMenuBuilder<S> {
 
     @Override
-    <T> ReactiveCanvasMenuBuilder<T> state(T state);
-
-    @Override
     <T> ReactiveCanvasMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory);
 
     @Override

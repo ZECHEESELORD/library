@@ -4,8 +4,6 @@ import java.util.function.Supplier;
 
 public interface ReactiveMenuBuilder<S> {
 
-    <T> ReactiveMenuBuilder<T> state(T state);
-
     <T> ReactiveMenuBuilder<T> stateFactory(Supplier<? extends T> stateFactory);
 
     ReactiveMenuBuilder<S> rows(int rows);

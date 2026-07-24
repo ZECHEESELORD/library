@@ -125,7 +125,7 @@ final class StandardReactiveMenu<S> implements ReactiveMenuDefinition {
                 () -> renderFilledBase ? filledBaseSlots : emptyBaseSlots);
         int size = baseSlots.size();
         if (rendered.placements().isEmpty()) {
-            return new MenuSessionView(rendered.title(), baseSlots, rendered.cursor());
+            return new MenuSessionView(rendered.title(), baseSlots);
         }
         List<MenuSlot> slots = new ArrayList<>(baseSlots);
         Set<Integer> reactiveClickTargets = new HashSet<>();
@@ -137,7 +137,7 @@ final class StandardReactiveMenu<S> implements ReactiveMenuDefinition {
             slots.set(slot, cache.compile(slot, entry.getValue()));
             reactiveClickTargets.add(slot);
         }
-        return new MenuSessionView(rendered.title(), List.copyOf(slots), rendered.cursor(), reactiveClickTargets);
+        return new MenuSessionView(rendered.title(), List.copyOf(slots), reactiveClickTargets);
     }
 
     private static List<MenuSlot> buildBaseSlots(int rows, Map<UtilitySlot, MenuItem> utilities, boolean fillWithBlackPane) {
