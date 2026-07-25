@@ -58,6 +58,7 @@ val projectPaths = listOf(
     ":common:menu-core",
     ":common:entity-api",
     ":common:entity-core",
+    ":common:npc-behavior-api",
     ":common:house-service-entity",
     ":platform:paper:message-paper",
     ":platform:paper:message-paper-1_21_11",

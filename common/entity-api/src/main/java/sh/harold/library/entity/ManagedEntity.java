@@ -4,6 +4,7 @@ import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -58,6 +59,13 @@ public interface ManagedEntity extends AutoCloseable {
     Optional<EntityInteractionHandler> interactionHandler();
 
     <T> Optional<T> capability(Class<T> capabilityType);
+
+    default <T> T requireCapability(Class<T> capabilityType) {
+        Objects.requireNonNull(capabilityType, "capabilityType");
+        return capability(capabilityType).orElseThrow(() -> new UnsupportedOperationException(
+                "Entity type " + type().key() + " does not support capability " + capabilityType.getName()
+        ));
+    }
 
     void despawn();
 
