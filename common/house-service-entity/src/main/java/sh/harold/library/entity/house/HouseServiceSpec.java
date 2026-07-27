@@ -2,6 +2,8 @@ package sh.harold.library.entity.house;
 
 import net.kyori.adventure.text.Component;
 import sh.harold.library.entity.EntitySpec;
+import sh.harold.library.entity.EntityTypes;
+import sh.harold.library.npc.behavior.NpcBehaviorProfile;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -13,19 +15,22 @@ public final class HouseServiceSpec {
     private final Component description;
     private final HouseVisibilityPolicy visibilityPolicy;
     private final HouseServiceClickHandler clickHandler;
+    private final NpcBehaviorProfile behaviorProfile;
 
     private HouseServiceSpec(
             EntitySpec entitySpec,
             Component name,
             Component description,
             HouseVisibilityPolicy visibilityPolicy,
-            HouseServiceClickHandler clickHandler
+            HouseServiceClickHandler clickHandler,
+            NpcBehaviorProfile behaviorProfile
     ) {
         this.entitySpec = Objects.requireNonNull(entitySpec, "entitySpec");
         this.name = name;
         this.description = description;
         this.visibilityPolicy = Objects.requireNonNull(visibilityPolicy, "visibilityPolicy");
         this.clickHandler = clickHandler;
+        this.behaviorProfile = behaviorProfile;
     }
 
     public EntitySpec entitySpec() {
@@ -48,6 +53,14 @@ public final class HouseServiceSpec {
         return Optional.ofNullable(clickHandler);
     }
 
+    /**
+     * Optional by design: omission preserves the historical motionless service
+     * NPC presentation.
+     */
+    public Optional<NpcBehaviorProfile> behaviorProfile() {
+        return Optional.ofNullable(behaviorProfile);
+    }
+
     public static Builder builder(EntitySpec entitySpec) {
         return new Builder(entitySpec);
     }
@@ -58,6 +71,7 @@ public final class HouseServiceSpec {
         private Component description;
         private HouseVisibilityPolicy visibilityPolicy = HouseVisibilityPolicy.ALWAYS;
         private HouseServiceClickHandler clickHandler;
+        private NpcBehaviorProfile behaviorProfile;
 
         private Builder(EntitySpec entitySpec) {
             this.entitySpec = Objects.requireNonNull(entitySpec, "entitySpec");
@@ -93,8 +107,25 @@ public final class HouseServiceSpec {
             return this;
         }
 
+        public Builder behaviorProfile(NpcBehaviorProfile behaviorProfile) {
+            this.behaviorProfile = Objects.requireNonNull(behaviorProfile, "behaviorProfile");
+            return this;
+        }
+
         public HouseServiceSpec build() {
-            return new HouseServiceSpec(entitySpec, name, description, visibilityPolicy, clickHandler);
+            if (behaviorProfile != null && !entitySpec.type().equals(EntityTypes.PLAYER_LIKE_HUMANOID)) {
+                throw new IllegalArgumentException(
+                        "behaviorProfile requires entity type " + EntityTypes.PLAYER_LIKE_HUMANOID.key()
+                );
+            }
+            return new HouseServiceSpec(
+                    entitySpec,
+                    name,
+                    description,
+                    visibilityPolicy,
+                    clickHandler,
+                    behaviorProfile
+            );
         }
     }
 }
