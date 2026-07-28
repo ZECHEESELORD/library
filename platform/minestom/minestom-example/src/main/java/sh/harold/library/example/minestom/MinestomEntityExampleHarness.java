@@ -6,11 +6,12 @@ import net.minestom.server.coordinate.Pos;
 import net.minestom.server.entity.Player;
 import net.minestom.server.instance.InstanceContainer;
 import sh.harold.library.entity.CommonEntityFlags;
-import sh.harold.library.entity.EntityInteractionHandler;
+import sh.harold.library.entity.EntityInteractionAction;
 import sh.harold.library.entity.EntityInteractionResult;
 import sh.harold.library.entity.EntitySpec;
 import sh.harold.library.entity.EntityTransform;
 import sh.harold.library.entity.EntityTypes;
+import sh.harold.library.entity.InteractionHand;
 import sh.harold.library.entity.InteractorRef;
 import sh.harold.library.entity.ManagedEntity;
 import sh.harold.library.entity.house.HouseServiceEntity;
@@ -71,17 +72,18 @@ final class MinestomEntityExampleHarness implements AutoCloseable {
                         .customName(Component.text("Entity Example Villager"))
                         .customNameVisible(true)
                         .build())
-                .interactionHandler(EntityInteractionHandler.observing(context -> {
+                .interactionHandler(context -> {
                     log("Native villager interaction: " + context.action() + " by " + context.interactor().uniqueId());
                     withInteractor(context.interactor(), player -> {
                         sounds.play(player, SoundCueKeys.INTERACTION_NPC);
                         feedback.info(
                                 player,
                                 "Interacted with the native villager using {kind}.",
-                                Message.slot("kind", context.action().name().toLowerCase(java.util.Locale.ROOT))
+                                Message.slot("kind", interactionLabel(context.action(), context.hand()))
                         );
                     });
-                }, EntityInteractionResult.PASS))
+                    return EntityInteractionResult.CONSUME;
+                })
                 .build());
 
         temporaryStand = platform.spawn(instance, EntitySpec.builder(EntityTypes.ARMOR_STAND)
@@ -159,6 +161,16 @@ final class MinestomEntityExampleHarness implements AutoCloseable {
         if (entity != null) {
             entity.despawn();
         }
+    }
+
+    private static String interactionLabel(
+            EntityInteractionAction action,
+            java.util.Optional<InteractionHand> hand
+    ) {
+        if (action == EntityInteractionAction.ATTACK) {
+            return "attack";
+        }
+        return hand.orElseThrow() == InteractionHand.MAIN_HAND ? "main-hand use" : "off-hand use";
     }
 
     private static EntityTransform transform(double x, double y, double z, float yaw, float pitch) {
