@@ -65,7 +65,6 @@ val paperLatestProjectPaths = listOf(
     ":platform:paper:menu-paper",
     ":platform:paper:paper-example",
     ":platform:paper:entity-paper",
-    ":platform:paper:entity-paper-citizens",
     ":platform:paper:paper-entity-example",
 )
 val paperLegacy12111ProjectPaths = listOf(

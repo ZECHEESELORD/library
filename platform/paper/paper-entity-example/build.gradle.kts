@@ -1,8 +1,8 @@
 dependencies {
     implementation(project(":common:house-service-entity"))
     implementation(project(":platform:paper:entity-paper"))
-    implementation(project(":platform:paper:entity-paper-citizens"))
     compileOnly("io.papermc.paper:paper-api:${rootProject.property("paperApiVersion")}")
+    compileOnly("com.github.retrooper:packetevents-spigot:${rootProject.property("packetEventsVersion")}")
 }
 
 tasks.processResources {

@@ -2,3 +2,10 @@ name: paper-entity-example
 version: '${version}'
 main: sh.harold.library.example.paper.entity.PaperEntityExamplePlugin
 api-version: '26.1.2'
+folia-supported: true
+dependencies:
+  server:
+    packetevents:
+      load: BEFORE
+      required: true
+      join-classpath: true

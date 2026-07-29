@@ -80,7 +80,6 @@ val projectPaths = listOf(
     ":platform:paper:menu-paper-1_21_11",
     ":platform:paper:paper-example",
     ":platform:paper:entity-paper",
-    ":platform:paper:entity-paper-citizens",
     ":platform:paper:paper-entity-example",
     ":platform:paper:scoreboard-paper-1_21_11",
     ":platform:minestom:message-minestom",
@@ -139,7 +138,8 @@ dependencyResolutionManagement {
         mavenCentral()
         maven("https://maven.fabricmc.net/")
         maven("https://repo.papermc.io/repository/maven-public/")
-        maven("https://maven.citizensnpcs.co/repo")
+        maven("https://repo.codemc.io/repository/maven-releases/")
+        maven("https://repo.codemc.io/repository/maven-snapshots/")
         maven("https://repo.minebench.de")
     }
 }
