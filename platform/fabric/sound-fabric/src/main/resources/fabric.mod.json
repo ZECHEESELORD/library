@@ -6,8 +6,8 @@
   "description": "Fabric server-side sound adapters for the shared creative library.",
   "environment": "*",
   "depends": {
-    "fabricloader": ">=0.19.1",
-    "minecraft": "~26.1.2",
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
     "fabric-api": "*"
   }
 }
