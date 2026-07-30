@@ -1,39 +1,42 @@
 package sh.harold.library.menu.core;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import sh.harold.library.menu.AccentFamily;
 import sh.harold.library.menu.MenuBlock;
+import sh.harold.library.menu.MenuChecklistEntry;
 import sh.harold.library.menu.MenuClick;
+import sh.harold.library.menu.MenuIcon;
 import sh.harold.library.menu.MenuInteraction;
 import sh.harold.library.menu.MenuItem;
 import sh.harold.library.menu.MenuOptionLine;
-import sh.harold.library.menu.MenuIcon;
+import sh.harold.library.menu.MenuProgress;
+import sh.harold.library.menu.MenuProgressPalette;
+import sh.harold.library.menu.MenuSection;
 import sh.harold.library.menu.MenuSlot;
 import sh.harold.library.menu.MenuTooltipBehavior;
-import sh.harold.library.ui.value.UiValue;
 
 import java.awt.Color;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 public final class HouseMenuCompiler {
 
-    private static final WrapProfile DEFAULT_WRAP_PROFILE = new WrapProfile(20, 30);
-    private static final WrapProfile BULLET_WRAP_PROFILE = new WrapProfile(30, 50);
+    static final int LORE_WIDTH_PIXELS = 240;
+
     private static final int WRAP_CACHE_LIMIT = 1_024;
-    private static final int PROGRESS_BAR_WIDTH = 20;
-    private static final Map<WrapCacheKey, List<String>> WRAP_CACHE =
+    private static final int PROGRESS_BAR_WIDTH = 25;
+    private static final Map<WrapCacheKey, List<Component>> WRAP_CACHE =
             new LinkedHashMap<>(WRAP_CACHE_LIMIT, 0.75f, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<WrapCacheKey, List<String>> eldest) {
+                protected boolean removeEldestEntry(Map.Entry<WrapCacheKey, List<Component>> eldest) {
                     return size() > WRAP_CACHE_LIMIT;
                 }
             };
@@ -54,30 +57,34 @@ public final class HouseMenuCompiler {
             int slot,
             MenuIcon icon,
             Component name,
-            String secondary,
-            List<MenuBlock> blocks,
+            Component secondary,
+            List<MenuSection> sections,
+            List<Component> statusLines,
             boolean glow,
             Map<MenuClick, MenuInteraction> interactions,
             boolean promptSuppressed,
             int amount
     ) {
-        CompiledMenuPresentation presentation = compilePresentation(icon, name, secondary, blocks, glow,
-                interactions, promptSuppressed, amount);
+        CompiledMenuPresentation presentation = compilePresentation(icon, name, secondary, sections, statusLines,
+                glow, interactions, promptSuppressed, amount);
         return presentation.toMenuSlot(slot, interactions);
     }
 
     static CompiledMenuPresentation compilePresentation(MenuItem item) {
         List<Component> lore = new ArrayList<>();
         List<Component> exactLoreLines = item.exactLore().orElse(null);
-        boolean exactLore = exactLoreLines != null;
         int replaceableLoreLineCount = 0;
-        if (exactLore) {
-            lore.addAll(exactLoreLines);
+        if (exactLoreLines != null) {
+            appendGroup(lore, exactLoreLines);
             replaceableLoreLineCount = exactLoreLines.size();
         }
-        appendSecondary(item.secondary().orElse(null), lore);
-        appendBlocks(item.blocks(), lore, item.secondary().isPresent(), exactLore && item.secondary().isEmpty());
-        appendPrompt(item.interactions(), item.promptSuppressed(), lore, exactLore);
+
+        item.secondary().ifPresent(secondary ->
+                appendGroup(lore, wrap(fallback(secondary, MUTED_NEUTRAL), Component.empty(), Component.empty())));
+        appendSections(item.sections(), lore);
+        appendStatus(item.statusLines(), lore);
+        appendPrompt(item.interactions(), item.promptSuppressed(), lore);
+
         int effectiveReplaceableLoreLineCount = item.tooltipBehavior() == MenuTooltipBehavior.LITERAL
                 ? replaceableLoreLineCount
                 : 0;
@@ -88,17 +95,21 @@ public final class HouseMenuCompiler {
     static CompiledMenuPresentation compilePresentation(
             MenuIcon icon,
             Component name,
-            String secondary,
-            List<MenuBlock> blocks,
+            Component secondary,
+            List<MenuSection> sections,
+            List<Component> statusLines,
             boolean glow,
             Map<MenuClick, MenuInteraction> interactions,
             boolean promptSuppressed,
             int amount
     ) {
         List<Component> lore = new ArrayList<>();
-        appendSecondary(secondary, lore);
-        appendBlocks(blocks, lore, secondary != null, false);
-        appendPrompt(interactions, promptSuppressed, lore, false);
+        if (secondary != null) {
+            appendGroup(lore, wrap(fallback(secondary, MUTED_NEUTRAL), Component.empty(), Component.empty()));
+        }
+        appendSections(sections, lore);
+        appendStatus(statusLines, lore);
+        appendPrompt(interactions, promptSuppressed, lore);
         return new CompiledMenuPresentation(icon, name, lore, glow, amount, MenuTooltipBehavior.CHROME, 0);
     }
 
@@ -106,229 +117,176 @@ public final class HouseMenuCompiler {
         return (rows - 1) * 9;
     }
 
-    private static void appendSecondary(String secondary, List<Component> lore) {
-        if (secondary == null) {
-            return;
+    private static void appendSections(List<MenuSection> sections, List<Component> lore) {
+        for (MenuSection section : sections) {
+            List<Component> lines = new ArrayList<>();
+            for (MenuBlock block : section.blocks()) {
+                lines.addAll(renderBlock(block));
+            }
+            appendGroup(lore, lines);
         }
-        wrapText(secondary, 0, 0).forEach(line -> lore.add(text(line, MUTED_NEUTRAL)));
     }
 
-    private static void appendBlocks(List<MenuBlock> blocks, List<Component> lore, boolean hasSecondary, boolean forceInitialSpacer) {
-        boolean renderedBlock = false;
-        for (MenuBlock block : blocks) {
-            List<Component> blockLines = renderBlock(block);
-            if (blockLines.isEmpty()) {
-                continue;
-            }
-            boolean needsSpacer = renderedBlock
-                    || forceInitialSpacer
-                    || (hasSecondary && !renderedBlock)
-                    || (!hasSecondary && lore.isEmpty() && block instanceof MenuBlock.Description);
-            if (needsSpacer) {
-                lore.add(Component.empty());
-            }
-            lore.addAll(blockLines);
-            renderedBlock = true;
+    private static void appendStatus(List<Component> statusLines, List<Component> lore) {
+        if (statusLines.isEmpty()) {
+            return;
         }
+        List<Component> rendered = new ArrayList<>();
+        for (Component line : statusLines) {
+            rendered.addAll(wrap(fallback(line, BODY_NEUTRAL), Component.empty(), Component.empty()));
+        }
+        appendGroup(lore, rendered);
     }
 
     private static void appendPrompt(
             Map<MenuClick, MenuInteraction> interactions,
             boolean promptSuppressed,
-            List<Component> lore,
-            boolean separateFromPreservedPresentation
+            List<Component> lore
     ) {
         if (interactions.isEmpty() || promptSuppressed) {
             return;
         }
         List<Component> promptLines = new ArrayList<>();
-        MenuInteraction left = interactions.get(MenuClick.LEFT);
-        if (left != null) {
-            promptLines.add(promptLine("CLICK", left.promptLabel(), NamedTextColor.YELLOW));
+        appendPrompt(promptLines, interactions.get(MenuClick.LEFT), "CLICK");
+        appendPrompt(promptLines, interactions.get(MenuClick.SHIFT_LEFT), "SHIFT CLICK");
+        appendPrompt(promptLines, interactions.get(MenuClick.RIGHT), "RIGHT CLICK");
+        appendPrompt(promptLines, interactions.get(MenuClick.SHIFT_RIGHT), "SHIFT RIGHT CLICK");
+        appendGroup(lore, promptLines);
+    }
+
+    private static void appendPrompt(List<Component> lines, MenuInteraction interaction, String clickLabel) {
+        if (interaction != null) {
+            lines.add(promptLine(clickLabel, interaction.promptLabel()));
         }
-        MenuInteraction shiftLeft = interactions.get(MenuClick.SHIFT_LEFT);
-        if (shiftLeft != null) {
-            promptLines.add(promptLine("SHIFT CLICK", shiftLeft.promptLabel(), NamedTextColor.YELLOW));
+    }
+
+    private static void appendGroup(List<Component> lore, List<Component> lines) {
+        if (lines.isEmpty()) {
+            return;
         }
-        MenuInteraction right = interactions.get(MenuClick.RIGHT);
-        if (right != null) {
-            promptLines.add(promptLine("RIGHT CLICK", right.promptLabel(), NamedTextColor.AQUA));
+        if (!lore.isEmpty() && !isBlank(lore.getLast())) {
+            lore.add(Component.empty());
         }
-        MenuInteraction shiftRight = interactions.get(MenuClick.SHIFT_RIGHT);
-        if (shiftRight != null) {
-            promptLines.add(promptLine("SHIFT RIGHT CLICK", shiftRight.promptLabel(), NamedTextColor.AQUA));
-        }
-        if (!promptLines.isEmpty()) {
-            if (!lore.isEmpty() || separateFromPreservedPresentation) {
-                lore.add(Component.empty());
-            }
-            lore.addAll(promptLines);
-        }
+        lore.addAll(lines);
+    }
+
+    private static boolean isBlank(Component component) {
+        return ComponentText.flatten(component).isEmpty();
     }
 
     private static List<Component> renderBlock(MenuBlock block) {
         return switch (block) {
-            case MenuBlock.Description description -> wrapText(description.text(), 0, 0).stream()
-                    .map(line -> text(line, BODY_NEUTRAL))
-                    .toList();
-            case MenuBlock.Lines lines -> renderLines(lines.lines(), lines.wrapMode());
-            case MenuBlock.MutedLines lines -> renderMutedLines(lines.lines());
+            case MenuBlock.Description description ->
+                    wrap(fallback(description.content(), BODY_NEUTRAL), Component.empty(), Component.empty());
+            case MenuBlock.Lines lines -> literalLines(lines.lines(), BODY_NEUTRAL);
+            case MenuBlock.MutedLines lines -> literalLines(lines.lines(), MUTED_NEUTRAL);
             case MenuBlock.Options options -> renderOptions(options.options(), options.windowSize());
-            case MenuBlock.ValueLines valueLines -> renderValueLines(valueLines.lines(), valueLines.wrapMode());
-            case MenuBlock.Pairs pairs -> renderPairs(pairs.pairs(), pairs.wrapMode());
+            case MenuBlock.ValueLines valueLines -> renderValueLines(valueLines.lines());
+            case MenuBlock.Pairs pairs -> renderPairs(pairs.pairs());
             case MenuBlock.Bullets bullets -> renderBullets(bullets.bullets());
-            case MenuBlock.Progress progress -> renderProgress(progress);
+            case MenuBlock.Checklist checklist -> renderChecklist(checklist.entries());
+            case MenuBlock.Progress progress -> renderProgress(progress.progress());
         };
     }
 
-    private static List<Component> renderLines(List<String> lines, MenuBlock.WrapMode wrapMode) {
-        List<Component> rendered = new ArrayList<>();
-        boolean canWrap = wrapMode == MenuBlock.WrapMode.SOFT && lines.size() == 1;
-        for (String line : lines) {
-            List<String> wrapped = canWrap ? softWrap(line, 0, 0) : List.of(line);
-            for (String wrappedLine : wrapped) {
-                rendered.add(text(wrappedLine, BODY_NEUTRAL));
-            }
-        }
-        return rendered;
-    }
-
-    private static List<Component> renderMutedLines(List<String> lines) {
-        List<Component> rendered = new ArrayList<>();
-        for (String line : lines) {
-            wrapText(line, 0, 0).forEach(wrappedLine -> rendered.add(text(wrappedLine, MUTED_NEUTRAL)));
-        }
-        return rendered;
+    private static List<Component> literalLines(List<Component> lines, TextColor defaultColor) {
+        return lines.stream().map(line -> fallback(line, defaultColor)).toList();
     }
 
     private static List<Component> renderOptions(List<MenuOptionLine> options, int windowSize) {
         List<MenuOptionLine> visible = visibleOptions(options, windowSize);
-        List<Component> rendered = new ArrayList<>(visible.size());
+        List<Component> rendered = new ArrayList<>();
         for (MenuOptionLine option : visible) {
             TextColor lineColor = option.selected() ? option.color() : muted(option.color());
-            String prefix = option.selected() ? "→ " : "   ";
-            Component prefixComponent = text(prefix, lineColor, option.selected());
-            Component labelComponent = text(option.label(), lineColor);
-            rendered.add(Component.text()
-                    .append(prefixComponent)
-                    .append(labelComponent)
-                    .decoration(TextDecoration.ITALIC, false)
-                    .build());
+            Component prefix = text(option.selected() ? "→ " : "   ", lineColor, option.selected(), false);
+            Component indent = indentFor(prefix, lineColor);
+            rendered.addAll(wrap(fallback(option.label(), lineColor), prefix, indent));
         }
         return rendered;
     }
 
-    private static List<Component> renderValueLines(List<MenuBlock.ValueLines.Entry> lines, MenuBlock.WrapMode wrapMode) {
+    private static List<Component> renderValueLines(List<MenuBlock.ValueLines.Entry> lines) {
         List<Component> rendered = new ArrayList<>();
-        boolean canWrap = wrapMode == MenuBlock.WrapMode.SOFT && lines.size() == 1;
         for (MenuBlock.ValueLines.Entry line : lines) {
-            if (canWrap) {
-                List<String> wrapped = softWrap(line.value().text(), line.prefix().length(), line.prefix().length());
-                String indent = " ".repeat(line.prefix().length());
-                for (int i = 0; i < wrapped.size(); i++) {
-                    if (i == 0) {
-                        rendered.add(prefixedValueLine(line.prefix(), wrapped.get(i), line.value(), BODY_NEUTRAL));
-                    } else {
-                        rendered.add(valueText(indent + wrapped.get(i), line.value(), BODY_NEUTRAL));
-                    }
-                }
-            } else {
-                rendered.add(prefixedValueLine(line.prefix(), line.value().text(), line.value(), BODY_NEUTRAL));
-            }
+            Component prefix = fallback(line.prefix(), BODY_NEUTRAL);
+            rendered.addAll(wrap(fallback(line.value(), BODY_NEUTRAL), prefix, indentFor(prefix, BODY_NEUTRAL)));
         }
         return rendered;
     }
 
-    private static List<Component> renderPairs(List<MenuBlock.Pairs.Entry> pairs, MenuBlock.WrapMode wrapMode) {
+    private static List<Component> renderPairs(List<MenuBlock.Pairs.Entry> pairs) {
         List<Component> rendered = new ArrayList<>();
-        boolean canWrap = wrapMode == MenuBlock.WrapMode.SOFT && pairs.size() == 1;
         for (MenuBlock.Pairs.Entry pair : pairs) {
-            String prefix = pair.key() + ": ";
-            if (canWrap) {
-                List<String> wrapped = softWrap(pair.value().text(), prefix.length(), prefix.length());
-                String indent = " ".repeat(prefix.length());
-                for (int i = 0; i < wrapped.size(); i++) {
-                    if (i == 0) {
-                        rendered.add(pairLine(pair.key(), wrapped.get(i), pair.value()));
-                    } else {
-                        rendered.add(valueText(indent + wrapped.get(i), pair.value(), STRONG_NEUTRAL));
-                    }
-                }
-            } else {
-                rendered.add(pairLine(pair.key(), pair.value().text(), pair.value()));
-            }
+            Component prefix = Component.text()
+                    .append(fallback(pair.key(), BODY_NEUTRAL))
+                    .append(text(": ", BODY_NEUTRAL))
+                    .decoration(TextDecoration.ITALIC, false)
+                    .build();
+            rendered.addAll(wrap(fallback(pair.value(), STRONG_NEUTRAL), prefix,
+                    indentFor(prefix, BODY_NEUTRAL)));
         }
         return rendered;
     }
 
-    private static List<Component> renderBullets(List<String> bullets) {
+    private static List<Component> renderBullets(List<Component> bullets) {
         List<Component> rendered = new ArrayList<>();
-        for (String bullet : bullets) {
-            List<String> wrapped = wrapText(bullet, 2, 2, BULLET_WRAP_PROFILE);
-            for (int i = 0; i < wrapped.size(); i++) {
-                if (i == 0) {
-                    rendered.add(Component.text()
-                            .append(text("• ", BODY_NEUTRAL))
-                            .append(text(wrapped.get(i), BODY_NEUTRAL))
-                            .decoration(TextDecoration.ITALIC, false)
-                            .build());
-                } else {
-                    rendered.add(text("  " + wrapped.get(i), BODY_NEUTRAL));
-                }
-            }
+        Component prefix = text("• ", BODY_NEUTRAL);
+        Component indent = indentFor(prefix, BODY_NEUTRAL);
+        for (Component bullet : bullets) {
+            rendered.addAll(wrap(fallback(bullet, BODY_NEUTRAL), prefix, indent));
         }
         return rendered;
     }
 
-    private static List<Component> renderProgress(MenuBlock.Progress progress) {
-        BigDecimal ratio = progress.current().divide(progress.max(), 6, RoundingMode.HALF_UP)
-                .max(BigDecimal.ZERO)
-                .min(BigDecimal.ONE);
+    private static List<Component> renderChecklist(List<MenuChecklistEntry> entries) {
+        List<Component> rendered = new ArrayList<>();
+        for (MenuChecklistEntry entry : entries) {
+            TextColor markerColor = entry.complete() ? NamedTextColor.GREEN : NamedTextColor.RED;
+            Component prefix = text(entry.complete() ? " ✔ " : " ✖ ", markerColor);
+            rendered.addAll(wrap(fallback(entry.label(), BODY_NEUTRAL), prefix,
+                    indentFor(prefix, BODY_NEUTRAL)));
+        }
+        return rendered;
+    }
+
+    private static List<Component> renderProgress(MenuProgress progress) {
+        BigDecimal ratio = progress.current().divide(progress.max(), 10, RoundingMode.HALF_UP);
         int filled = ratio.multiply(BigDecimal.valueOf(PROGRESS_BAR_WIDTH))
-                .setScale(0, RoundingMode.HALF_UP)
-                .intValueExact();
-        int empty = Math.max(0, PROGRESS_BAR_WIDTH - filled);
-        AccentFamily accent = progress.accentFamily();
-        String filledBar = "-".repeat(Math.max(0, filled));
-        String emptyBar = "-".repeat(empty);
-        Component firstLine = Component.text()
-                .append(text(progress.label() + ": ", BODY_NEUTRAL))
-                .append(text(HouseNumberFormatter.formatPercent(ratio) + "%", accent.light()))
+                .setScale(0, RoundingMode.CEILING)
+                .intValue();
+        filled = Math.max(0, Math.min(PROGRESS_BAR_WIDTH, filled));
+        int empty = PROGRESS_BAR_WIDTH - filled;
+
+        MenuProgressPalette palette = progress.palette();
+        Component prefix = Component.text()
+                .append(fallback(progress.label(), BODY_NEUTRAL))
+                .append(text(": ", BODY_NEUTRAL))
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
-        Component secondLine = Component.text()
-                .append(text(filledBar, accent.light(), false, true))
-                .append(text(emptyBar, BODY_NEUTRAL, false, true))
+        Component percent = text(HouseNumberFormatter.formatPercent(ratio) + "%", palette.percent());
+        List<Component> labelLines = wrap(percent, prefix, indentFor(prefix, BODY_NEUTRAL));
+
+        Component barLine = Component.text()
+                .append(text(" ".repeat(filled), palette.filled(), true, true))
+                .append(text(" ".repeat(empty), NamedTextColor.WHITE, true, true))
                 .append(Component.space())
-                .append(text(HouseNumberFormatter.format(progress.current()), accent.light()))
-                .append(text("/", accent.dark()))
-                .append(text(HouseNumberFormatter.format(progress.max()), accent.light()))
+                .append(text(HouseNumberFormatter.format(progress.current()), palette.value()))
+                .append(text("/", palette.separator()))
+                .append(text(HouseNumberFormatter.format(progress.max()), palette.value()))
+                .append(progress.unit() == null ? Component.empty() : text(" " + progress.unit(), BODY_NEUTRAL))
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
-        return List.of(firstLine, secondLine);
+
+        List<Component> rendered = new ArrayList<>(labelLines.size() + 1);
+        rendered.addAll(labelLines);
+        rendered.add(barLine);
+        return rendered;
     }
 
-    private static Component pairLine(String key, String value, UiValue styledValue) {
-        return prefixedValueLine(key + ": ", value, styledValue, STRONG_NEUTRAL);
-    }
-
-    private static Component prefixedValueLine(String prefix, String value, UiValue styledValue, TextColor defaultValueColor) {
+    private static Component promptLine(String clickLabel, String promptLabel) {
         return Component.text()
-                .append(text(prefix, BODY_NEUTRAL))
-                .append(valueText(value, styledValue, defaultValueColor))
-                .decoration(TextDecoration.ITALIC, false)
-                .build();
-    }
-
-    private static Component valueText(String text, UiValue value, TextColor defaultColor) {
-        TextColor color = value.colorOverride() == null ? defaultColor : value.colorOverride();
-        return text(text, color);
-    }
-
-    private static Component promptLine(String clickLabel, String promptLabel, NamedTextColor color) {
-        return Component.text()
-                .append(text(clickLabel, color, true))
-                .append(text(" to " + emphaticPromptLabel(promptLabel), color))
+                .append(text(clickLabel, NamedTextColor.YELLOW, true, false))
+                .append(text(" to " + emphaticPromptLabel(promptLabel), NamedTextColor.YELLOW))
                 .decoration(TextDecoration.ITALIC, false)
                 .build();
     }
@@ -337,16 +295,25 @@ public final class HouseMenuCompiler {
         return promptLabel.endsWith("!") ? promptLabel : promptLabel + "!";
     }
 
-    private static Component text(String text, TextColor color) {
-        return text(text, color, false);
+    private static Component fallback(Component component, TextColor color) {
+        return Component.text()
+                .color(color)
+                .decoration(TextDecoration.ITALIC, false)
+                .append(component)
+                .build();
     }
 
-    private static Component text(String text, TextColor color, boolean bold) {
-        return text(text, color, bold, false);
+    private static Component indentFor(Component prefix, TextColor color) {
+        int spaces = Math.max(0, Math.round((MinecraftFontMetrics.width(prefix) + 1) / 5.0f));
+        return text(" ".repeat(spaces), color);
     }
 
-    private static Component text(String text, TextColor color, boolean bold, boolean strikethrough) {
-        return Component.text(text, color)
+    private static Component text(String content, TextColor color) {
+        return text(content, color, false, false);
+    }
+
+    private static Component text(String content, TextColor color, boolean bold, boolean strikethrough) {
+        return Component.text(content, color)
                 .decoration(TextDecoration.BOLD, bold)
                 .decoration(TextDecoration.STRIKETHROUGH, strikethrough)
                 .decoration(TextDecoration.ITALIC, false);
@@ -380,162 +347,182 @@ public final class HouseMenuCompiler {
         return TextColor.color(Color.HSBtoRGB(hsb[0], saturation, brightness) & 0xFFFFFF);
     }
 
-    private static List<String> softWrap(String text, int firstIndentChars, int continuationIndentChars) {
-        return wrapText(text, firstIndentChars, continuationIndentChars, DEFAULT_WRAP_PROFILE);
-    }
+    private static List<Component> wrap(Component source, Component firstPrefix, Component continuationPrefix) {
+        NormalizedText normalized = normalize(source);
+        if (normalized.words().isEmpty()) {
+            return List.of();
+        }
 
-    private static List<String> wrapText(String text, int firstIndentChars, int continuationIndentChars) {
-        return wrapText(text, firstIndentChars, continuationIndentChars, DEFAULT_WRAP_PROFILE);
-    }
-
-    private static List<String> wrapText(String text, int firstIndentChars, int continuationIndentChars, WrapProfile profile) {
-        String normalized = normalize(text);
-        WrapCacheKey cacheKey = new WrapCacheKey(normalized, firstIndentChars, continuationIndentChars, profile);
+        WrapCacheKey key = new WrapCacheKey(
+                normalized.resolved(),
+                resolve(firstPrefix),
+                resolve(continuationPrefix),
+                LORE_WIDTH_PIXELS);
         synchronized (WRAP_CACHE) {
-            List<String> cached = WRAP_CACHE.get(cacheKey);
+            List<Component> cached = WRAP_CACHE.get(key);
             if (cached != null) {
                 return cached;
             }
         }
-        List<String> wrapped = computeWrappedText(normalized, firstIndentChars, continuationIndentChars, profile);
+
+        List<Component> wrapped = greedyWrap(normalized.words(), firstPrefix, continuationPrefix);
         synchronized (WRAP_CACHE) {
-            List<String> cached = WRAP_CACHE.get(cacheKey);
-            if (cached != null) {
-                return cached;
+            List<Component> existing = WRAP_CACHE.get(key);
+            if (existing != null) {
+                return existing;
             }
-            WRAP_CACHE.put(cacheKey, wrapped);
+            WRAP_CACHE.put(key, wrapped);
         }
         return wrapped;
     }
 
-    private static List<String> computeWrappedText(String normalized, int firstIndentChars, int continuationIndentChars, WrapProfile profile) {
-        if (normalized.length() + firstIndentChars <= profile.hardWrapLimit()) {
-            return List.of(normalized);
-        }
-        String[] words = normalized.split(" ");
-        WrappedLayout best = bestLayout(words, 0, firstIndentChars, continuationIndentChars, false, profile, new HashMap<>());
-        return best == null || best.lines().isEmpty() ? List.of(normalized) : best.lines();
-    }
-
-    private static String normalize(String text) {
-        return text.trim().replaceAll("\\s+", " ");
-    }
-
-    private static WrappedLayout bestLayout(
-            String[] words,
-            int start,
-            int firstIndentChars,
-            int continuationIndentChars,
-            boolean continuation,
-            WrapProfile profile,
-            Map<WrapState, WrappedLayout> memo
+    private static List<Component> greedyWrap(
+            List<StyledWord> words,
+            Component firstPrefix,
+            Component continuationPrefix
     ) {
-        WrapState state = new WrapState(start, continuation);
-        WrappedLayout cached = memo.get(state);
-        if (cached != null) {
-            return cached;
-        }
-        int indentChars = continuation ? continuationIndentChars : firstIndentChars;
-        WrappedLayout best = null;
-        for (int end : candidateEnds(words, start, indentChars, profile)) {
-            String line = joinWords(words, start, end);
-            int visibleLength = indentChars + line.length();
-            WrappedLayout suffix;
-            if (end == words.length - 1) {
-                suffix = WrappedLayout.empty();
-            } else {
-                suffix = bestLayout(words, end + 1, firstIndentChars, continuationIndentChars, true, profile, memo);
+        List<Component> lines = new ArrayList<>();
+        List<StyledWord> current = new ArrayList<>();
+        Component prefix = firstPrefix;
+
+        for (StyledWord word : words) {
+            List<StyledWord> candidate = new ArrayList<>(current);
+            candidate.add(word);
+            Component candidateLine = line(prefix, candidate);
+            if (!current.isEmpty() && MinecraftFontMetrics.width(candidateLine) > LORE_WIDTH_PIXELS) {
+                lines.add(line(prefix, current));
+                current = new ArrayList<>();
+                prefix = continuationPrefix;
             }
-            WrappedLayout candidate = suffix.prepend(line, end, visibleLength, profile.softWrapStart());
-            if (best == null || compareLayouts(candidate, best) < 0) {
-                best = candidate;
-            }
+            current.add(word);
         }
-        memo.put(state, best);
-        return best;
+        if (!current.isEmpty()) {
+            lines.add(line(prefix, current));
+        }
+        return List.copyOf(lines);
     }
 
-    private static List<Integer> candidateEnds(String[] words, int start, int indentChars, WrapProfile profile) {
-        List<Integer> ends = new ArrayList<>();
-        int budget = Math.max(1, profile.hardWrapLimit() - indentChars);
-        int currentLength = 0;
-        for (int end = start; end < words.length; end++) {
-            int spacer = end == start ? 0 : 1;
-            int candidateLength = currentLength + spacer + words[end].length();
-            if (candidateLength > budget) {
-                if (end == start) {
-                    ends.add(end);
+    private static Component line(Component prefix, List<StyledWord> words) {
+        TextComponent.Builder builder = Component.text().decoration(TextDecoration.ITALIC, false);
+        if (!isBlank(prefix)) {
+            builder.append(prefix);
+        }
+        for (int index = 0; index < words.size(); index++) {
+            if (index > 0) {
+                builder.append(Component.space());
+            }
+            builder.append(words.get(index).component());
+        }
+        return builder.build();
+    }
+
+    private static NormalizedText normalize(Component source) {
+        List<StyledRun> runs = new ArrayList<>();
+        flatten(source, Style.empty(), runs);
+
+        List<StyledWord> words = new ArrayList<>();
+        List<StyledRun> current = new ArrayList<>();
+        for (StyledRun run : runs) {
+            StringBuilder segment = new StringBuilder();
+            int[] codePoints = run.text().codePoints().toArray();
+            for (int codePoint : codePoints) {
+                if (Character.isWhitespace(codePoint)) {
+                    flushSegment(current, segment, run.style());
+                    flushWord(words, current);
+                } else {
+                    segment.appendCodePoint(codePoint);
                 }
-                break;
             }
-            currentLength = candidateLength;
-            ends.add(end);
+            flushSegment(current, segment, run.style());
         }
-        return ends;
-    }
+        flushWord(words, current);
 
-    private static String joinWords(String[] words, int start, int end) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = start; i <= end; i++) {
-            if (i > start) {
-                builder.append(' ');
+        TextComponent.Builder resolved = Component.text();
+        for (int index = 0; index < words.size(); index++) {
+            if (index > 0) {
+                resolved.append(Component.space());
             }
-            builder.append(words[i]);
+            resolved.append(words.get(index).component());
         }
-        return builder.toString();
+        return new NormalizedText(List.copyOf(words), resolved.build());
     }
 
-    private static int compareLayouts(WrappedLayout left, WrappedLayout right) {
-        int lineCountComparison = Integer.compare(left.lineCount(), right.lineCount());
-        if (lineCountComparison != 0) {
-            return lineCountComparison;
+    private static Component resolve(Component source) {
+        List<StyledRun> runs = new ArrayList<>();
+        flatten(source, Style.empty(), runs);
+        TextComponent.Builder builder = Component.text();
+        for (StyledRun run : runs) {
+            builder.append(Component.text(run.text(), run.style()));
         }
-        int scoreComparison = Long.compare(left.sumSquares(), right.sumSquares());
-        if (scoreComparison != 0) {
-            return scoreComparison;
+        return builder.build();
+    }
+
+    private static void flatten(Component component, Style inherited, List<StyledRun> runs) {
+        Style resolved = inherited.merge(component.style(), Style.Merge.Strategy.ALWAYS);
+        if (component instanceof TextComponent text && !text.content().isEmpty()) {
+            appendRun(runs, text.content(), resolved);
         }
-        int softTargetComparison = Long.compare(left.softTargetScore(), right.softTargetScore());
-        if (softTargetComparison != 0) {
-            return softTargetComparison;
+        for (Component child : component.children()) {
+            flatten(child, resolved, runs);
         }
-        for (int i = 0; i < left.breaks().size(); i++) {
-            int breakComparison = Integer.compare(right.breaks().get(i), left.breaks().get(i));
-            if (breakComparison != 0) {
-                return breakComparison;
+    }
+
+    private static void appendRun(List<StyledRun> runs, String content, Style style) {
+        if (content.isEmpty()) {
+            return;
+        }
+        if (!runs.isEmpty() && runs.getLast().style().equals(style)) {
+            StyledRun previous = runs.removeLast();
+            runs.add(new StyledRun(previous.text() + content, style));
+        } else {
+            runs.add(new StyledRun(content, style));
+        }
+    }
+
+    private static void flushSegment(List<StyledRun> word, StringBuilder segment, Style style) {
+        if (segment.isEmpty()) {
+            return;
+        }
+        String content = segment.toString();
+        segment.setLength(0);
+        if (!word.isEmpty() && word.getLast().style().equals(style)) {
+            StyledRun previous = word.removeLast();
+            word.add(new StyledRun(previous.text() + content, style));
+        } else {
+            word.add(new StyledRun(content, style));
+        }
+    }
+
+    private static void flushWord(List<StyledWord> words, List<StyledRun> current) {
+        if (current.isEmpty()) {
+            return;
+        }
+        words.add(new StyledWord(List.copyOf(current)));
+        current.clear();
+    }
+
+    private record StyledRun(String text, Style style) {
+    }
+
+    private record StyledWord(List<StyledRun> runs) {
+
+        private Component component() {
+            TextComponent.Builder builder = Component.text();
+            for (StyledRun run : runs) {
+                builder.append(Component.text(run.text(), run.style()));
             }
+            return builder.build();
         }
-        return 0;
     }
 
-    private record WrapProfile(int softWrapStart, int hardWrapLimit) {
+    private record NormalizedText(List<StyledWord> words, Component resolved) {
     }
 
-    private record WrapCacheKey(String text, int firstIndentChars, int continuationIndentChars, WrapProfile profile) {
-    }
-
-    private record WrapState(int start, boolean continuation) {
-    }
-
-    private record WrappedLayout(List<String> lines, List<Integer> breaks, int lineCount, long sumSquares, long softTargetScore) {
-
-        private static WrappedLayout empty() {
-            return new WrappedLayout(List.of(), List.of(), 0, 0L, 0L);
-        }
-
-        private WrappedLayout prepend(String line, int end, int visibleLength, int softWrapStart) {
-            List<String> nextLines = new ArrayList<>(lines.size() + 1);
-            nextLines.add(line);
-            nextLines.addAll(lines);
-
-            List<Integer> nextBreaks = new ArrayList<>(breaks.size() + 1);
-            nextBreaks.add(end);
-            nextBreaks.addAll(breaks);
-
-            long overflow = Math.max(0, visibleLength - softWrapStart);
-            long nextSumSquares = sumSquares + (long) visibleLength * visibleLength;
-            long nextSoftTargetScore = softTargetScore + overflow * overflow;
-            return new WrappedLayout(List.copyOf(nextLines), List.copyOf(nextBreaks),
-                    lineCount + 1, nextSumSquares, nextSoftTargetScore);
-        }
+    private record WrapCacheKey(
+            Component resolvedSource,
+            Component resolvedFirstPrefix,
+            Component resolvedContinuationPrefix,
+            int width
+    ) {
     }
 }

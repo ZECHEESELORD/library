@@ -120,7 +120,7 @@ class StandardMenuServiceTest {
         assertEquals("Dark Oak", titleAt(frame, 4));
         assertEquals("Stone", titleAt(frame, 6));
         assertEquals("Cobblestone", titleAt(frame, 7));
-        assertEquals(List.of("", "Oak", "", "CLICK to view!"), loreAt(frame, 1));
+        assertEquals(List.of("CLICK to view!"), loreAt(frame, 1));
         assertEquals("minecraft:black_stained_glass_pane", iconAt(frame, 5));
 
         assertEquals("minecraft:lime_stained_glass_pane", iconAt(frame, 10));
@@ -157,8 +157,7 @@ class StandardMenuServiceTest {
         List<String> lore = loreAt(frame, slot);
 
         assertEquals(NamedTextColor.LIGHT_PURPLE, frame.slots().get(slot).title().color());
-        assertEquals("", lore.getFirst());
-        assertTrue(lore.get(1).startsWith("Upgrade your account"));
+        assertTrue(lore.getFirst().startsWith("Upgrade your account"));
         assertTrue(lore.contains("Profile: Nothing Going On..."));
         assertTrue(lore.contains("Account: Bazaar Flipper II"));
         assertEquals("CLICK to view!", lore.getLast());
@@ -953,7 +952,7 @@ class StandardMenuServiceTest {
                 .pairs("Cost", "2,750 Gems", "You have")
                 .build());
 
-        assertEquals("rawPairs must contain an even number of entries", exception.getMessage());
+        assertEquals("rawPairs must contain a non-empty even number of entries", exception.getMessage());
     }
 
     private static MenuTab listTab(String id, String name, int count) {

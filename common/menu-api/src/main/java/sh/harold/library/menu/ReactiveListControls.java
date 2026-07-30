@@ -161,7 +161,7 @@ public final class ReactiveListControls {
         MenuButton.Builder builder = MenuButton.builder(MenuIcon.vanilla(iconKey))
                 .name(Component.text(title, net.kyori.adventure.text.format.TextColor.color(titleColor)))
                 .description(description)
-                .optionLines(copiedOptions)
+                .options(copiedOptions)
                 .emit(ActionVerb.BROWSE, leftPrompt, leftMessage)
                 .onRightEmit(ActionVerb.BROWSE, rightPrompt, rightMessage);
         return builder.build();

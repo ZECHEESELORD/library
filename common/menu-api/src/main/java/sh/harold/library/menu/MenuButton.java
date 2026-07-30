@@ -6,6 +6,7 @@ import net.kyori.adventure.text.Component;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
@@ -13,8 +14,9 @@ public final class MenuButton implements MenuItem {
 
     private final MenuIcon icon;
     private final Component name;
-    private final String secondary;
-    private final List<MenuBlock> blocks;
+    private final Component secondary;
+    private final List<MenuSection> sections;
+    private final List<Component> statusLines;
     private final List<Component> exactLore;
     private final boolean glow;
     private final int amount;
@@ -23,17 +25,36 @@ public final class MenuButton implements MenuItem {
     private final MenuTooltipBehavior tooltipBehavior;
 
     private MenuButton(Builder builder) {
-        this.icon = builder.icon();
-        this.name = builder.name();
-        this.secondary = builder.secondary();
-        this.blocks = builder.blocks();
-        this.exactLore = builder.exactLore();
-        this.glow = builder.isGlowing();
-        this.amount = builder.amount();
-        this.interactions = Map.copyOf(builder.interactions);
-        this.promptSuppressed = builder.promptSuppressed;
-        this.tooltipBehavior = builder.tooltipBehavior();
-        if (interactions.isEmpty()) {
+        this(builder.icon(), builder.name(), builder.secondary(), builder.sections(), builder.statusLines(),
+                builder.exactLore(), builder.isGlowing(), builder.amount(), builder.interactions,
+                builder.promptSuppressed, builder.tooltipBehavior());
+    }
+
+    MenuButton(
+            MenuIcon icon,
+            Component name,
+            Component secondary,
+            List<MenuSection> sections,
+            List<Component> statusLines,
+            List<Component> exactLore,
+            boolean glow,
+            int amount,
+            Map<MenuClick, MenuInteraction> interactions,
+            boolean promptSuppressed,
+            MenuTooltipBehavior tooltipBehavior
+    ) {
+        this.icon = Objects.requireNonNull(icon, "icon");
+        this.name = Objects.requireNonNull(name, "name");
+        this.secondary = secondary;
+        this.sections = List.copyOf(Objects.requireNonNull(sections, "sections"));
+        this.statusLines = List.copyOf(Objects.requireNonNull(statusLines, "statusLines"));
+        this.exactLore = exactLore == null ? null : List.copyOf(exactLore);
+        this.glow = glow;
+        this.amount = amount;
+        this.interactions = Map.copyOf(Objects.requireNonNull(interactions, "interactions"));
+        this.promptSuppressed = promptSuppressed;
+        this.tooltipBehavior = Objects.requireNonNull(tooltipBehavior, "tooltipBehavior");
+        if (this.interactions.isEmpty()) {
             throw new IllegalStateException("MenuButton requires at least one interaction");
         }
         if (amount <= 0) {
@@ -56,13 +77,18 @@ public final class MenuButton implements MenuItem {
     }
 
     @Override
-    public Optional<String> secondary() {
+    public Optional<Component> secondary() {
         return Optional.ofNullable(secondary);
     }
 
     @Override
-    public List<MenuBlock> blocks() {
-        return blocks;
+    public List<MenuSection> sections() {
+        return sections;
+    }
+
+    @Override
+    public List<Component> statusLines() {
+        return statusLines;
     }
 
     @Override
@@ -203,15 +229,6 @@ public final class MenuButton implements MenuItem {
                     "withoutRightSound() requires a right-click interaction");
         }
 
-        private Builder updateInteraction(MenuClick click, UnaryOperator<MenuInteraction> transform, String missingMessage) {
-            MenuInteraction interaction = interactions.get(click);
-            if (interaction == null) {
-                throw new IllegalStateException(missingMessage);
-            }
-            interactions.put(click, transform.apply(interaction));
-            return this;
-        }
-
         public Builder skipPrompt() {
             this.promptSuppressed = true;
             return this;
@@ -227,6 +244,15 @@ public final class MenuButton implements MenuItem {
 
         public MenuButton build() {
             return new MenuButton(this);
+        }
+
+        private Builder updateInteraction(MenuClick click, UnaryOperator<MenuInteraction> transform, String message) {
+            MenuInteraction interaction = interactions.get(click);
+            if (interaction == null) {
+                throw new IllegalStateException(message);
+            }
+            interactions.put(click, transform.apply(interaction));
+            return this;
         }
 
         private int amount() {

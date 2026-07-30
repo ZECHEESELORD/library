@@ -1,6 +1,7 @@
 package sh.harold.library.menu;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextDecoration;
 
 import java.util.List;
 import java.util.Objects;
@@ -11,21 +12,32 @@ public final class MenuTab {
     private final String id;
     private final Component name;
     private final MenuIcon icon;
-    private final String secondary;
-    private final List<MenuBlock> blocks;
+    private final Component secondary;
+    private final List<MenuSection> sections;
+    private final List<Component> statusLines;
     private final boolean glow;
     private final MenuTabContent content;
 
     public MenuTab(String id, Component name, MenuIcon icon, MenuTabContent content) {
-        this(id, name, icon, null, List.of(), false, content);
+        this(id, name, icon, null, List.of(), List.of(), false, content);
     }
 
-    public MenuTab(String id, Component name, MenuIcon icon, String secondary, List<MenuBlock> blocks, boolean glow, MenuTabContent content) {
+    public MenuTab(
+            String id,
+            Component name,
+            MenuIcon icon,
+            Component secondary,
+            List<MenuSection> sections,
+            List<Component> statusLines,
+            boolean glow,
+            MenuTabContent content
+    ) {
         this.id = requireId(id);
-        this.name = Objects.requireNonNull(name, "name");
+        this.name = Objects.requireNonNull(name, "name").decoration(TextDecoration.ITALIC, false);
         this.icon = Objects.requireNonNull(icon, "icon");
         this.secondary = secondary;
-        this.blocks = List.copyOf(Objects.requireNonNull(blocks, "blocks"));
+        this.sections = List.copyOf(Objects.requireNonNull(sections, "sections"));
+        this.statusLines = List.copyOf(Objects.requireNonNull(statusLines, "statusLines"));
         this.glow = glow;
         this.content = Objects.requireNonNull(content, "content");
     }
@@ -62,12 +74,16 @@ public final class MenuTab {
         return icon;
     }
 
-    public String secondary() {
+    public Component secondary() {
         return secondary;
     }
 
-    public List<MenuBlock> blocks() {
-        return blocks;
+    public List<MenuSection> sections() {
+        return sections;
+    }
+
+    public List<Component> statusLines() {
+        return statusLines;
     }
 
     public boolean glow() {
@@ -117,7 +133,7 @@ public final class MenuTab {
             if (content == null) {
                 throw new IllegalStateException("tab content is required");
             }
-            return new MenuTab(id, name(), icon(), secondary(), blocks(), isGlowing(), content);
+            return new MenuTab(id, name(), icon(), secondary(), sections(), statusLines(), isGlowing(), content);
         }
 
         @Override

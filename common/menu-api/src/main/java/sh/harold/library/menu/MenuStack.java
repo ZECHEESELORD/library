@@ -15,8 +15,9 @@ public final class MenuStack implements MenuItem {
 
     private final MenuIcon icon;
     private final Component name;
-    private final String secondary;
-    private final List<MenuBlock> blocks;
+    private final Component secondary;
+    private final List<MenuSection> sections;
+    private final List<Component> statusLines;
     private final List<Component> exactLore;
     private final boolean glow;
     private final int amount;
@@ -26,7 +27,8 @@ public final class MenuStack implements MenuItem {
         this.icon = builder.icon();
         this.name = builder.name();
         this.secondary = builder.secondary();
-        this.blocks = builder.blocks();
+        this.sections = builder.sections();
+        this.statusLines = builder.statusLines();
         this.exactLore = builder.exactLore();
         this.glow = builder.isGlowing();
         this.amount = builder.amount;
@@ -51,13 +53,18 @@ public final class MenuStack implements MenuItem {
     }
 
     @Override
-    public Optional<String> secondary() {
+    public Optional<Component> secondary() {
         return Optional.ofNullable(secondary);
     }
 
     @Override
-    public List<MenuBlock> blocks() {
-        return blocks;
+    public List<MenuSection> sections() {
+        return sections;
+    }
+
+    @Override
+    public List<Component> statusLines() {
+        return statusLines;
     }
 
     @Override

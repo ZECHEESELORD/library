@@ -1,7 +1,7 @@
 package sh.harold.library.menu.core;
 
 import net.kyori.adventure.text.Component;
-import sh.harold.library.menu.MenuBlock;
+import sh.harold.library.menu.MenuSection;
 import sh.harold.library.menu.MenuClick;
 import sh.harold.library.menu.MenuIcon;
 import sh.harold.library.menu.MenuInteraction;
@@ -64,8 +64,9 @@ final class ReactivePlacementCache {
     private record MenuVisualKey(
             MenuIcon icon,
             Component title,
-            String secondary,
-            List<MenuBlock> blocks,
+            Component secondary,
+            List<MenuSection> sections,
+            List<Component> statusLines,
             List<Component> exactLore,
             boolean glow,
             int amount,
@@ -77,7 +78,8 @@ final class ReactivePlacementCache {
         private MenuVisualKey {
             icon = Objects.requireNonNull(icon, "icon");
             title = Objects.requireNonNull(title, "title");
-            blocks = List.copyOf(blocks);
+            sections = List.copyOf(sections);
+            statusLines = List.copyOf(statusLines);
             exactLore = List.copyOf(exactLore);
             prompts = Map.copyOf(prompts);
         }
@@ -87,7 +89,7 @@ final class ReactivePlacementCache {
             for (Map.Entry<MenuClick, MenuInteraction> entry : item.interactions().entrySet()) {
                 prompts.put(entry.getKey(), entry.getValue().promptLabel());
             }
-            return new MenuVisualKey(item.icon(), item.name(), item.secondary().orElse(null), item.blocks(),
+            return new MenuVisualKey(item.icon(), item.name(), item.secondary().orElse(null), item.sections(), item.statusLines(),
                     item.exactLore().orElse(List.of()),
                     item.glow(), item.amount(), item.promptSuppressed(), item.tooltipBehavior(), prompts);
         }

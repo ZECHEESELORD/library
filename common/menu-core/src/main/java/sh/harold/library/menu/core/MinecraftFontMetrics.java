@@ -2,6 +2,7 @@ package sh.harold.library.menu.core;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextDecoration;
 
 import java.util.HashMap;
@@ -9,7 +10,7 @@ import java.util.Map;
 
 final class MinecraftFontMetrics {
 
-    private static final Map<Character, Integer> WIDTHS = new HashMap<>();
+    private static final Map<Integer, Integer> WIDTHS = new HashMap<>();
 
     static {
         put(2, "!,.:;|i");
@@ -27,44 +28,56 @@ final class MinecraftFontMetrics {
         if (component == null) {
             return 0;
         }
-        return widthComponent(component, false);
+        WidthAccumulator accumulator = new WidthAccumulator();
+        append(component, Style.empty(), accumulator);
+        return accumulator.width();
     }
 
     static int width(String text) {
-        int width = 0;
-        for (char character : text.toCharArray()) {
-            width += characterWidth(character, false) + 1;
-        }
-        return Math.max(0, width - 1);
+        return width(text, false);
     }
 
-    private static int widthComponent(Component component, boolean inheritedBold) {
-        boolean bold = inheritedBold || component.decoration(TextDecoration.BOLD) == TextDecoration.State.TRUE;
-        int width = 0;
-        if (component instanceof TextComponent textComponent) {
-            for (char character : textComponent.content().toCharArray()) {
-                width += characterWidth(character, bold) + 1;
-            }
-        } else {
-            width += width(ComponentText.flatten(component));
-        }
-        for (Component child : component.children()) {
-            width += widthComponent(child, bold);
-        }
-        return Math.max(0, width == 0 ? 0 : width - 1);
+    static int width(String text, boolean bold) {
+        WidthAccumulator accumulator = new WidthAccumulator();
+        text.codePoints().forEach(codePoint -> accumulator.add(codePoint, bold));
+        return accumulator.width();
     }
 
-    private static int characterWidth(char character, boolean bold) {
-        int width = WIDTHS.getOrDefault(character, 6);
-        if (character == ' ') {
+    static int codePointWidth(int codePoint, boolean bold) {
+        int width = WIDTHS.getOrDefault(codePoint, 6);
+        if (codePoint == ' ') {
             return 4;
         }
         return bold ? width + 1 : width;
     }
 
+    private static void append(Component component, Style inherited, WidthAccumulator accumulator) {
+        Style resolved = inherited.merge(component.style(), Style.Merge.Strategy.ALWAYS);
+        boolean bold = resolved.decoration(TextDecoration.BOLD) == TextDecoration.State.TRUE;
+        if (component instanceof TextComponent textComponent) {
+            textComponent.content().codePoints().forEach(codePoint -> accumulator.add(codePoint, bold));
+        }
+        for (Component child : component.children()) {
+            append(child, resolved, accumulator);
+        }
+    }
+
     private static void put(int width, String characters) {
-        for (char character : characters.toCharArray()) {
-            WIDTHS.put(character, width);
+        characters.codePoints().forEach(codePoint -> WIDTHS.put(codePoint, width));
+    }
+
+    private static final class WidthAccumulator {
+
+        private int width;
+        private boolean empty = true;
+
+        private void add(int codePoint, boolean bold) {
+            width += codePointWidth(codePoint, bold) + 1;
+            empty = false;
+        }
+
+        private int width() {
+            return empty ? 0 : width - 1;
         }
     }
 }

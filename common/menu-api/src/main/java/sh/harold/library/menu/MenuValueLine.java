@@ -1,21 +1,28 @@
 package sh.harold.library.menu;
 
-import sh.harold.library.ui.value.UiValue;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.ComponentLike;
 
 import java.util.Objects;
 
-public record MenuValueLine(String prefix, UiValue value) {
+public record MenuValueLine(Component prefix, Component value) {
 
     public MenuValueLine {
-        Objects.requireNonNull(prefix, "prefix");
-        Objects.requireNonNull(value, "value");
+        prefix = Objects.requireNonNull(prefix, "prefix");
+        value = MenuComponents.requireContent(Objects.requireNonNull(value, "value"), "value");
     }
 
-    public static MenuValueLine of(String prefix, UiValue value) {
-        return new MenuValueLine(prefix, value);
+    public MenuValueLine(String prefix, Object value) {
+        this(Component.text(Objects.requireNonNull(prefix, "prefix")), MenuComponents.component(value));
     }
 
     public static MenuValueLine of(String prefix, Object value) {
-        return new MenuValueLine(prefix, UiValue.of(Objects.requireNonNull(value, "value")));
+        return new MenuValueLine(prefix, value);
+    }
+
+    public static MenuValueLine of(ComponentLike prefix, ComponentLike value) {
+        return new MenuValueLine(
+                Objects.requireNonNull(prefix, "prefix").asComponent(),
+                Objects.requireNonNull(value, "value").asComponent());
     }
 }

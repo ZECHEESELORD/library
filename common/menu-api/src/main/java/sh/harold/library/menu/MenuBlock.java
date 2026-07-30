@@ -1,46 +1,32 @@
 package sh.harold.library.menu;
 
-import sh.harold.library.ui.value.UiValue;
+import net.kyori.adventure.text.Component;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
-public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines, MenuBlock.MutedLines, MenuBlock.Options,
-        MenuBlock.ValueLines, MenuBlock.Pairs, MenuBlock.Bullets, MenuBlock.Progress {
+public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines, MenuBlock.MutedLines,
+        MenuBlock.Options, MenuBlock.ValueLines, MenuBlock.Pairs, MenuBlock.Bullets,
+        MenuBlock.Checklist, MenuBlock.Progress {
 
-    enum WrapMode {
-        /**
-         * Render each entry on a single lore line.
-         */
-        SINGLE_LINE,
-        /**
-         * Allow a single long entry to rebalance into wrapped lore using the shared
-         * character-count rules.
-         * Multi-entry {@code lines(...)} and {@code pairs(...)} blocks still keep one entry per lore line.
-         */
-        SOFT
-    }
-
-    record Description(String text) implements MenuBlock {
+    record Description(Component content) implements MenuBlock {
 
         public Description {
-            requireText(text, "text");
+            content = MenuComponents.requireContent(Objects.requireNonNull(content, "content"), "content");
         }
     }
 
-    record Lines(List<String> lines, WrapMode wrapMode) implements MenuBlock {
+    record Lines(List<Component> lines) implements MenuBlock {
 
         public Lines {
-            lines = immutableLines(lines, "lines");
-            wrapMode = Objects.requireNonNull(wrapMode, "wrapMode");
+            lines = immutableComponents(lines, "lines");
         }
     }
 
-    record MutedLines(List<String> lines) implements MenuBlock {
+    record MutedLines(List<Component> lines) implements MenuBlock {
 
         public MutedLines {
-            lines = immutableLines(lines, "lines");
+            lines = immutableComponents(lines, "lines");
         }
     }
 
@@ -58,7 +44,7 @@ public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines
         }
     }
 
-    record ValueLines(List<Entry> lines, WrapMode wrapMode) implements MenuBlock {
+    record ValueLines(List<Entry> lines) implements MenuBlock {
 
         public ValueLines {
             Objects.requireNonNull(lines, "lines");
@@ -66,19 +52,18 @@ public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines
             if (lines.isEmpty()) {
                 throw new IllegalArgumentException("lines cannot be empty");
             }
-            wrapMode = Objects.requireNonNull(wrapMode, "wrapMode");
         }
 
-        public record Entry(String prefix, UiValue value) {
+        public record Entry(Component prefix, Component value) {
 
             public Entry {
-                Objects.requireNonNull(prefix, "prefix");
-                Objects.requireNonNull(value, "value");
+                prefix = Objects.requireNonNull(prefix, "prefix");
+                value = MenuComponents.requireContent(Objects.requireNonNull(value, "value"), "value");
             }
         }
     }
 
-    record Pairs(List<Entry> pairs, WrapMode wrapMode) implements MenuBlock {
+    record Pairs(List<Entry> pairs) implements MenuBlock {
 
         public Pairs {
             Objects.requireNonNull(pairs, "pairs");
@@ -86,59 +71,51 @@ public sealed interface MenuBlock permits MenuBlock.Description, MenuBlock.Lines
             if (pairs.isEmpty()) {
                 throw new IllegalArgumentException("pairs cannot be empty");
             }
-            wrapMode = Objects.requireNonNull(wrapMode, "wrapMode");
         }
 
-        public record Entry(String key, UiValue value) {
+        public record Entry(Component key, Component value) {
 
             public Entry {
-                requireText(key, "key");
-                Objects.requireNonNull(value, "value");
+                key = MenuComponents.requireContent(Objects.requireNonNull(key, "key"), "key");
+                value = MenuComponents.requireContent(Objects.requireNonNull(value, "value"), "value");
             }
         }
     }
 
-    record Bullets(List<String> bullets) implements MenuBlock {
+    record Bullets(List<Component> bullets) implements MenuBlock {
 
         public Bullets {
-            bullets = immutableLines(bullets, "bullets");
+            bullets = immutableComponents(bullets, "bullets");
         }
     }
 
-    record Progress(String label, BigDecimal current, BigDecimal max, AccentFamily accentFamily) implements MenuBlock {
+    record Checklist(List<MenuChecklistEntry> entries) implements MenuBlock {
+
+        public Checklist {
+            Objects.requireNonNull(entries, "entries");
+            entries = List.copyOf(entries);
+            if (entries.isEmpty()) {
+                throw new IllegalArgumentException("entries cannot be empty");
+            }
+        }
+    }
+
+    record Progress(MenuProgress progress) implements MenuBlock {
 
         public Progress {
-            requireText(label, "label");
-            current = requireNumber(current, "current");
-            max = requireNumber(max, "max");
-            if (max.signum() <= 0) {
-                throw new IllegalArgumentException("max must be greater than zero");
-            }
-            accentFamily = Objects.requireNonNull(accentFamily, "accentFamily");
+            progress = Objects.requireNonNull(progress, "progress");
         }
     }
 
-    private static List<String> immutableLines(List<String> lines, String label) {
-        Objects.requireNonNull(lines, label);
-        List<String> copy = List.copyOf(lines);
+    private static List<Component> immutableComponents(List<Component> components, String label) {
+        Objects.requireNonNull(components, label);
+        List<Component> copy = List.copyOf(components);
         if (copy.isEmpty()) {
             throw new IllegalArgumentException(label + " cannot be empty");
         }
-        for (String line : copy) {
-            requireText(line, label + " entry");
+        for (Component component : copy) {
+            MenuComponents.requireContent(component, label + " entry");
         }
         return copy;
-    }
-
-    private static BigDecimal requireNumber(BigDecimal value, String label) {
-        Objects.requireNonNull(value, label);
-        return value;
-    }
-
-    private static void requireText(String text, String label) {
-        Objects.requireNonNull(text, label);
-        if (text.isBlank()) {
-            throw new IllegalArgumentException(label + " cannot be blank");
-        }
     }
 }

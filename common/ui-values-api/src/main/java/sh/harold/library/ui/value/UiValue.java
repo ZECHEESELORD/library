@@ -1,10 +1,12 @@
 package sh.harold.library.ui.value;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.ComponentLike;
 import net.kyori.adventure.text.format.TextColor;
 
 import java.util.Objects;
 
-public record UiValue(String text, TextColor colorOverride) {
+public record UiValue(String text, TextColor colorOverride) implements ComponentLike {
 
     public UiValue {
         Objects.requireNonNull(text, "text");
@@ -31,6 +33,11 @@ public record UiValue(String text, TextColor colorOverride) {
 
     public UiValue color(int rgbHex) {
         return color(TextColor.color(requireRgb(rgbHex)));
+    }
+
+    @Override
+    public Component asComponent() {
+        return colorOverride == null ? Component.text(text) : Component.text(text, colorOverride);
     }
 
     private static int requireRgb(int rgbHex) {

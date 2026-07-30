@@ -249,10 +249,7 @@ final class StandardReactiveTabsMenu<S> implements ReactiveMenuDefinition {
         Map<MenuClick, MenuInteraction> interactions = Map.of(
                 MenuClick.LEFT, MenuInteraction.of(ActionVerb.SWITCH_TAB,
                         new MenuSlotAction.Dispatch(new ReactiveGeometryAction.SwitchTab(tab.id()))));
-        if (tab.secondary() == null && tab.blocks().isEmpty()) {
-            return StandardMenuService.chromeButton(slot, tab.name(), tab.icon(), interactions, active || tab.glow());
-        }
-        return HouseMenuCompiler.compile(slot, tab.icon(), tab.name(), tab.secondary(), tab.blocks(),
+        return HouseMenuCompiler.compile(slot, tab.icon(), tab.name(), tab.secondary(), tab.sections(), tab.statusLines(),
                 active || tab.glow(), interactions, false, 1);
     }
 

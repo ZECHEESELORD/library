@@ -880,10 +880,8 @@ public final class StandardMenuService implements MenuService {
     private static MenuSlot tabButton(int slot, MenuTab tab, boolean active, int navStart) {
         Map<MenuClick, MenuInteraction> interactions = Map.of(
                 MenuClick.LEFT, MenuInteraction.of(ActionVerb.SWITCH_TAB, new MenuSlotAction.OpenFrame(tabFrameId(tab.id(), navStart, 0))));
-        if (tab.secondary() == null && tab.blocks().isEmpty()) {
-            return chromeButton(slot, tab.name(), tab.icon(), interactions, active || tab.glow());
-        }
-        return HouseMenuCompiler.compile(slot, tab.icon(), tab.name(), tab.secondary(), tab.blocks(), active || tab.glow(), interactions, false, 1);
+        return HouseMenuCompiler.compile(slot, tab.icon(), tab.name(), tab.secondary(), tab.sections(), tab.statusLines(),
+                active || tab.glow(), interactions, false, 1);
     }
 
     static MenuSlot tabIndicator(int slot, boolean active) {
@@ -938,50 +936,6 @@ public final class StandardMenuService implements MenuService {
                 List.of(Component.text("Page " + pageNumber, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)),
                 false,
                 interactions);
-    }
-
-    static MenuSlot chromeButton(int slot, String title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions) {
-        return chromeButton(slot, title, icon, interactions, false);
-    }
-
-    static MenuSlot chromeButton(int slot, String title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions, boolean glow) {
-        return chromeButton(slot, Component.text(title), icon, interactions, glow);
-    }
-
-    static MenuSlot chromeButton(int slot, Component title, MenuIcon icon, Map<MenuClick, MenuInteraction> interactions, boolean glow) {
-        return new MenuSlot(slot, icon, title.decoration(TextDecoration.ITALIC, false),
-                chromeLore(title, interactions), glow, interactions);
-    }
-
-    private static List<Component> chromeLore(Component title, Map<MenuClick, MenuInteraction> interactions) {
-        String plainTitle = plain(title);
-        List<Component> lore = new ArrayList<>();
-        lore.add(Component.empty());
-        lore.add(Component.text(plainTitle, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
-        if (!interactions.isEmpty()) {
-            lore.add(Component.empty());
-            MenuInteraction left = interactions.get(MenuClick.LEFT);
-            if (left != null) {
-                lore.add(promptLine("CLICK", left.promptLabel(), NamedTextColor.YELLOW));
-            }
-            MenuInteraction right = interactions.get(MenuClick.RIGHT);
-            if (right != null) {
-                lore.add(promptLine("RIGHT CLICK", right.promptLabel(), NamedTextColor.AQUA));
-            }
-        }
-        return List.copyOf(lore);
-    }
-
-    private static Component promptLine(String clickLabel, String promptLabel, NamedTextColor color) {
-        return Component.text()
-                .append(Component.text(clickLabel, color, TextDecoration.BOLD))
-                .append(Component.text(" to " + emphaticPromptLabel(promptLabel), color))
-                .decoration(TextDecoration.ITALIC, false)
-                .build();
-    }
-
-    private static String emphaticPromptLabel(String promptLabel) {
-        return promptLabel.endsWith("!") ? promptLabel : promptLabel + "!";
     }
 
     static void applyUtilities(Map<Integer, MenuSlot> slots, int footerStart, Map<UtilitySlot, MenuItem> utilities) {

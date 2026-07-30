@@ -12,9 +12,13 @@ public sealed interface MenuItem permits MenuButton, MenuDisplayItem, MenuStack 
 
     Component name();
 
-    Optional<String> secondary();
+    Optional<Component> secondary();
 
-    List<MenuBlock> blocks();
+    List<MenuSection> sections();
+
+    default List<Component> statusLines() {
+        return List.of();
+    }
 
     default Optional<List<Component>> exactLore() {
         return Optional.empty();
