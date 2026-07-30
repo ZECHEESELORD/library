@@ -83,10 +83,11 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | Module | What it does | Adapters |
 | --- | --- | --- |
 | `entity` | Entities composed from typed capabilities, including display, AI, equipment, pose, skin, variant, leash, and passenger support | Paper, Minestom, Fabric |
+| `npc-behavior` | Declarative native-mannequin attention, personality idles, prop routines, speech bubbles, and ambient conversations | Paper, Minestom |
 | `house-service-entity` | Service NPC implementation built on `entity-core` | common |
 
 > [!NOTE]
-> Paper has an optional `entity-paper-citizens` bridge for NPCs backed by Citizens. Velocity has no scoreboard adapter because a proxy cannot render a Minecraft sidebar.
+> Paper NPC behavior uses native mannequins and requires PacketEvents `2.13.0`; the adapter fails fast if PacketEvents is absent, disabled, uninitialized, or running an unsupported protocol. Velocity has no scoreboard adapter because a proxy cannot render a Minecraft sidebar.
 
 > [!NOTE]
 > `menu-paper` uses viewer- and region-aware scheduling and is compatible with Folia during normal operation. A consuming plugin must still declare `folia-supported: true` in its own plugin descriptor; this does not imply Folia support for unrelated Paper adapters. Folia hot-disable or reload with active menu sessions is unsupported because owner-thread work can no longer be scheduled after disable; disable only after those sessions are gone. Reactive runtimes skip native rendering after an unchanged reducer result. Keep high-frequency reactive titles stable: Paper and Fabric must rebuild and reopen the native inventory when a title changes.
@@ -126,7 +127,8 @@ Add the repositories required by the adapters you use:
 | --- | --- |
 | `https://maven.fabricmc.net/` | Fabric adapters |
 | `https://repo.papermc.io/repository/maven-public/` | Paper adapters |
-| `https://maven.citizensnpcs.co/repo` | the Citizens bridge |
+| `https://repo.codemc.io/repository/maven-releases/` | PacketEvents for native Paper mannequin composition |
+| `https://repo.codemc.io/repository/maven-snapshots/` | PacketEvents snapshot transitive resolution |
 | `https://repo.minebench.de` | Velocity adapters |
 
 ### Coordinates
@@ -147,7 +149,7 @@ dependencies {
 ```
 
 > [!IMPORTANT]
-> The BOM manages only artifacts from this repository. Host dependencies for Paper, Fabric, Minestom, Velocity, Citizens, and MongoDB still use their own repositories and the versions required by each module.
+> The BOM manages only artifacts from this repository. Host dependencies for Paper, PacketEvents, Fabric, Minestom, Velocity, and MongoDB still use their own repositories and the versions required by each module.
 
 <details>
 <summary>Full list of published artifacts</summary>
@@ -155,7 +157,7 @@ dependencies {
 JitPack publishes:
 
 - every `common/*` module, including the `-api`, `-core`, and backend artifacts listed above
-- platform adapters under each host, such as `message-paper`, `scoreboard-minestom`, `menu-fabric`, `data-velocity`, and `entity-paper-citizens`
+- platform adapters under each host, such as `message-paper`, `scoreboard-minestom`, `menu-fabric`, `data-velocity`, and `entity-paper`
 
 Legacy artifacts add a version suffix when their source differs from the current lane. Examples include `scoreboard-paper-1_21_11`, `message-fabric-1_21_11`, and `menu-fabric-1_21_11`.
 
@@ -187,6 +189,42 @@ All text uses Adventure `4.17.0`.
 ---
 
 ## Usage
+
+### NPC behavior
+
+NPC behavior is opt-in and is available only on `PLAYER_LIKE_HUMANOID` entities. The mannequin's props, idle routine, conversation staging, sound, and ordinary speech are one shared world performance. Attention is composed per tracked viewer, so two nearby players can each see the same NPC looking at them without turning the shared prop routine into a separate performance.
+
+Build a profile from a personality, voice, attention policy, interaction barks, and weighted declarative routines:
+
+```java
+NpcRoutine study = NpcRoutines.lecternStudy(lecternAnchor);
+
+NpcBehaviorProfile guide = NpcBehaviorProfile.builder(NpcPersonalityPreset.CURIOUS)
+        .voice(NpcVoiceProfiles.WARM_VILLAGER)
+        .attention(NpcAttentionSpec.defaults())
+        .interactionLine(Component.text("Oh! Hello there."))
+        .idle(study, 3, NpcCooldownRange.seconds(8, 16))
+        .build();
+
+HouseServiceSpec spec = HouseServiceSpec.builder(
+                EntitySpec.builder(EntityTypes.PLAYER_LIKE_HUMANOID).build())
+        .name("&aGideon")
+        .description("Guide")
+        .behaviorProfile(guide)
+        .build();
+
+platform.spawnServiceAsync(world, spec).thenAccept(service -> {
+    HumanoidBehaviorCapable behavior = service.entity()
+            .requireCapability(HumanoidBehaviorCapable.class);
+    behavior.speak(Component.text("Take a look around."));
+});
+```
+
+Omitting `behaviorProfile` leaves a House service motionless. Calling `speak`, `perform`, or `attendTo` on an unconfigured behavior capability fails immediately. `NpcRoutine` is deliberately sequence-only: authors can look or sweep toward anchors, change stance and equipment, gesture, swing or use a hand, play a sound, and wait. It cannot run callbacks, branch, loop, move the NPC, or mutate blocks and inventories.
+
+`attendTo(UUID)` is the behavior identity boundary. Its `Identified` overload accepts Adventure identities and platform players; `Audience` is not used as player or group membership. Platform adapters use audiences only as permitted sound recipients.
+
+Paper consumers must install PacketEvents `2.13.0`, declare it as a required server dependency, and construct `PaperEntityPlatform` only after PacketEvents has loaded and initialized. The adapter rejects missing or unsupported PacketEvents/protocol combinations instead of guessing packet layouts. Paper/Folia code should use `spawnAsync`, `spawnServiceAsync`, `teleportAsync`, and `closeAsync`; synchronous methods are owner-region fast paths and fail on the wrong lane. See the [Paper entity example](platform/paper/paper-entity-example) and [Minestom entity example](platform/minestom/minestom-entity-example) for complete platform wiring. PacketEvents' repository and dependency coordinates are documented in its [development setup guide](https://docs.packetevents.com/introduction/development-setup/).
 
 Menu v9 authors semantic sections and leaves spacing, 240-pixel lore wrapping, progress rendering, and prompt placement to the compiler:
 

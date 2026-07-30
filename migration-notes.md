@@ -1,5 +1,22 @@
 # Migration Notes
 
+- The NPC behavior expansion is a source-breaking v9 re-release. Paper now uses native mannequins and requires PacketEvents `2.13.0`; the Citizens adapter, repository, dependency, settings, and examples have been removed completely.
+- Entity interactions now use `EntityInteractionAction` (`USE` or `ATTACK`), an optional `InteractionHand`, and an `EntityInteractionResult` (`PASS` or `CONSUME`). Use `EntityInteractionHandler.observing(...)` when migrating a former void observer lambda.
+- `PLAYER_LIKE_HUMANOID` exposes `HumanoidBehaviorCapable` on Paper and Minestom. Behavior remains opt-in: a mannequin without an `NpcBehaviorProfile` is inert, and explicit behavior commands fail fast until configured.
+- Paper entity creation, service creation, teleport, and cleanup have asynchronous Folia-safe entry points. Synchronous entry points are owner-region fast paths and fail clearly from a foreign lane.
+
+For a former void interaction observer, return an explicit result or use the migration helper:
+
+```java
+.interactionHandler(EntityInteractionHandler.observing(
+        context -> audit(context.interactor(), context.action(), context.hand()),
+        EntityInteractionResult.PASS
+))
+```
+
+`USE` always carries `MAIN_HAND` or `OFF_HAND`; `ATTACK` carries no hand. Application handlers still receive both actions after behavior observes them. Safe native mannequins consume both actions and suppress vanilla damage and knockback, while generic entities remain `PASS` by default.
+
+Replace any dependency or construction of the removed Paper Citizens adapter with `entity-paper` and `new PaperEntityPlatform(plugin)`. Install PacketEvents `2.13.0` as a server plugin and declare it as a required dependency. On Paper/Folia, migrate lifecycle calls to `spawnAsync`, `spawnServiceAsync`, `teleportAsync`, and `closeAsync` unless the caller is already on the owning region lane.
 - YAML deleted-document revisions are now durable across restart. `WriteCondition.revision(...)` can safely guard delete-then-recreate flows after the owner restarts.
 - Mongo initialization is now lazy on first async operation instead of forcing `ping` and revision-index setup during owner startup.
 - Mongo insert retries now treat only duplicate-key insert failures as retryable conflicts. Other write failures surface immediately.
