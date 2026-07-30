@@ -8686,3 +8686,4 @@ SLOT 49 icon=minecraft:barrier texture=- glow=false amount=1 tooltip=CHROME repl
   TITLE {text="Close",color=#ff5555,bold=not_set,italic=false,strike=not_set}
   ACTION LEFT verb=CLOSE prompt=close type=Close sound=creative-library:menu/click
 END_ENTRY
+
