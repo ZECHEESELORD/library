@@ -135,7 +135,7 @@ Import the BOM once, then name the modules without repeating the tag:
 
 ```kotlin
 dependencies {
-    implementation(platform("com.github.ZECHEESELORD.library:library-bom:v7"))
+    implementation(platform("com.github.ZECHEESELORD.library:library-bom:v9"))
 
     implementation("com.github.ZECHEESELORD.library:cooldown-api")
     implementation("com.github.ZECHEESELORD.library:cooldown-core")
@@ -161,7 +161,7 @@ Legacy artifacts add a version suffix when their source differs from the current
 
 Example modules (not published):
 
-`paper-example`, `paper-entity-example`, `minestom-example`, `minestom-entity-example`, `velocity-example`, `fabric-example`, `fabric-client-example`
+`menu-showcase`, `paper-example`, `paper-entity-example`, `minestom-example`, `minestom-entity-example`, `velocity-example`, `fabric-example`, `fabric-client-example`
 
 </details>
 
@@ -187,6 +187,36 @@ All text uses Adventure `4.17.0`.
 ---
 
 ## Usage
+
+Menu v9 authors semantic sections and leaves spacing, 240-pixel lore wrapping, progress rendering, and prompt placement to the compiler:
+
+```java
+MenuItemTemplate<AccountState> upgrade = MenuItemTemplate
+        .<AccountState, UpgradeState>builder(MenuIcon.vanilla("gold_block"), AccountState::upgradeState)
+        .base((state, item) -> item
+                .name(Component.text("Gold Bank Upgrade", NamedTextColor.GOLD))
+                .description("Increase the account balance limit and unlock another coop withdrawal slot.")
+                .section(section -> section
+                        .valueLine(Component.text("Bank cap: ", NamedTextColor.GRAY),
+                                Component.text("100M coins", NamedTextColor.GOLD))
+                        .mutedLine("Applies to every member of the profile."))
+                .progress("Deposit requirement", state.deposited(), 5_000_000, "coins")
+                .checklist(state.requirements()))
+        .variant(UpgradeState.AVAILABLE, (state, item) -> item
+                .status(Component.text("Ready to upgrade!", NamedTextColor.GREEN))
+                .onLeftClick(ActionVerb.CONFIRM, "upgrade", context -> upgradeBank(state)))
+        .variant(UpgradeState.LOCKED, (state, item) -> item
+                .status(Component.text("Complete all requirements to upgrade.", NamedTextColor.RED)))
+        .build();
+
+Menu menu = menus.canvas()
+        .title("Bank Upgrades")
+        .rows(6)
+        .place(22, upgrade.render(account))
+        .build();
+```
+
+Domain terms such as coins, bank upgrades, and account requirements stay in consumer code. The shared API owns only the structural grammar.
 
 This example registers and displays a scoreboard, overrides one section for a viewer, and adds a temporary notice:
 
