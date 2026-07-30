@@ -30,6 +30,7 @@ val jitPackGroup = System.getenv("GROUP")
 val jitPackVersion = System.getenv("VERSION")?.takeUnless(String::isBlank)
 val bomProjectPath = ":library-bom"
 val unpublishedProjectPaths = setOf(
+    ":examples:menu-showcase",
     ":platform:paper:paper-example",
     ":platform:paper:paper-entity-example",
     ":platform:paper:paper-data-owner",

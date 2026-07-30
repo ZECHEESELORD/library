@@ -5,6 +5,7 @@ dependencies {
     implementation(project(":common:message-core"))
     implementation(project(":common:state-machine-core"))
     implementation(project(":common:menu-core"))
+    implementation(project(":examples:menu-showcase"))
     implementation(project(":common:spatial-core"))
     implementation(project(":common:tween-core"))
     implementation(project(":common:curve-core"))

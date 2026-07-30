@@ -13,6 +13,7 @@ rootProject.name = "library"
 
 val projectPaths = listOf(
     ":library-bom",
+    ":examples:menu-showcase",
     ":common:tick-lifecycle-api",
     ":common:spatial-api",
     ":common:spatial-core",

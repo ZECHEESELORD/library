@@ -1,5 +1,7 @@
 package sh.harold.library.example.paper;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import sh.harold.library.cooldown.CooldownAcquisition;
@@ -167,7 +169,7 @@ final class PaperCooldownExamples implements AutoCloseable {
 
     private Menu menu(Player player) {
         return menus.canvas()
-                .title(FakeSkyBlockMenuTitles.special("Cooldown Lab"))
+                .title(Component.text("Cooldown Lab", NamedTextColor.LIGHT_PURPLE))
                 .place(13, statusCard(player))
                 .place(20, localButton(player))
                 .place(22, sharedButton(player))
@@ -178,7 +180,7 @@ final class PaperCooldownExamples implements AutoCloseable {
 
     private MenuDisplayItem statusCard(Player player) {
         return menus.display(Material.CLOCK)
-                .name(FakeSkyBlockMenuTitles.normal("Cooldown Status"))
+                .name(Component.text("Cooldown Status", NamedTextColor.YELLOW))
                 .description("Claim a key, then reopen the menu to see the live timer update.")
                         .pairs(
                         MenuPair.of("Local", statusValue(localKey(player))),
@@ -190,7 +192,7 @@ final class PaperCooldownExamples implements AutoCloseable {
 
     private MenuButton localButton(Player player) {
         return menus.button(Material.LIME_DYE)
-                .name(FakeSkyBlockMenuTitles.success("Local Key"))
+                .name(Component.text("Local Key", NamedTextColor.GREEN))
                 .description("Use the rejecting local cooldown twice to prove the repeat is blocked.")
                 .action(ActionVerb.CLAIM, context -> {
                     runLocal(player);
@@ -201,7 +203,7 @@ final class PaperCooldownExamples implements AutoCloseable {
 
     private MenuButton sharedButton(Player player) {
         return menus.button(Material.CLOCK)
-                .name(FakeSkyBlockMenuTitles.perk("Shared Key"))
+                .name(Component.text("Shared Key", NamedTextColor.AQUA))
                 .description("Use the extending shared cooldown twice to prove the timer refreshes.")
                 .action(ActionVerb.CLAIM, context -> {
                     runShared(player);
@@ -212,7 +214,7 @@ final class PaperCooldownExamples implements AutoCloseable {
 
     private MenuButton contextButton(Player player) {
         return menus.button(Material.NAME_TAG)
-                .name(FakeSkyBlockMenuTitles.special("Context Split"))
+                .name(Component.text("Context Split", NamedTextColor.LIGHT_PURPLE))
                 .description("Use two context refs on the same cooldown shape to prove they stay separate.")
                 .action(ActionVerb.CLAIM, context -> {
                     runContext(player);
@@ -223,7 +225,7 @@ final class PaperCooldownExamples implements AutoCloseable {
 
     private MenuButton resetButton(Player player) {
         return menus.button(Material.BARRIER)
-                .name(FakeSkyBlockMenuTitles.danger("Reset Keys"))
+                .name(Component.text("Reset Keys", NamedTextColor.RED))
                 .description("Clear every key used by this cooldown harness.")
                 .action(ActionVerb.MANAGE, "reset", context -> {
                     clear(player);
@@ -239,9 +241,9 @@ final class PaperCooldownExamples implements AutoCloseable {
     private UiValue statusValue(CooldownKey key) {
         Optional<Duration> remaining = cooldowns.remaining(key);
         if (remaining.isEmpty()) {
-            return FakeSkyBlockMenuValues.ready("Ready");
+            return UiValue.of("Ready").color(NamedTextColor.GREEN);
         }
-        return FakeSkyBlockMenuValues.tracked(formatDuration(remaining.get()));
+        return UiValue.of(formatDuration(remaining.get())).color(NamedTextColor.AQUA);
     }
 
     private String outcomeLabel(CooldownAcquisition acquisition, CooldownKey key, Duration window) {
