@@ -61,7 +61,7 @@ class MenuShowcaseCatalogTest {
     void corpusGoldensRetainCompleteSurfacesInsteadOfPromptOnlyPlaceholders() {
         MenuShowcaseCatalog catalog = new MenuShowcaseCatalog();
 
-        assertEquals(321, catalog.goldens().stream()
+        assertEquals(925, catalog.goldens().stream()
                 .mapToInt(entry -> entry.source().orElseThrow().items().size())
                 .sum());
 
@@ -110,11 +110,26 @@ class MenuShowcaseCatalogTest {
     }
 
     @Test
+    void corpusGoldensPreserveCapturedAirAndColoredChrome() {
+        MenuShowcaseCatalog catalog = new MenuShowcaseCatalog();
+
+        Menu orders = compiled(entry(catalog, "bazaar-orders"));
+        assertEquals("minecraft:black_stained_glass_pane", slot(orders, 0).icon().key());
+        assertEquals("minecraft:air", slot(orders, 11).icon().key());
+        assertEquals("minecraft:air", slot(orders, 23).icon().key());
+
+        Menu oddities = compiled(entry(catalog, "bazaar-oddities"));
+        assertEquals("minecraft:pink_stained_glass_pane", slot(oddities, 1).icon().key());
+        assertEquals("minecraft:air", slot(oddities, 34).icon().key());
+        assertEquals("minecraft:air", slot(oddities, 38).icon().key());
+    }
+
+    @Test
     void corpusConfirmationKeepsTheCapturedTwoChoiceInteractionModel() {
         ShowcaseEntry confirmation = entry(new MenuShowcaseCatalog(), "confirmation");
         Menu menu = compiled(confirmation);
 
-        assertEquals(2, confirmation.source().orElseThrow().items().size());
+        assertEquals(27, confirmation.source().orElseThrow().items().size());
         assertEquals(3, menu.rows());
         assertEquals(Set.of("Selling whole inventory", "Cancel"), visibleTitles(menu));
 
@@ -175,7 +190,7 @@ class MenuShowcaseCatalogTest {
 
     private static Set<String> visibleTitles(Menu menu) {
         return menu.initialFrame().slots().stream()
-                .filter(item -> !isFiller(item))
+                .filter(item -> !isBackground(item))
                 .map(item -> flatten(item.title()))
                 .collect(java.util.stream.Collectors.toSet());
     }
@@ -213,8 +228,14 @@ class MenuShowcaseCatalogTest {
             MenuFrame frame = menu.frame(frameId);
             output.append("FRAME ").append(frameId)
                     .append(" title=").append(component(frame.title())).append('\n');
+            output.append("  LAYOUT");
+            frame.slots().forEach(slot -> output.append(' ')
+                    .append(slot.slot()).append('=')
+                    .append(slot.icon().key()).append('*')
+                    .append(slot.amount()).append(slot.glow() ? '^' : '-'));
+            output.append('\n');
             frame.slots().stream()
-                    .filter(slot -> !isFiller(slot))
+                    .filter(slot -> !isBackground(slot))
                     .forEach(slot -> appendSlot(output, slot));
         });
     }
@@ -253,11 +274,13 @@ class MenuShowcaseCatalogTest {
                 .append('\n');
     }
 
-    private static boolean isFiller(MenuSlot slot) {
-        return slot.icon().key().equals("minecraft:black_stained_glass_pane")
-                && flatten(slot.title()).isBlank()
-                && slot.lore().isEmpty()
-                && slot.interactions().isEmpty();
+    private static boolean isBackground(MenuSlot slot) {
+        String icon = slot.icon().key();
+        return icon.equals("minecraft:air")
+                || (icon.endsWith("_stained_glass_pane")
+                    && flatten(slot.title()).isBlank()
+                    && slot.lore().isEmpty()
+                    && slot.interactions().isEmpty());
     }
 
     private static String component(Component component) {

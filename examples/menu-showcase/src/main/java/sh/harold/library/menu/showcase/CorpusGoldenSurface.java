@@ -60,6 +60,7 @@ final class CorpusGoldenSurface {
     private final String title;
     private final int rows;
     private final List<CapturedItem> items;
+    private final List<CapturedChrome> chrome;
 
     private CorpusGoldenSurface(
             String id,
@@ -67,7 +68,8 @@ final class CorpusGoldenSurface {
             String surfaceSha256,
             String title,
             int rows,
-            List<CapturedItem> items
+            List<CapturedItem> items,
+            List<CapturedChrome> chrome
     ) {
         this.id = requireText(id, "id");
         this.label = requireText(label, "label");
@@ -78,13 +80,27 @@ final class CorpusGoldenSurface {
         }
         this.rows = rows;
         this.items = List.copyOf(items);
+        this.chrome = List.copyOf(chrome);
         if (this.items.isEmpty()) {
             throw new IllegalArgumentException("items cannot be empty");
         }
         Set<Integer> slots = new HashSet<>();
         for (CapturedItem item : this.items) {
+            if (item.sourceSlot() >= rows * 9) {
+                throw new IllegalArgumentException("Source slot " + item.sourceSlot() + " is outside " + id);
+            }
             if (!slots.add(item.sourceSlot())) {
                 throw new IllegalArgumentException("Duplicate source slot " + item.sourceSlot() + " in " + id);
+            }
+        }
+        for (CapturedChrome group : this.chrome) {
+            for (int slot : group.slots()) {
+                if (slot >= rows * 9) {
+                    throw new IllegalArgumentException("Chrome slot " + slot + " is outside " + id);
+                }
+                if (!slots.add(slot)) {
+                    throw new IllegalArgumentException("Duplicate source slot " + slot + " in " + id);
+                }
             }
         }
     }
@@ -102,9 +118,12 @@ final class CorpusGoldenSurface {
     }
 
     SourceReference sourceReference() {
-        return new SourceReference(surfaceSha256, items.stream()
-                .map(item -> new SourceItemReference(item.sha256(), item.sourceSlot()))
-                .toList());
+        List<SourceItemReference> references = new ArrayList<>();
+        items.forEach(item -> references.add(new SourceItemReference(item.sha256(), item.sourceSlot())));
+        chrome.forEach(group -> group.slots().forEach(
+                slot -> references.add(new SourceItemReference(group.sha256(), slot))));
+        references.sort(Comparator.comparingInt(SourceItemReference::slot));
+        return new SourceReference(surfaceSha256, references);
     }
 
     Menu build(MenuService menus) {
@@ -133,12 +152,18 @@ final class CorpusGoldenSurface {
             canvas.place(targetSlot, item.toMenuItem());
         }
         Menu built = canvas.build();
-        // The capture has only a subject-as-confirm button and Cancel; do not invent a third choice.
-        return id.equals("confirmation") ? withoutHouseClose(built) : built;
+        return withCapturedBackground(built, Set.copyOf(placedSlots));
     }
 
-    private static Menu withoutHouseClose(Menu delegate) {
+    private Menu withCapturedBackground(Menu delegate, Set<Integer> placedSlots) {
         int closeSlot = (delegate.rows() - 1) * 9 + 4;
+        Set<Integer> sourceItemSlots = items.stream()
+                .map(CapturedItem::sourceSlot)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        Map<Integer, String> chromeBySlot = new LinkedHashMap<>();
+        chrome.forEach(group -> group.slots().forEach(slot -> chromeBySlot.put(slot, group.icon())));
+        Map<Integer, String> capturedChrome = Map.copyOf(chromeBySlot);
+        boolean retainHouseClose = !id.equals("confirmation");
         return new Menu() {
             @Override
             public Component title() {
@@ -159,7 +184,20 @@ final class CorpusGoldenSurface {
             public MenuFrame frame(String frameId) {
                 MenuFrame frame = delegate.frame(frameId);
                 List<MenuSlot> slots = frame.slots().stream()
-                        .map(slot -> slot.slot() == closeSlot ? filler(slot.slot()) : slot)
+                        .map(slot -> {
+                            int index = slot.slot();
+                            if (placedSlots.contains(index) || (retainHouseClose && index == closeSlot)) {
+                                return slot;
+                            }
+                            String chromeIcon = capturedChrome.get(index);
+                            if (chromeIcon != null) {
+                                return chrome(index, chromeIcon);
+                            }
+                            if (sourceItemSlots.contains(index)) {
+                                return slot;
+                            }
+                            return empty(index);
+                        })
                         .toList();
                 return new MenuFrame(frame.title(), slots);
             }
@@ -176,9 +214,14 @@ final class CorpusGoldenSurface {
         };
     }
 
-    private static MenuSlot filler(int slot) {
-        return new MenuSlot(slot, MenuIcon.vanilla("black_stained_glass_pane"),
+    private static MenuSlot chrome(int slot, String icon) {
+        return new MenuSlot(slot, MenuIcon.vanilla(icon),
                 Component.text(" "), List.of(), false, Map.of());
+    }
+
+    private static MenuSlot empty(int slot) {
+        return new MenuSlot(slot, MenuIcon.vanilla("air"),
+                Component.empty(), List.of(), false, Map.of());
     }
 
     private Set<Integer> sourceOwnedSlots(int footerStart) {
@@ -236,7 +279,7 @@ final class CorpusGoldenSurface {
             }
             JsonObject root = COMPONENTS.serializer().fromJson(
                     new InputStreamReader(input, StandardCharsets.UTF_8), JsonObject.class);
-            if (requiredInt(root, "schemaVersion") != 1) {
+            if (requiredInt(root, "schemaVersion") != 2) {
                 throw new IllegalStateException("Unsupported golden menu resource schema");
             }
             List<CorpusGoldenSurface> surfaces = new ArrayList<>();
@@ -251,13 +294,26 @@ final class CorpusGoldenSurface {
                 for (JsonElement itemElement : requiredArray(surface, "items")) {
                     items.add(parseItem(itemElement.getAsJsonObject()));
                 }
+                List<CapturedChrome> chrome = new ArrayList<>();
+                for (JsonElement chromeElement : requiredArray(surface, "chrome")) {
+                    JsonObject group = chromeElement.getAsJsonObject();
+                    List<Integer> slots = new ArrayList<>();
+                    for (JsonElement slot : requiredArray(group, "slots")) {
+                        slots.add(slot.getAsInt());
+                    }
+                    chrome.add(new CapturedChrome(
+                            requiredString(group, "sha256"),
+                            requiredString(group, "icon"),
+                            slots));
+                }
                 surfaces.add(new CorpusGoldenSurface(
                         id,
                         requiredString(surface, "label"),
                         requiredString(surface, "surfaceSha256"),
                         requiredString(surface, "title"),
                         requiredInt(surface, "rows"),
-                        items));
+                        items,
+                        chrome));
             }
             if (surfaces.size() != 20) {
                 throw new IllegalStateException("Expected 20 corpus golden surfaces, got " + surfaces.size());
@@ -483,6 +539,23 @@ final class CorpusGoldenSurface {
     }
 
     private record CapturedPrompt(MenuClick click, ActionVerb verb, String label) {
+    }
+
+    private record CapturedChrome(String sha256, String icon, List<Integer> slots) {
+
+        private CapturedChrome {
+            sha256 = SourceItemReference.requireSha256(sha256, "sha256");
+            icon = requireText(icon, "icon");
+            slots = List.copyOf(slots);
+            if (slots.isEmpty()) {
+                throw new IllegalArgumentException("chrome slots cannot be empty");
+            }
+            for (int slot : slots) {
+                if (slot < 0 || slot > 53) {
+                    throw new IllegalArgumentException("chrome slot must be between 0 and 53");
+                }
+            }
+        }
     }
 
     private record AuthoredLore(List<List<Component>> sections, List<CapturedPrompt> prompts) {
