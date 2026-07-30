@@ -5,6 +5,7 @@ import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.junit.jupiter.api.Test;
+import sh.harold.library.menu.ActionVerb;
 import sh.harold.library.menu.Menu;
 import sh.harold.library.menu.MenuClick;
 import sh.harold.library.menu.MenuFrame;
@@ -57,6 +58,81 @@ class MenuShowcaseCatalogTest {
     }
 
     @Test
+    void corpusGoldensRetainCompleteSurfacesInsteadOfPromptOnlyPlaceholders() {
+        MenuShowcaseCatalog catalog = new MenuShowcaseCatalog();
+
+        assertEquals(321, catalog.goldens().stream()
+                .mapToInt(entry -> entry.source().orElseThrow().items().size())
+                .sum());
+
+        ShowcaseEntry skyBlock = entry(catalog, "skyblock-menu");
+        assertEquals(Set.of(
+                        "Stats & Equipment",
+                        "Your Skills",
+                        "Collections",
+                        "Recipe Book",
+                        "SkyBlock Leveling",
+                        "Quests & Chapters",
+                        "Calendar and Events",
+                        "Storage",
+                        "Your Bags",
+                        "Pets",
+                        "Crafting Table",
+                        "Loadouts",
+                        "Personal Bank",
+                        "Profile Management",
+                        "Fast Travel",
+                        "Close",
+                        "Settings",
+                        "Booster Cookie"),
+                visibleTitles(compiled(skyBlock)));
+
+        MenuSlot cucumber = slot(compiled(entry(catalog, "profile-management")), 11);
+        assertEquals("Profile: Cucumber", flatten(cucumber.title()));
+        assertEquals(28, cucumber.lore().size());
+        assertTrue(cucumber.lore().stream()
+                .map(MenuShowcaseCatalogTest::flatten)
+                .anyMatch(line -> line.equals("Bank Coins: 93,660,545")));
+
+        Set<String> promptOnlyChrome = Set.of("Close", "Cancel", "Go Back", "Scroll Up", "Scroll Right");
+        for (ShowcaseEntry golden : catalog.goldens()) {
+            for (MenuSlot item : compiled(golden).initialFrame().slots()) {
+                String title = flatten(item.title());
+                if (item.interactions().isEmpty() || promptOnlyChrome.contains(title)) {
+                    continue;
+                }
+                boolean promptOnly = !item.lore().isEmpty() && item.lore().stream()
+                        .map(MenuShowcaseCatalogTest::flatten)
+                        .allMatch(line -> line.isBlank() || isGeneratedPrompt(line));
+                assertTrue(!promptOnly, golden.id() + " contains a prompt-only placeholder: " + title);
+            }
+        }
+    }
+
+    @Test
+    void corpusConfirmationKeepsTheCapturedTwoChoiceInteractionModel() {
+        ShowcaseEntry confirmation = entry(new MenuShowcaseCatalog(), "confirmation");
+        Menu menu = compiled(confirmation);
+
+        assertEquals(2, confirmation.source().orElseThrow().items().size());
+        assertEquals(3, menu.rows());
+        assertEquals(Set.of("Selling whole inventory", "Cancel"), visibleTitles(menu));
+
+        MenuSlot confirm = slot(menu, 11);
+        assertEquals(List.of(
+                        "You sell: 2x products",
+                        "You earn: 49.5 coins",
+                        "",
+                        "CLICK to confirm!"),
+                confirm.lore().stream().map(MenuShowcaseCatalogTest::flatten).toList());
+        assertEquals(ActionVerb.CONFIRM, confirm.interactions().get(MenuClick.LEFT).verb());
+
+        MenuSlot cancel = slot(menu, 15);
+        assertTrue(cancel.lore().isEmpty());
+        assertEquals(ActionVerb.BACK, cancel.interactions().get(MenuClick.LEFT).verb());
+    }
+
+    @Test
     void synthesizedExamplesCollectivelyExerciseTheCompleteV9FeatureMatrix() {
         MenuShowcaseCatalog catalog = new MenuShowcaseCatalog();
         EnumSet<ShowcaseFeature> covered = EnumSet.noneOf(ShowcaseFeature.class);
@@ -77,6 +153,35 @@ class MenuShowcaseCatalogTest {
             String expected = new String(input.readAllBytes(), StandardCharsets.UTF_8).replace("\r\n", "\n");
             assertEquals(expected, actual);
         }
+    }
+
+    private static ShowcaseEntry entry(MenuShowcaseCatalog catalog, String id) {
+        return catalog.entries().stream()
+                .filter(entry -> entry.id().equals(id))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static Menu compiled(ShowcaseEntry entry) {
+        return (Menu) entry.menu();
+    }
+
+    private static MenuSlot slot(Menu menu, int slot) {
+        return menu.initialFrame().slots().stream()
+                .filter(item -> item.slot() == slot)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static Set<String> visibleTitles(Menu menu) {
+        return menu.initialFrame().slots().stream()
+                .filter(item -> !isFiller(item))
+                .map(item -> flatten(item.title()))
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private static boolean isGeneratedPrompt(String line) {
+        return line.matches("(?:CLICK|SHIFT CLICK|RIGHT CLICK|SHIFT RIGHT CLICK) to .+!");
     }
 
     private static String snapshot(MenuShowcaseCatalog catalog) {
