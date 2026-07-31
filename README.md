@@ -224,7 +224,13 @@ Omitting `behaviorProfile` leaves a House service motionless. Calling `speak`, `
 
 `attendTo(UUID)` is the behavior identity boundary. Its `Identified` overload accepts Adventure identities and platform players; `Audience` is not used as player or group membership. Platform adapters use audiences only as permitted sound recipients.
 
-Paper consumers must install PacketEvents `2.13.0`, declare it as a required server dependency, and construct `PaperEntityPlatform` only after PacketEvents has loaded and initialized. The adapter rejects missing or unsupported PacketEvents/protocol combinations instead of guessing packet layouts. Paper/Folia code should use `spawnAsync`, `spawnServiceAsync`, `teleportAsync`, and `closeAsync`; synchronous methods are owner-region fast paths and fail on the wrong lane. See the [Paper entity example](platform/paper/paper-entity-example) and [Minestom entity example](platform/minestom/minestom-entity-example) for complete platform wiring. PacketEvents' repository and dependency coordinates are documented in its [development setup guide](https://docs.packetevents.com/introduction/development-setup/).
+Paper consumers must install PacketEvents `2.13.0`, declare it as a required server dependency, and construct `PaperEntityPlatform` only after PacketEvents has loaded and initialized. The adapter rejects missing or unsupported PacketEvents/protocol combinations instead of guessing packet layouts. Paper/Folia code should use `spawnAsync`, `spawnServiceAsync`, `teleportAsync`, and `closeAsync`; synchronous methods are owner-region fast paths and fail on the wrong lane. PacketEvents' repository and dependency coordinates are documented in its [development setup guide](https://docs.packetevents.com/introduction/development-setup/).
+
+The platform examples are persistent walk-up showcases rather than one-shot smoke sequences. Both include a working library, a forge and supporting roles that cover all eight personalities, all four shipped prop routines, custom sequence primitives, weighted ambient idles, attention barks, shared and overlapping conversations, application chat callbacks, base-equipment restoration, and explicit controls for speech, playback, manual attention, snapshots, disable, and reconfiguration. See the [Paper NPC dioramas](platform/paper/paper-entity-example) and [Minestom NPC dioramas](platform/minestom/minestom-entity-example) for scene maps, controls, and two-player verification instructions. Run the standalone Minestom version with:
+
+```bash
+./gradlew runMinestomNpcDioramas
+```
 
 Menu v9 authors semantic sections and leaves spacing, 240-pixel lore wrapping, progress rendering, and prompt placement to the compiler:
 
