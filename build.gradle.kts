@@ -180,6 +180,12 @@ tasks.register("runMinestomExample") {
     dependsOn(":platform:minestom:minestom-example:run")
 }
 
+tasks.register("runMinestomNpcDioramas") {
+    group = "application"
+    description = "Runs the standalone Minestom NPC behavior dioramas."
+    dependsOn(":platform:minestom:minestom-entity-example:run")
+}
+
 tasks.register("runFabricServerExample") {
     group = "application"
     description = "Runs the Fabric server example using Loom."
