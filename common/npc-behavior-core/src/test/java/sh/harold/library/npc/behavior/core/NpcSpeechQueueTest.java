@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -73,6 +75,27 @@ class NpcSpeechQueueTest {
 
         assertEquals("second", plain(shown.get(0).text()));
         assertFalse(second.done());
+    }
+
+    @Test
+    void viewerSuppressionUpdatesTheCurrentBubbleAndCarriesIntoLaterLines() {
+        UUID viewer = new UUID(0L, 42L);
+        List<NpcBubbleFrame> shown = new ArrayList<>();
+        List<NpcBubbleFrame> updated = new ArrayList<>();
+        NpcSpeechQueue queue = new NpcSpeechQueue(shown::add, updated::add, ignored -> { });
+        queue.append(Component.text("first"), NpcBubbleFrame.Kind.CONVERSATION);
+        queue.append(Component.text("second"), NpcBubbleFrame.Kind.CONVERSATION);
+        queue.tick(0);
+
+        queue.suppressViewer(viewer);
+
+        assertEquals(Set.of(viewer), updated.getLast().excludedViewers());
+        queue.tick(40);
+        queue.tick(48);
+        assertEquals(Set.of(viewer), shown.getLast().excludedViewers());
+
+        queue.releaseViewer(viewer);
+        assertTrue(updated.getLast().excludedViewers().isEmpty());
     }
 
     @Test

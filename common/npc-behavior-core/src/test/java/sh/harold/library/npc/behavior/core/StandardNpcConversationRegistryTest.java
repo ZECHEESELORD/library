@@ -114,13 +114,13 @@ class StandardNpcConversationRegistryTest {
     }
 
     @Test
-    void directInteractionRunsEachOtherActorOnceThenDefersClickedBark() {
+    void directInteractionKeepsSharedConversationActiveAndRepliesToOnlyThatViewer() {
         Fixture fixture = new Fixture(3);
         NpcConversationRegistration registration = fixture.registry.register(topic(), fixture.entities);
         fixture.tick(100);
         fixture.tick(101);
         UUID viewer = new UUID(0L, 999L);
-        NpcBehaviorActor clicked = fixture.actors.get(1);
+        NpcBehaviorActor clicked = fixture.actors.get(0);
         clicked.observeViewer(new NpcAttentionStack.Observation(
                 viewer,
                 true,
@@ -132,24 +132,17 @@ class StandardNpcConversationRegistryTest {
         ));
         clicked.observeInteraction(viewer, sh.harold.library.entity.EntityInteractionAction.USE);
 
-        int reachedCooldownAt = -1;
-        for (int tick = 102; tick < 1_000; tick++) {
-            fixture.tick(tick);
-            if (registration.snapshot().state() == NpcConversationState.COOLDOWN) {
-                reachedCooldownAt = tick;
-                fixture.tick(tick + 1);
-                break;
-            }
-        }
+        fixture.tick(102);
 
-        assertTrue(reachedCooldownAt > 0);
-        assertEquals(0, fixture.registry.activeLockCount());
-        assertTrue(fixture.ports.get(0).interruptionBubbles > 0);
-        assertEquals(0, fixture.ports.get(1).interruptionBubbles,
-                "interacted NPC is excluded from the whole cascade");
-        assertTrue(fixture.ports.get(2).interruptionBubbles > 0);
-        assertTrue(fixture.ports.get(1).attentionBubbles > 0,
-                "clicked attention bark is shown only after locks are released");
+        assertEquals(NpcConversationState.ACTIVE, registration.snapshot().state());
+        assertEquals(3, fixture.registry.activeLockCount());
+        assertTrue(fixture.ports.get(0).virtualBubbleViewers.contains(viewer));
+        assertTrue(fixture.ports.get(0).sharedBubbles.stream().anyMatch(
+                bubble -> bubble.kind() == NpcBubbleFrame.Kind.CONVERSATION
+                        && bubble.excludedViewers().contains(viewer)
+        ));
+        assertEquals(0, fixture.ports.get(1).interruptionBubbles);
+        assertEquals(0, fixture.ports.get(2).interruptionBubbles);
     }
 
     @Test
@@ -197,7 +190,7 @@ class StandardNpcConversationRegistryTest {
     }
 
     @Test
-    void unregisterAfterRoutingStillDeliversTheDirectInteractionBark() {
+    void unregisterAfterInteractionDoesNotDelayThePrivateReply() {
         Fixture fixture = new Fixture(2);
         NpcConversationRegistration registration = fixture.registry.register(topic(), fixture.entities);
         fixture.tick(100);
@@ -210,21 +203,18 @@ class StandardNpcConversationRegistryTest {
         clicked.observeInteraction(viewer, sh.harold.library.entity.EntityInteractionAction.USE);
         clicked.tick(101);
 
+        assertTrue(fixture.ports.get(0).virtualBubbleViewers.contains(viewer));
+        assertEquals(NpcConversationState.ACTIVE, registration.snapshot().state());
         registration.unregister();
         fixture.registry.tick(101);
         clicked.tick(102);
 
-        assertTrue(fixture.ports.get(0).attentionBubbles > 0);
         assertEquals(0, fixture.registry.activeLockCount());
     }
 
     @Test
-    void genericInterruptionPoolIsUsedWhenAnNpcHasNoProfileOverride() {
+    void directInteractionDoesNotTriggerAConversationInterruptionCascade() {
         Fixture fixture = new Fixture(2);
-        fixture.actors.get(1).configure(NpcBehaviorProfile.builder()
-                .interactionLine(Component.text("hello"))
-                .build());
-        fixture.tick(1);
         NpcConversationRegistration registration = fixture.registry.register(topic(), fixture.entities);
         fixture.tick(101);
 
@@ -232,17 +222,16 @@ class StandardNpcConversationRegistryTest {
         NpcBehaviorActor clicked = fixture.actors.get(0);
         clicked.observeViewer(observation(viewer));
         clicked.observeInteraction(viewer, sh.harold.library.entity.EntityInteractionAction.USE);
-        for (int tick = 102; tick < 1_000 && registration.snapshot().state() != NpcConversationState.COOLDOWN;
-             tick++) {
-            fixture.tick(tick);
-        }
+        fixture.tick(102);
 
-        assertTrue(fixture.ports.get(1).interruptionTexts.contains(Component.text("hey!")));
-        assertEquals(0, fixture.registry.activeLockCount());
+        assertEquals(NpcConversationState.ACTIVE, registration.snapshot().state());
+        assertEquals(2, fixture.registry.activeLockCount());
+        assertEquals(0, fixture.ports.get(0).interruptionBubbles);
+        assertEquals(0, fixture.ports.get(1).interruptionBubbles);
     }
 
     @Test
-    void secondInteractionSupersedesThePendingCascadeAndDeferredBark() {
+    void concurrentPlayerInteractionsRemainIndependent() {
         Fixture fixture = new Fixture(3);
         NpcConversationRegistration registration = fixture.registry.register(topic(), fixture.entities);
         fixture.tick(100);
@@ -253,22 +242,12 @@ class StandardNpcConversationRegistryTest {
         fixture.actors.get(1).observeViewer(observation(secondViewer));
         fixture.actors.get(1).observeInteraction(secondViewer, sh.harold.library.entity.EntityInteractionAction.ATTACK);
 
-        int cooldownTick = -1;
-        for (int tick = 101; tick < 1_000; tick++) {
-            fixture.tick(tick);
-            if (registration.snapshot().state() == NpcConversationState.COOLDOWN) {
-                cooldownTick = tick;
-                break;
-            }
-        }
-        assertTrue(cooldownTick > 0);
-        fixture.tick(cooldownTick + 1);
+        fixture.tick(101);
 
-        assertEquals(0, fixture.ports.get(0).attentionBubbles,
-                "the first disposable deferred bark is superseded");
-        assertTrue(fixture.ports.get(1).attentionBubbles > 0,
-                "only the newest interacted NPC receives the post-cascade bark");
-        assertEquals(0, fixture.registry.activeLockCount());
+        assertEquals(NpcConversationState.ACTIVE, registration.snapshot().state());
+        assertEquals(3, fixture.registry.activeLockCount());
+        assertTrue(fixture.ports.get(0).virtualBubbleViewers.contains(firstViewer));
+        assertTrue(fixture.ports.get(1).virtualBubbleViewers.contains(secondViewer));
     }
 
     private static NpcAttentionStack.Observation observation(UUID viewer) {
@@ -411,18 +390,20 @@ class StandardNpcConversationRegistryTest {
 
     private static final class RecordingPort implements NpcBehaviorRenderPort {
         private int interruptionBubbles;
-        private int attentionBubbles;
-        private final List<Component> interruptionTexts = new ArrayList<>();
+        private final List<NpcBubbleFrame> sharedBubbles = new ArrayList<>();
+        private final List<UUID> virtualBubbleViewers = new ArrayList<>();
 
         @Override
         public void showSharedBubble(NpcBubbleFrame bubble) {
+            sharedBubbles.add(bubble);
             if (bubble.kind() == NpcBubbleFrame.Kind.INTERRUPTION) {
                 interruptionBubbles++;
-                interruptionTexts.add(bubble.text());
             }
-            if (bubble.kind() == NpcBubbleFrame.Kind.ATTENTION) {
-                attentionBubbles++;
-            }
+        }
+
+        @Override
+        public void showVirtualBubble(UUID viewerId, NpcBubbleFrame bubble) {
+            virtualBubbleViewers.add(viewerId);
         }
     }
 

@@ -68,6 +68,29 @@ public final class NpcAttentionBubbles {
         return bubble;
     }
 
+    public synchronized NpcBubbleFrame showViewer(
+            UUID target,
+            Component text,
+            NpcVoiceProfile voice,
+            long tick
+    ) {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(text, "text");
+        Objects.requireNonNull(voice, "voice");
+        clearViewer(target);
+        long expiresAt = tick + NpcSpeechText.holdTicks(text);
+        NpcBubbleFrame bubble = new NpcBubbleFrame(
+                nextId++,
+                NpcSpeechText.wrap(text),
+                expiresAt,
+                NpcBubbleFrame.Kind.ATTENTION
+        );
+        virtual.put(target, bubble);
+        renderer.showVirtualBubble(target, bubble);
+        playVoice(voice, Set.of(target));
+        return bubble;
+    }
+
     public synchronized void tick(long tick) {
         if (real != null && tick >= real.bubble.expiresAtTick()) {
             renderer.clearSharedBubble(real.bubble.id());
@@ -85,14 +108,32 @@ public final class NpcAttentionBubbles {
     public synchronized void release(UUID viewerId) {
         Objects.requireNonNull(viewerId, "viewerId");
         removeVirtual(viewerId);
-        if (real != null && real.target.equals(viewerId)) {
-            renderer.clearSharedBubble(real.bubble.id());
-            real = null;
-            return;
-        }
         if (real != null && real.bubble.excludedViewers().contains(viewerId)) {
             Set<UUID> exclusions = new LinkedHashSet<>(real.bubble.excludedViewers());
             exclusions.remove(viewerId);
+            NpcBubbleFrame updated = new NpcBubbleFrame(
+                    real.bubble.id(),
+                    real.bubble.text(),
+                    real.bubble.expiresAtTick(),
+                    real.bubble.kind(),
+                    exclusions
+            );
+            real = new Real(real.target, updated);
+            renderer.showSharedBubble(updated);
+            return;
+        }
+        if (real != null && real.target.equals(viewerId)) {
+            renderer.clearSharedBubble(real.bubble.id());
+            real = null;
+        }
+    }
+
+    public synchronized void clearViewer(UUID viewerId) {
+        Objects.requireNonNull(viewerId, "viewerId");
+        removeVirtual(viewerId);
+        if (real != null && !real.bubble.excludedViewers().contains(viewerId)) {
+            Set<UUID> exclusions = new LinkedHashSet<>(real.bubble.excludedViewers());
+            exclusions.add(viewerId);
             NpcBubbleFrame updated = new NpcBubbleFrame(
                     real.bubble.id(),
                     real.bubble.text(),
@@ -106,11 +147,18 @@ public final class NpcAttentionBubbles {
     }
 
     public synchronized void clear() {
+        clearExcept(Set.of());
+    }
+
+    public synchronized void clearExcept(Set<UUID> retainedViewers) {
+        Set<UUID> retained = Set.copyOf(Objects.requireNonNull(retainedViewers, "retainedViewers"));
         if (real != null) {
             renderer.clearSharedBubble(real.bubble.id());
             real = null;
         }
-        List<UUID> viewers = List.copyOf(virtual.keySet());
+        List<UUID> viewers = virtual.keySet().stream()
+                .filter(viewer -> !retained.contains(viewer))
+                .toList();
         viewers.forEach(this::removeVirtual);
     }
 

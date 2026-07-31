@@ -124,7 +124,11 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         this.conversationGaze = new NpcGazeController(homeYaw, homePitch);
         this.idleSelector = new NpcIdleSelector(random);
         this.attentionBubbles = new NpcAttentionBubbles(renderer, random);
-        this.speech = new NpcSpeechQueue(this::showWorldBubble, renderer::clearSharedBubble);
+        this.speech = new NpcSpeechQueue(
+                this::showWorldBubble,
+                renderer::showSharedBubble,
+                renderer::clearSharedBubble
+        );
         NpcRenderFrame home = NpcRenderFrame.standing(homeYaw, homePitch);
         this.nativeSnapshot = new NpcNativeSnapshot(Vec3.ZERO, Optional.empty(), home, 0);
         this.routines = new NpcRoutinePlayer(
@@ -640,6 +644,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         sharedGesture.clear();
         attentionBubbles.clear();
         speech.clear(lastTick);
+        speech.clearViewerSuppressions();
         routines.cancel();
         idleSelector.reset();
         activeIdle = null;
@@ -682,6 +687,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         for (NpcAttentionStack.Event event : attention.drainEvents()) {
             if (event.type() == NpcAttentionStack.EventType.RELEASED) {
                 attentionBubbles.release(event.viewerId());
+                speech.releaseViewer(event.viewerId());
                 viewerGazes.remove(event.viewerId());
                 viewerGestures.remove(event.viewerId());
                 lastViewerFrames.remove(event.viewerId());
@@ -729,6 +735,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
                 .map(NpcAttentionStack.Observation::target)
                 .orElse(new NpcAttentionStack.GazeTarget(homeYaw, homePitch));
         attention.interaction(viewerId, target);
+        speech.suppressViewer(viewerId);
         if (!interactionRouter.route(actorId, viewerId)) {
             showInteractionBark(viewerId, lastTick);
         }
@@ -739,6 +746,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         if (current == null) {
             return;
         }
+        attentionBubbles.clearViewer(viewerId);
         startViewerGesture(viewerId, new NpcRenderAnimation(
                 toAnimation(defaultInteractionGesture(current)),
                 6
@@ -747,7 +755,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
             return;
         }
         Component line = current.interactionLines().get(random.nextInt(0, current.interactionLines().size()));
-        showAttentionBark(viewerId, line, tick);
+        attentionBubbles.showViewer(viewerId, line, current.voice(), tick);
     }
 
     private void showAttentionBark(UUID viewerId, Component line, long tick) {
@@ -929,8 +937,10 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
             return NpcBehaviorActivity.ROUTINE;
         }
         NpcSpeechQueue.Snapshot speechSnapshot = speech.snapshot();
+        NpcAttentionBubbles.Snapshot bubbleSnapshot = attentionBubbles.snapshot();
         if (speechSnapshot.phase() != NpcSpeechQueue.Phase.IDLE
-                || attentionBubbles.snapshot().realBubble().isPresent()) {
+                || bubbleSnapshot.realBubble().isPresent()
+                || !bubbleSnapshot.virtualBubbles().isEmpty()) {
             return NpcBehaviorActivity.SPEECH;
         }
         if (attention.snapshot().sessions().isEmpty()
@@ -946,8 +956,13 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         NpcAttentionStack.Snapshot attentionSnapshot = attention.snapshot();
         NpcRoutinePlayer.Snapshot routineSnapshot = routines.snapshot();
         NpcSpeechQueue.Snapshot speechSnapshot = speech.snapshot();
+        NpcAttentionBubbles.Snapshot bubbleSnapshot = attentionBubbles.snapshot();
         Optional<Component> visibleSpeech = speechSnapshot.visibleText().or(() ->
-                attentionBubbles.snapshot().realBubble().map(NpcBubbleFrame::text)
+                bubbleSnapshot.realBubble().map(NpcBubbleFrame::text).or(() ->
+                        bubbleSnapshot.virtualBubbles().values().stream()
+                                .findFirst()
+                                .map(NpcBubbleFrame::text)
+                )
         );
         List<UUID> stack = attentionSnapshot.sessions().stream()
                 .map(NpcAttentionStack.Session::viewerId)
@@ -967,16 +982,24 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
     }
 
     private void showWorldBubble(NpcBubbleFrame bubble) {
-        attentionBubbles.clear();
+        attentionBubbles.clearExcept(bubble.excludedViewers());
         renderer.showSharedBubble(bubble);
         NpcBehaviorProfile current = profile;
         if (current != null) {
-            playSharedVoice(current.voice());
+            playSharedVoice(current.voice(), bubble.excludedViewers());
         }
     }
 
-    private void playSharedVoice(NpcVoiceProfile voice) {
-        NpcVoiceDelivery.select(voice, random).ifPresent(cue -> renderer.playSound(cue.shared()));
+    private void playSharedVoice(NpcVoiceProfile voice, Set<UUID> excludedViewers) {
+        NpcVoiceDelivery.select(voice, random).ifPresent(cue -> {
+            if (excludedViewers.isEmpty()) {
+                renderer.playSound(cue.shared());
+                return;
+            }
+            observations.keySet().stream()
+                    .filter(viewer -> !excludedViewers.contains(viewer))
+                    .forEach(viewer -> renderer.playSound(cue.viewer(viewer)));
+        });
     }
 
     private static boolean materiallyDifferent(NpcRenderFrame previous, NpcRenderFrame next) {

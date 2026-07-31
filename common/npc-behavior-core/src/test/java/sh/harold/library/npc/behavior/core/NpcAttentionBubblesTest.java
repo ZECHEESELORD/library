@@ -68,6 +68,29 @@ class NpcAttentionBubblesTest {
         assertTrue(port.clearedShared.contains(real.id()));
     }
 
+    @Test
+    void privateReplyHidesTheExistingAttentionBarkFromOnlyItsViewer() {
+        RecordingPort port = new RecordingPort();
+        NpcAttentionBubbles bubbles = new NpcAttentionBubbles(port, new MinimumRandom());
+        NpcBubbleFrame shared = bubbles.show(
+                P2,
+                Component.text("ambient"),
+                voice(),
+                Set.of(P1, P2),
+                Set.of(P2),
+                0
+        );
+
+        bubbles.showViewer(P1, Component.text("private"), voice(), 1);
+
+        NpcBubbleFrame updated = port.shared.getLast();
+        assertEquals(shared.id(), updated.id());
+        assertEquals(Set.of(P1), updated.excludedViewers());
+        assertEquals("private", port.virtual.get(P1).text().toString().contains("private")
+                ? "private"
+                : "missing");
+    }
+
     private static NpcVoiceProfile voice() {
         return new NpcVoiceProfile(
                 NpcSoundProfile.of(new NpcSoundProfile.Variant(
@@ -88,7 +111,13 @@ class NpcAttentionBubblesTest {
         private final Map<UUID, NpcBubbleFrame> virtual = new LinkedHashMap<>();
         private final List<UUID> clearedVirtual = new ArrayList<>();
         private final List<Long> clearedShared = new ArrayList<>();
+        private final List<NpcBubbleFrame> shared = new ArrayList<>();
         private final List<NpcRenderedSound> sounds = new ArrayList<>();
+
+        @Override
+        public void showSharedBubble(NpcBubbleFrame bubble) {
+            shared.add(bubble);
+        }
 
         @Override
         public void showVirtualBubble(UUID viewerId, NpcBubbleFrame bubble) {

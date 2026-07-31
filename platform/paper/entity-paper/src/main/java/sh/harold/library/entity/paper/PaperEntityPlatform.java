@@ -111,7 +111,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -604,9 +603,14 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
         });
     }
 
-    private boolean enqueueViewerWork(UUID viewerId, Consumer<Player> action, Runnable retired) {
+    private boolean enqueueViewerWork(
+            UUID viewerId,
+            Consumer<Player> action,
+            Runnable retired,
+            ViewerWorkPriority priority
+    ) {
         PaperViewerLoop loop = viewerLoops.get(Objects.requireNonNull(viewerId, "viewerId"));
-        return loop != null && loop.enqueue(action, retired);
+        return loop != null && loop.submit(action, retired, priority);
     }
 
     private void retireViewer(UUID viewerId, NpcAttentionStack.ReleaseReason reason) {
@@ -758,10 +762,13 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
 
     /** Exactly one ownership-lane task per online viewer. */
     private final class PaperViewerLoop {
+        private static final int MAX_INTERACTIVE_WORK_PER_DRAIN = 64;
+        private static final int MAX_BACKGROUND_WORK_PER_TICK = 64;
+
         private final Player player;
         private final Map<UUID, LosState> lineOfSight = new HashMap<>();
         private final Set<UUID> observed = new HashSet<>();
-        private final ConcurrentLinkedQueue<ViewerWork> work = new ConcurrentLinkedQueue<>();
+        private final PaperViewerWorkQueue<ViewerWork> work = new PaperViewerWorkQueue<>();
         private final CompletableFuture<Void> retirement = new CompletableFuture<>();
         private final AtomicBoolean retired = new AtomicBoolean();
         private final ScheduledTask task;
@@ -867,49 +874,64 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
             }
         }
 
-        private boolean enqueue(Consumer<Player> action, Runnable retiredAction) {
+        private boolean submit(
+                Consumer<Player> action,
+                Runnable retiredAction,
+                ViewerWorkPriority priority
+        ) {
             Objects.requireNonNull(action, "action");
             Objects.requireNonNull(retiredAction, "retiredAction");
+            Objects.requireNonNull(priority, "priority");
             if (retired.get() || lifecycle.closed()) {
                 return false;
             }
             ViewerWork queued = new ViewerWork(action, retiredAction);
-            work.add(queued);
+            work.add(queued, priority);
             if (retired.get() || lifecycle.closed()) {
                 if (work.remove(queued)) {
                     return false;
                 }
             }
+            if (priority == ViewerWorkPriority.INTERACTIVE
+                    && plugin.getServer().isOwnedByCurrentRegion(player)) {
+                // Queue first, then drain, so work submitted before a region
+                // handoff cannot be overtaken by this same-region fast path.
+                work.drainInteractive(MAX_INTERACTIVE_WORK_PER_DRAIN, this::runWork);
+            }
             return true;
         }
 
         private void drainWork() {
-            ViewerWork queued;
-            while ((queued = work.poll()) != null) {
+            work.drainPrioritized(
+                    MAX_INTERACTIVE_WORK_PER_DRAIN,
+                    MAX_BACKGROUND_WORK_PER_TICK,
+                    this::runWork
+            );
+        }
+
+        private void runWork(ViewerWork queued) {
+            try {
+                queued.action().accept(player);
+            } catch (Throwable failure) {
                 try {
-                    queued.action().accept(player);
-                } catch (Throwable failure) {
-                    try {
-                        queued.retired().run();
-                    } catch (Throwable cleanupFailure) {
-                        failure.addSuppressed(cleanupFailure);
-                    }
-                    plugin.getSLF4JLogger().warn("Failed to compose NPC viewer work for {}",
-                            player.getUniqueId(), failure);
+                    queued.retired().run();
+                } catch (Throwable cleanupFailure) {
+                    failure.addSuppressed(cleanupFailure);
                 }
+                plugin.getSLF4JLogger().warn("Failed to compose NPC viewer work for {}",
+                        player.getUniqueId(), failure);
             }
         }
 
         private void retireQueuedWork() {
-            ViewerWork queued;
-            while ((queued = work.poll()) != null) {
+            work.drainAll(queued -> {
                 try {
                     queued.retired().run();
                 } catch (Throwable failure) {
                     plugin.getSLF4JLogger().warn("Failed to retire NPC viewer work for {}",
                             player.getUniqueId(), failure);
                 }
-            }
+            });
         }
 
         private boolean shouldProbe(UUID actorId, UUID viewerId, NpcBehaviorProfile profile) {

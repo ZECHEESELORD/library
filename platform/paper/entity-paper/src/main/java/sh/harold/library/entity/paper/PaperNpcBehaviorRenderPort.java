@@ -234,7 +234,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
             if (!virtualBubbles.replace(viewerId, pending, active)) {
                 codec.destroyVirtualBubble(user, entityId);
             }
-        }, () -> virtualBubbles.remove(viewerId, pending), false);
+        }, () -> virtualBubbles.remove(viewerId, pending), false, ViewerWorkPriority.INTERACTIVE);
     }
 
     @Override
@@ -248,7 +248,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
             return;
         }
         scheduleViewer(viewerId, false, user -> codec.destroyVirtualBubble(user, bubble.entityId()),
-                () -> { }, true);
+                () -> { }, true, ViewerWorkPriority.INTERACTIVE);
     }
 
     @Override
@@ -444,7 +444,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
         for (UUID viewerId : newlyExcluded) {
             codec.hideEntity(viewerId, current.entityId());
             scheduleViewer(viewerId, false, user -> codec.destroyVirtualBubble(user, current.entityId()),
-                    () -> { }, true);
+                    () -> { }, true, ViewerWorkPriority.INTERACTIVE);
         }
 
         Set<UUID> newlyRevealed = new LinkedHashSet<>(current.frame().excludedViewers());
@@ -459,7 +459,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
                     current.entityUuid(),
                     updated.text(),
                     position
-            ), () -> { }, false);
+            ), () -> { }, false, ViewerWorkPriority.INTERACTIVE);
         }
         sharedBubble = current.withFrame(updated);
     }
@@ -525,7 +525,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
                     sound.volume(),
                     sound.pitch()
             );
-        }, () -> { });
+        }, () -> { }, ViewerWorkPriority.BACKGROUND);
     }
 
     /** Keeps at most one queued overlay delivery per viewer for this NPC. */
@@ -568,6 +568,24 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
             Runnable retired,
             boolean allowUntracked
     ) {
+        scheduleViewer(
+                viewerId,
+                requireTracked,
+                action,
+                retired,
+                allowUntracked,
+                ViewerWorkPriority.BACKGROUND
+        );
+    }
+
+    private void scheduleViewer(
+            UUID viewerId,
+            boolean requireTracked,
+            Consumer<User> action,
+            Runnable retired,
+            boolean allowUntracked,
+            ViewerWorkPriority priority
+    ) {
         boolean queued = viewerDispatcher.enqueue(viewerId, player -> {
             ActorSnapshot snapshot = actorSnapshot;
             if (!player.isOnline()
@@ -582,7 +600,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
                 return;
             }
             action.accept(user);
-        }, retired);
+        }, retired, priority);
         if (!queued) {
             retired.run();
         }
@@ -761,6 +779,11 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
 
     @FunctionalInterface
     interface ViewerDispatcher {
-        boolean enqueue(UUID viewerId, Consumer<Player> action, Runnable retired);
+        boolean enqueue(
+                UUID viewerId,
+                Consumer<Player> action,
+                Runnable retired,
+                ViewerWorkPriority priority
+        );
     }
 }

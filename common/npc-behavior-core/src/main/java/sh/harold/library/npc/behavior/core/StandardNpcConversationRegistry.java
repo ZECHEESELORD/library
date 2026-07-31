@@ -99,16 +99,11 @@ public final class StandardNpcConversationRegistry implements
 
     @Override
     public boolean route(UUID actorId, UUID viewerId) {
-        Registration registration = locks.get(Objects.requireNonNull(actorId, "actorId"));
-        if (registration == null || registration.closed) {
-            return false;
-        }
-        NpcConversationState state = registration.state;
-        if (state != NpcConversationState.ACTIVE && state != NpcConversationState.INTERRUPTING) {
-            return false;
-        }
-        events.add(() -> interrupt(registration, actorId, Objects.requireNonNull(viewerId, "viewerId")));
-        return true;
+        Objects.requireNonNull(actorId, "actorId");
+        Objects.requireNonNull(viewerId, "viewerId");
+        // Player interactions are viewer-local actor overrides. The shared
+        // ambient conversation must continue for every other tracked viewer.
+        return false;
     }
 
     public void tick() {

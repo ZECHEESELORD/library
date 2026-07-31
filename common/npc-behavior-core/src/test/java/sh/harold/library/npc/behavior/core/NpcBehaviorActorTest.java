@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -97,7 +98,7 @@ class NpcBehaviorActorTest {
         actor.tick(3);
 
         assertEquals(P1, actor.snapshot().canonicalTarget().orElseThrow());
-        assertEquals(2, port.sharedBubbles.stream()
+        assertEquals(2, port.virtualBubbleEvents.stream()
                 .filter(bubble -> bubble.kind() == NpcBubbleFrame.Kind.ATTENTION)
                 .count());
         assertTrue(actor.snapshot().visibleSpeech().isPresent(),
@@ -187,7 +188,7 @@ class NpcBehaviorActorTest {
         warm.tick(1);
 
         assertTrue(warmPort.viewerAnimationTypes.contains(NpcRenderAnimation.Type.WAVE));
-        assertTrue(warmPort.sharedBubbles.stream().anyMatch(
+        assertTrue(warmPort.virtualBubbleEvents.stream().anyMatch(
                 bubble -> bubble.kind() == NpcBubbleFrame.Kind.ATTENTION
         ));
 
@@ -218,6 +219,30 @@ class NpcBehaviorActorTest {
         actor.tick(1);
 
         assertTrue(port.sounds.stream().anyMatch(sound -> sound.recipient().filter(P1::equals).isPresent()));
+    }
+
+    @Test
+    void interactionSuppressesSharedSpeechOnlyForTheInteractingViewer() {
+        RecordingPort port = new RecordingPort();
+        NpcBehaviorActor actor = actor(port);
+        actor.configure(NpcBehaviorProfile.builder()
+                .interactionLine(Component.text("private reply"))
+                .build());
+        actor.tick(0);
+        actor.speakNow(Component.text("shared conversation"));
+        actor.tick(1);
+        actor.observeViewer(visible(P1, 20.0f));
+        actor.observeViewer(visible(P2, -20.0f));
+        actor.observeInteraction(P1, EntityInteractionAction.USE);
+
+        actor.tick(2);
+
+        NpcBubbleFrame shared = port.sharedBubbles.getLast();
+        assertEquals(Set.of(P1), shared.excludedViewers());
+        assertTrue(port.virtualBubbles.containsKey(P1));
+        assertFalse(port.virtualBubbles.containsKey(P2));
+        assertTrue(port.viewerFrames.containsKey(P1));
+        assertTrue(port.viewerFrames.containsKey(P2));
     }
 
     @Test
@@ -347,6 +372,8 @@ class NpcBehaviorActorTest {
         private final List<UUID> viewerFrameEvents = new ArrayList<>();
         private final List<UUID> clearedOverlays = new ArrayList<>();
         private final List<NpcBubbleFrame> sharedBubbles = new ArrayList<>();
+        private final Map<UUID, NpcBubbleFrame> virtualBubbles = new LinkedHashMap<>();
+        private final List<NpcBubbleFrame> virtualBubbleEvents = new ArrayList<>();
         private final List<UUID> viewerAnimations = new ArrayList<>();
         private final List<NpcRenderAnimation.Type> viewerAnimationTypes = new ArrayList<>();
         private final List<NpcRenderedSound> sounds = new ArrayList<>();
@@ -378,6 +405,17 @@ class NpcBehaviorActorTest {
         @Override
         public void showSharedBubble(NpcBubbleFrame bubble) {
             sharedBubbles.add(bubble);
+        }
+
+        @Override
+        public void showVirtualBubble(UUID viewerId, NpcBubbleFrame bubble) {
+            virtualBubbles.put(viewerId, bubble);
+            virtualBubbleEvents.add(bubble);
+        }
+
+        @Override
+        public void clearVirtualBubble(UUID viewerId, long bubbleId) {
+            virtualBubbles.remove(viewerId);
         }
 
         @Override

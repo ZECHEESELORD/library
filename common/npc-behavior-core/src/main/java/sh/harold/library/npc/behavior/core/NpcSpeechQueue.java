@@ -5,9 +5,12 @@ import net.kyori.adventure.text.Component;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
@@ -20,8 +23,11 @@ public final class NpcSpeechQueue {
 
     private final Deque<Entry> pending = new ArrayDeque<>();
     private final Consumer<NpcBubbleFrame> show;
+    private final Consumer<NpcBubbleFrame> update;
     private final java.util.function.LongConsumer clear;
+    private final Set<UUID> excludedViewers = new LinkedHashSet<>();
     private Entry active;
+    private NpcBubbleFrame visibleFrame;
     private Entry urgentBehindBarrier;
     private Phase phase = Phase.IDLE;
     private long deadline;
@@ -29,7 +35,16 @@ public final class NpcSpeechQueue {
     private int barrierDepth;
 
     public NpcSpeechQueue(Consumer<NpcBubbleFrame> show, java.util.function.LongConsumer clear) {
+        this(show, show, clear);
+    }
+
+    public NpcSpeechQueue(
+            Consumer<NpcBubbleFrame> show,
+            Consumer<NpcBubbleFrame> update,
+            java.util.function.LongConsumer clear
+    ) {
         this.show = Objects.requireNonNull(show, "show");
+        this.update = Objects.requireNonNull(update, "update");
         this.clear = Objects.requireNonNull(clear, "clear");
     }
 
@@ -77,6 +92,7 @@ public final class NpcSpeechQueue {
         }
         if (phase == Phase.VISIBLE) {
             clear.accept(active.id);
+            visibleFrame = null;
             phase = Phase.BREATH;
             deadline = tick + NpcSpeechText.BREATH_TICKS;
             return;
@@ -100,6 +116,25 @@ public final class NpcSpeechQueue {
         }
         stopActive(false);
         deadline = tick;
+    }
+
+    public synchronized void suppressViewer(UUID viewerId) {
+        if (excludedViewers.add(Objects.requireNonNull(viewerId, "viewerId"))) {
+            refreshVisibleFrame();
+        }
+    }
+
+    public synchronized void releaseViewer(UUID viewerId) {
+        if (excludedViewers.remove(Objects.requireNonNull(viewerId, "viewerId"))) {
+            refreshVisibleFrame();
+        }
+    }
+
+    public synchronized void clearViewerSuppressions() {
+        if (!excludedViewers.isEmpty()) {
+            excludedViewers.clear();
+            refreshVisibleFrame();
+        }
     }
 
     public synchronized void cancel(Ticket ticket) {
@@ -163,7 +198,22 @@ public final class NpcSpeechQueue {
         phase = Phase.VISIBLE;
         Component wrapped = NpcSpeechText.wrap(entry.text);
         deadline = tick + NpcSpeechText.holdTicks(entry.text);
-        show.accept(new NpcBubbleFrame(entry.id, wrapped, deadline, entry.kind));
+        visibleFrame = new NpcBubbleFrame(entry.id, wrapped, deadline, entry.kind, excludedViewers);
+        show.accept(visibleFrame);
+    }
+
+    private void refreshVisibleFrame() {
+        if (visibleFrame == null || phase != Phase.VISIBLE) {
+            return;
+        }
+        visibleFrame = new NpcBubbleFrame(
+                visibleFrame.id(),
+                visibleFrame.text(),
+                visibleFrame.expiresAtTick(),
+                visibleFrame.kind(),
+                excludedViewers
+        );
+        update.accept(visibleFrame);
     }
 
     private void cancelPending() {
@@ -179,6 +229,7 @@ public final class NpcSpeechQueue {
         if (phase == Phase.VISIBLE) {
             clear.accept(active.id);
         }
+        visibleFrame = null;
         active.ticket.complete(completed);
         active = null;
         phase = Phase.IDLE;
