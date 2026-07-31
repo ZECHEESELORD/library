@@ -1262,20 +1262,21 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
                     }
                 });
 
-                registerCapability(PersistenceCapable.class, new PersistenceCapable() {
-                    @Override
-                    public boolean persistent() {
-                        PaperManagedEntity.this.requireMutable();
-                        return entity.isPersistent();
-                    }
-
-                    @Override
-                    public void persistent(boolean persistent) {
-                        PaperManagedEntity.this.requireMutable();
-                        entity.setPersistent(persistent);
-                    }
-                });
             }
+
+            registerCapability(PersistenceCapable.class, new PersistenceCapable() {
+                @Override
+                public boolean persistent() {
+                    PaperManagedEntity.this.requireMutable();
+                    return entity.isPersistent();
+                }
+
+                @Override
+                public void persistent(boolean persistent) {
+                    PaperManagedEntity.this.requireMutable();
+                    entity.setPersistent(persistent);
+                }
+            });
 
             if (entity instanceof LivingEntity collidableEntity) {
                 registerCapability(CollidableCapable.class, new CollidableCapable() {
