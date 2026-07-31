@@ -44,6 +44,8 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConversationParticipant, AutoCloseable {
 
+    private static final long VIEWER_OVERLAY_INTERVAL_TICKS = 3L;
+
     private final UUID actorId;
     private final float homeYaw;
     private final float homePitch;
@@ -57,12 +59,12 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
     private final Map<UUID, ViewerGaze> viewerGazes = new LinkedHashMap<>();
     private final Map<UUID, NpcGestureComposer> viewerGestures = new LinkedHashMap<>();
     private final Map<UUID, NpcRenderFrame> lastViewerFrames = new LinkedHashMap<>();
+    private final Map<UUID, Long> lastViewerRenderTicks = new LinkedHashMap<>();
     private final Set<UUID> renderedOverlays = new LinkedHashSet<>();
     private final AtomicLong configurationGeneration = new AtomicLong();
     private final AtomicLong implicitObservationEpoch = new AtomicLong();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final ConcurrentLinkedQueue<IdleCompletion> idleCompletions = new ConcurrentLinkedQueue<>();
-    private final NpcGazeController sharedGaze;
     private final NpcGazeController conversationGaze;
     private final NpcGestureComposer sharedGesture = new NpcGestureComposer();
     private final NpcIdleSelector idleSelector;
@@ -78,9 +80,6 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
     private volatile InteractionRouter interactionRouter = InteractionRouter.NONE;
     private NpcAttentionStack attention = new NpcAttentionStack(NpcAttentionStack.Policy.defaults());
     private NpcRenderFrame lastSharedFrame;
-    private UUID sharedGazeTarget;
-    private Set<UUID> sharedAttentionGestureExclusions = Set.of();
-    private long sharedAttentionGestureExpiresAt = Long.MIN_VALUE;
     private NpcAttentionStack.GazeTarget conversationTarget;
     private PendingConfiguration pendingConfiguration;
     private NpcIdleEntry activeIdle;
@@ -122,7 +121,6 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.random = Objects.requireNonNull(random, "random");
-        this.sharedGaze = new NpcGazeController(homeYaw, homePitch);
         this.conversationGaze = new NpcGazeController(homeYaw, homePitch);
         this.idleSelector = new NpcIdleSelector(random);
         this.attentionBubbles = new NpcAttentionBubbles(renderer, random);
@@ -637,11 +635,9 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         viewerGazes.clear();
         viewerGestures.clear();
         lastViewerFrames.clear();
+        lastViewerRenderTicks.clear();
         evaluatedLosEpochs.clear();
         sharedGesture.clear();
-        sharedAttentionGestureExclusions = Set.of();
-        sharedAttentionGestureExpiresAt = Long.MIN_VALUE;
-        sharedGazeTarget = null;
         attentionBubbles.clear();
         speech.clear(lastTick);
         routines.cancel();
@@ -689,11 +685,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
                 viewerGazes.remove(event.viewerId());
                 viewerGestures.remove(event.viewerId());
                 lastViewerFrames.remove(event.viewerId());
-                if (sharedAttentionGestureExclusions.contains(event.viewerId())) {
-                    Set<UUID> remaining = new LinkedHashSet<>(sharedAttentionGestureExclusions);
-                    remaining.remove(event.viewerId());
-                    sharedAttentionGestureExclusions = Set.copyOf(remaining);
-                }
+                lastViewerRenderTicks.remove(event.viewerId());
                 if (renderedOverlays.remove(event.viewerId())) {
                     renderer.clearViewerOverlay(event.viewerId(), currentSharedFrame());
                 }
@@ -721,11 +713,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         if (!act.gestures().isEmpty()) {
             NpcGesturePreset gesture = act.gestures().get(random.nextInt(0, act.gestures().size()));
             NpcRenderAnimation animation = new NpcRenderAnimation(toAnimation(gesture), 6);
-            if (attention.snapshot().canonicalViewer().filter(viewerId::equals).isPresent()) {
-                startSharedAttentionGesture(viewerId, animation);
-            } else {
-                startViewerGesture(viewerId, animation);
-            }
+            startViewerGesture(viewerId, animation);
         }
         if (!act.barkLines().isEmpty()) {
             showAttentionBark(
@@ -751,7 +739,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         if (current == null) {
             return;
         }
-        startSharedAttentionGesture(viewerId, new NpcRenderAnimation(
+        startViewerGesture(viewerId, new NpcRenderAnimation(
                 toAnimation(defaultInteractionGesture(current)),
                 6
         ));
@@ -818,7 +806,6 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
     private void composeFrames(long tick) {
         NpcRenderFrame sharedBase = routines.composedFrame();
         NpcAttentionStack.Snapshot attentionSnapshot = attention.snapshot();
-        NpcAttentionResponse response = attentionResponse();
         NpcRenderFrame shared = sharedBase;
         Map<UUID, NpcRenderFrame> desiredOverlays = new LinkedHashMap<>();
 
@@ -831,70 +818,28 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
                     NpcSustainMode.STEADY
             );
             shared = sharedBase.withLook(gaze.bodyYaw(), gaze.headYaw(), gaze.pitch());
-        } else if (response instanceof NpcAttentionResponse.Sustain sustain) {
-            Optional<NpcAttentionStack.Session> canonical = attentionSnapshot.canonicalViewer()
-                    .flatMap(attentionSnapshot::session);
-            if (canonical.isPresent()) {
-                NpcAttentionStack.Session session = canonical.orElseThrow();
-                if (!session.viewerId().equals(sharedGazeTarget)) {
-                    sharedGaze.target(session.target(), tick);
-                    sharedGazeTarget = session.viewerId();
-                } else {
-                    sharedGaze.retarget(session.target());
-                }
-                NpcGazeController.State gaze = sharedGaze.tick(
-                        tick,
-                        profile.personality(),
-                        profile.tuning(),
-                        sustain.mode()
-                );
-                shared = sharedBase.withLook(gaze.bodyYaw(), gaze.headYaw(), gaze.pitch());
-            } else {
-                if (sharedGazeTarget != null) {
-                    sharedGaze.home(tick);
-                    sharedGazeTarget = null;
-                }
-                NpcGazeController.State gaze = sharedGaze.tick(
-                        tick,
-                        profile.personality(),
-                        profile.tuning(),
-                        sustain.mode()
-                );
-                shared = sharedBase.withLook(gaze.bodyYaw(), gaze.headYaw(), gaze.pitch());
-            }
-
-            Set<UUID> sustainedOverlayViewers = attentionSnapshot.overlayViewers();
-            for (UUID viewerId : sustainedOverlayViewers) {
-                NpcAttentionStack.Session session = attentionSnapshot.session(viewerId).orElseThrow();
-                ViewerGaze viewer = viewerGazes.computeIfAbsent(viewerId, ignored -> new ViewerGaze(
-                        new NpcGazeController(sharedBase.bodyYaw(), sharedBase.pitch()),
-                        session.target(),
-                        tick
-                ));
-                viewer.controller.retarget(session.target());
-                NpcGazeController.State gaze = viewer.controller.tick(
-                        tick,
-                        profile.personality(),
-                        profile.tuning(),
-                        sustain.mode()
-                );
-                NpcRenderFrame overlay = sharedBase.withLook(gaze.bodyYaw(), gaze.headYaw(), gaze.pitch());
-                desiredOverlays.put(viewerId, overlay);
-            }
-        } else {
-            sharedGazeTarget = null;
         }
 
-        NpcRenderFrame sharedBeforeGesture = shared;
+        NpcSustainMode viewerFocusMode = viewerFocusMode();
+        for (NpcAttentionStack.Session session : attentionSnapshot.sessions()) {
+            UUID viewerId = session.viewerId();
+            ViewerGaze viewer = viewerGazes.computeIfAbsent(viewerId, ignored -> new ViewerGaze(
+                    new NpcGazeController(sharedBase.bodyYaw(), sharedBase.pitch()),
+                    session.target(),
+                    tick
+            ));
+            viewer.controller.retarget(session.target());
+            NpcGazeController.State gaze = viewer.controller.tick(
+                    tick,
+                    profile.personality(),
+                    profile.tuning(),
+                    viewerFocusMode
+            );
+            NpcRenderFrame overlay = sharedBase.withLook(gaze.bodyYaw(), gaze.headYaw(), gaze.pitch());
+            desiredOverlays.put(viewerId, overlay);
+        }
+
         shared = sharedGesture.compose(shared, tick);
-        if (tick < sharedAttentionGestureExpiresAt) {
-            for (UUID excluded : sharedAttentionGestureExclusions) {
-                desiredOverlays.putIfAbsent(excluded, sharedBeforeGesture);
-            }
-        } else {
-            sharedAttentionGestureExclusions = Set.of();
-            sharedAttentionGestureExpiresAt = Long.MIN_VALUE;
-        }
 
         List<UUID> completedGestures = new ArrayList<>();
         for (Map.Entry<UUID, NpcGestureComposer> entry : viewerGestures.entrySet()) {
@@ -913,9 +858,13 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         for (Map.Entry<UUID, NpcRenderFrame> entry : desiredOverlays.entrySet()) {
             UUID viewerId = entry.getKey();
             NpcRenderFrame overlay = entry.getValue();
-            if (materiallyDifferent(lastViewerFrames.get(viewerId), overlay)) {
+            Long lastRenderedAt = lastViewerRenderTicks.get(viewerId);
+            boolean renderDue = lastRenderedAt == null
+                    || tick - lastRenderedAt >= VIEWER_OVERLAY_INTERVAL_TICKS;
+            if (renderDue && materiallyDifferent(lastViewerFrames.get(viewerId), overlay)) {
                 renderer.renderViewerOverlay(viewerId, overlay);
                 lastViewerFrames.put(viewerId, overlay);
+                lastViewerRenderTicks.put(viewerId, tick);
             }
             renderedOverlays.add(viewerId);
         }
@@ -937,6 +886,7 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         }
         renderedOverlays.removeAll(removed);
         removed.forEach(lastViewerFrames::remove);
+        removed.forEach(lastViewerRenderTicks::remove);
         viewerGazes.keySet().removeIf(viewer -> !desired.contains(viewer));
     }
 
@@ -950,6 +900,13 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
             case ROUTINE -> NpcAttentionActivity.ROUTINE;
             case CONVERSATION -> NpcAttentionActivity.CONVERSATION;
         });
+    }
+
+    private NpcSustainMode viewerFocusMode() {
+        NpcAttentionResponse idle = profile.attention().responseFor(NpcAttentionActivity.IDLE);
+        return idle instanceof NpcAttentionResponse.Sustain sustain
+                ? sustain.mode()
+                : NpcSustainMode.NATURAL;
     }
 
     private AttentionActivity currentAttentionActivity() {
@@ -1090,22 +1047,10 @@ public final class NpcBehaviorActor implements HumanoidBehaviorCapable, NpcConve
         renderer.animateShared(animation);
     }
 
-    private void startSharedAttentionGesture(UUID target, NpcRenderAnimation animation) {
-        Set<UUID> excluded = new LinkedHashSet<>();
-        for (NpcAttentionStack.Session session : attention.snapshot().sessions()) {
-            if (!session.viewerId().equals(target)) {
-                excluded.add(session.viewerId());
-            }
-        }
-        sharedAttentionGestureExclusions = Set.copyOf(excluded);
-        sharedAttentionGestureExpiresAt = lastTick + animation.durationTicks();
-        sharedGesture.start(animation, lastTick);
-        renderer.animateAttention(animation, sharedAttentionGestureExclusions);
-    }
-
     private void startViewerGesture(UUID viewerId, NpcRenderAnimation animation) {
         viewerGestures.computeIfAbsent(viewerId, ignored -> new NpcGestureComposer())
                 .start(animation, lastTick);
+        lastViewerRenderTicks.remove(viewerId);
         renderer.animateViewer(viewerId, animation);
     }
 

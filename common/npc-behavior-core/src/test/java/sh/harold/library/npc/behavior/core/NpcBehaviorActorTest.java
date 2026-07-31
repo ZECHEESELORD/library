@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,12 +67,13 @@ class NpcBehaviorActorTest {
         assertEquals(P2, actor.snapshot().canonicalTarget().orElseThrow());
         assertEquals(List.of(P1, P2), actor.snapshot().acquisitionStack());
         assertTrue(port.viewerFrames.containsKey(P1));
-        assertFalse(port.viewerFrames.containsKey(P2));
+        assertTrue(port.viewerFrames.containsKey(P2));
 
         actor.removeViewer(P2, NpcAttentionStack.ReleaseReason.UNTRACKED);
         actor.tick(3);
         assertEquals(P1, actor.snapshot().canonicalTarget().orElseThrow());
-        assertTrue(port.clearedOverlays.contains(P1), "former personal overlay is replaced with full native frame");
+        assertTrue(port.clearedOverlays.contains(P2));
+        assertTrue(port.viewerFrames.containsKey(P1));
 
         var disabled = actor.disable();
         actor.tick(4);
@@ -105,7 +105,7 @@ class NpcBehaviorActorTest {
     }
 
     @Test
-    void laterCanonicalAttentionGestureIsExcludedFromEarlierEngagedBranch() {
+    void everyAcquiredViewerOwnsAnIndependentFocusAndAcknowledgementBranch() {
         RecordingPort port = new RecordingPort();
         NpcBehaviorActor actor = actor(port);
         NpcAttentionSpec attention = NpcAttentionSpec.builder()
@@ -121,11 +121,57 @@ class NpcBehaviorActorTest {
         actor.observeViewer(visible(P2, 45.0f));
         actor.tick(2);
 
-        assertEquals(List.of(Set.of(), Set.of(P1)), port.attentionAnimationExclusions);
-        assertTrue(port.viewerFrames.containsKey(P1),
-                "the earlier branch temporarily owns attention channels while the new act plays");
+        assertEquals(List.of(P1, P2), port.viewerAnimations);
+        assertTrue(port.viewerFrames.containsKey(P1));
+        assertTrue(port.viewerFrames.containsKey(P2));
         actor.tick(8);
-        assertFalse(port.viewerFrames.containsKey(P1));
+        assertTrue(port.viewerFrames.containsKey(P1));
+        assertTrue(port.viewerFrames.containsKey(P2));
+    }
+
+    @Test
+    void proximityFocusStartsWhileAnIgnoredRoutineIsStillActive() {
+        RecordingPort port = new RecordingPort();
+        NpcBehaviorActor actor = actor(port);
+        NpcAttentionSpec attention = NpcAttentionSpec.builder()
+                .idleResponse(NpcAttentionResponse.sustain(NpcSustainMode.STEADY))
+                .routineResponse(NpcAttentionResponse.ignore())
+                .build();
+        actor.configure(NpcBehaviorProfile.builder().attention(attention).build());
+        actor.tick(0);
+        NpcRoutine routine = NpcRoutine.builder(Key.key("test", "long_work"))
+                .wait(NpcTimingBand.LONG)
+                .build();
+        actor.perform(routine);
+        actor.tick(1);
+
+        actor.observeViewer(visible(P1, 60.0f));
+        actor.tick(2);
+
+        assertEquals(routine.key(), actor.snapshot().activeRoutine().orElseThrow());
+        assertTrue(port.viewerFrames.containsKey(P1),
+                "the player-specific gaze must not wait for the shared routine to complete");
+    }
+
+    @Test
+    void movingViewerFocusIsImmediateAndRateLimited() {
+        RecordingPort port = new RecordingPort();
+        NpcBehaviorActor actor = actor(port);
+        actor.configure(profile());
+        actor.tick(0);
+
+        for (int tick = 1; tick <= 200; tick++) {
+            actor.observeViewer(visible(P1, 90.0f + tick * 3.0f));
+            actor.tick(tick);
+            if (tick == 1) {
+                assertEquals(List.of(P1), port.viewerFrameEvents,
+                        "the first per-player focus frame must not be throttled");
+            }
+        }
+
+        assertTrue(port.viewerFrameEvents.size() > 1);
+        assertTrue(port.viewerFrameEvents.size() <= 67,
+                "moving focus should emit at most once every three actor ticks");
     }
 
     @Test
@@ -140,7 +186,7 @@ class NpcBehaviorActorTest {
         warm.observeInteraction(P1, EntityInteractionAction.USE);
         warm.tick(1);
 
-        assertTrue(warmPort.attentionAnimations.contains(NpcRenderAnimation.Type.WAVE));
+        assertTrue(warmPort.viewerAnimationTypes.contains(NpcRenderAnimation.Type.WAVE));
         assertTrue(warmPort.sharedBubbles.stream().anyMatch(
                 bubble -> bubble.kind() == NpcBubbleFrame.Kind.ATTENTION
         ));
@@ -155,7 +201,7 @@ class NpcBehaviorActorTest {
         nervous.observeInteraction(P1, EntityInteractionAction.ATTACK);
         nervous.tick(1);
 
-        assertTrue(nervousPort.attentionAnimations.contains(NpcRenderAnimation.Type.CROUCH_PULSE));
+        assertTrue(nervousPort.viewerAnimationTypes.contains(NpcRenderAnimation.Type.CROUCH_PULSE));
     }
 
     @Test
@@ -298,10 +344,11 @@ class NpcBehaviorActorTest {
     private static final class RecordingPort implements NpcBehaviorRenderPort {
         private final List<NpcRenderFrame> sharedFrames = new ArrayList<>();
         private final Map<UUID, NpcRenderFrame> viewerFrames = new LinkedHashMap<>();
+        private final List<UUID> viewerFrameEvents = new ArrayList<>();
         private final List<UUID> clearedOverlays = new ArrayList<>();
         private final List<NpcBubbleFrame> sharedBubbles = new ArrayList<>();
-        private final List<Set<UUID>> attentionAnimationExclusions = new ArrayList<>();
-        private final List<NpcRenderAnimation.Type> attentionAnimations = new ArrayList<>();
+        private final List<UUID> viewerAnimations = new ArrayList<>();
+        private final List<NpcRenderAnimation.Type> viewerAnimationTypes = new ArrayList<>();
         private final List<NpcRenderedSound> sounds = new ArrayList<>();
         private int restoreCount;
 
@@ -319,6 +366,7 @@ class NpcBehaviorActorTest {
         @Override
         public void renderViewerOverlay(UUID viewerId, NpcRenderFrame frame) {
             viewerFrames.put(viewerId, frame);
+            viewerFrameEvents.add(viewerId);
         }
 
         @Override
@@ -333,9 +381,9 @@ class NpcBehaviorActorTest {
         }
 
         @Override
-        public void animateAttention(NpcRenderAnimation animation, Set<UUID> excludedViewers) {
-            attentionAnimations.add(animation.type());
-            attentionAnimationExclusions.add(Set.copyOf(excludedViewers));
+        public void animateViewer(UUID viewerId, NpcRenderAnimation animation) {
+            viewerAnimations.add(viewerId);
+            viewerAnimationTypes.add(animation.type());
         }
 
         @Override

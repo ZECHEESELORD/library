@@ -66,6 +66,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
     private final int mannequinEntityId;
     private final Map<UUID, NpcRenderFrame> overlays = new ConcurrentHashMap<>();
     private final Map<UUID, NpcRenderFrame> deliveredOverlays = new ConcurrentHashMap<>();
+    private final Set<UUID> pendingOverlayDispatches = ConcurrentHashMap.newKeySet();
     private final Map<UUID, VirtualBubble> virtualBubbles = new ConcurrentHashMap<>();
 
     private volatile NpcRenderFrame baseFrame;
@@ -170,19 +171,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
         Objects.requireNonNull(viewerId, "viewerId");
         Objects.requireNonNull(frame, "frame");
         overlays.put(viewerId, frame);
-        scheduleViewer(viewerId, true, user -> {
-            if (!frame.equals(overlays.get(viewerId))) {
-                return;
-            }
-            NpcRenderFrame previous = deliveredOverlays.get(viewerId);
-            NpcRenderFrame comparison = previous == null ? nativeFrame : previous;
-            codec.compose(viewerId, mannequinEntityId, frame, ATTENTION_CHANNELS);
-            codec.sendFrameDelta(user, mannequinEntityId, comparison, frame, ATTENTION_CHANNELS);
-            deliveredOverlays.put(viewerId, frame);
-        }, () -> {
-            deliveredOverlays.remove(viewerId);
-            codec.clearComposition(viewerId, mannequinEntityId);
-        }, false);
+        scheduleLatestOverlay(viewerId);
     }
 
     @Override
@@ -539,6 +528,39 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
         }, () -> { });
     }
 
+    /** Keeps at most one queued overlay delivery per viewer for this NPC. */
+    private void scheduleLatestOverlay(UUID viewerId) {
+        if (!pendingOverlayDispatches.add(viewerId)) {
+            return;
+        }
+        scheduleViewer(viewerId, true, user -> {
+            NpcRenderFrame latest = overlays.get(viewerId);
+            if (latest != null) {
+                NpcRenderFrame previous = deliveredOverlays.get(viewerId);
+                NpcRenderFrame comparison = previous == null ? nativeFrame : previous;
+                codec.compose(viewerId, mannequinEntityId, latest, ATTENTION_CHANNELS);
+                codec.sendFrameDelta(user, mannequinEntityId, comparison, latest, ATTENTION_CHANNELS);
+                deliveredOverlays.put(viewerId, latest);
+            }
+            finishOverlayDispatch(viewerId, true);
+        }, () -> {
+            deliveredOverlays.remove(viewerId);
+            codec.clearComposition(viewerId, mannequinEntityId);
+            finishOverlayDispatch(viewerId, false);
+        }, false);
+    }
+
+    private void finishOverlayDispatch(UUID viewerId, boolean rescheduleLatest) {
+        pendingOverlayDispatches.remove(viewerId);
+        if (!rescheduleLatest) {
+            return;
+        }
+        NpcRenderFrame latest = overlays.get(viewerId);
+        if (latest != null && !latest.equals(deliveredOverlays.get(viewerId))) {
+            scheduleLatestOverlay(viewerId);
+        }
+    }
+
     private void scheduleViewer(
             UUID viewerId,
             boolean requireTracked,
@@ -611,6 +633,7 @@ final class PaperNpcBehaviorRenderPort implements NpcBehaviorRenderPort, AutoClo
         }
         overlays.clear();
         deliveredOverlays.clear();
+        pendingOverlayDispatches.clear();
         virtualBubbles.clear();
         codec.removeEntity(mannequinEntityId);
         closed = true;
