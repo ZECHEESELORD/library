@@ -282,11 +282,7 @@ public final class StandardNpcConversationRegistry implements
             if (staging == NpcConversationStagingMode.CASUAL_RANDOM_SUBSET) {
                 anyCasual |= selected;
             }
-            if (staging == NpcConversationStagingMode.SPEAKER_FOCUSED_PASSIVE_LISTENERS) {
-                listener.clearConversationStage();
-            } else {
-                listener.stageConversation(staging, speaker.position(), selected);
-            }
+            listener.stageConversation(staging, speaker.position(), selected);
         }
         if (staging == NpcConversationStagingMode.CASUAL_RANDOM_SUBSET && !anyCasual) {
             addressee.stageConversation(staging, speaker.position(), true);

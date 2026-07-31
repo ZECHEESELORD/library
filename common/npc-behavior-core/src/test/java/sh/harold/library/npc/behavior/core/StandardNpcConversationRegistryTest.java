@@ -213,6 +213,39 @@ class StandardNpcConversationRegistryTest {
     }
 
     @Test
+    void passiveListenersRemainStagedTowardTheSpeakerForTheWholeTurn() {
+        Fixture fixture = new Fixture(3);
+        List<DelegatingCapability> capabilities = fixture.actors.stream()
+                .map(DelegatingCapability::new)
+                .toList();
+        List<TestEntity> wrapped = capabilities.stream()
+                .map(TestEntity::new)
+                .toList();
+        NpcConversationRegistration registration = fixture.registry.register(topic(), wrapped);
+
+        boolean reachedPassiveTurn = false;
+        for (int tick = 100; tick < 1_000; tick++) {
+            fixture.tick(tick);
+            if (registration.snapshot().stagingMode()
+                    .filter(mode -> mode == NpcConversationStagingMode.SPEAKER_FOCUSED_PASSIVE_LISTENERS)
+                    .isPresent()) {
+                reachedPassiveTurn = true;
+                break;
+            }
+        }
+
+        assertTrue(reachedPassiveTurn);
+        assertEquals(
+                NpcConversationStagingMode.SPEAKER_FOCUSED_PASSIVE_LISTENERS,
+                capabilities.get(1).conversationStages.getLast()
+        );
+        assertEquals(
+                NpcConversationStagingMode.SPEAKER_FOCUSED_PASSIVE_LISTENERS,
+                capabilities.get(2).conversationStages.getLast()
+        );
+    }
+
+    @Test
     void directInteractionDoesNotTriggerAConversationInterruptionCascade() {
         Fixture fixture = new Fixture(2);
         NpcConversationRegistration registration = fixture.registry.register(topic(), fixture.entities);
@@ -341,6 +374,7 @@ class StandardNpcConversationRegistryTest {
 
     private static final class DelegatingCapability implements HumanoidBehaviorCapable, NpcConversationParticipant {
         private final NpcBehaviorActor actor;
+        private final List<NpcConversationStagingMode> conversationStages = new ArrayList<>();
 
         private DelegatingCapability(NpcBehaviorActor actor) {
             this.actor = actor;
@@ -379,6 +413,7 @@ class StandardNpcConversationRegistryTest {
         @Override public void finishDeferredInteraction(UUID viewerId) { actor.finishDeferredInteraction(viewerId); }
         @Override public AutoCloseable beginInterruptionBarrier() { return actor.beginInterruptionBarrier(); }
         @Override public void stageConversation(NpcConversationStagingMode mode, Vec3 focus, boolean selected) {
+            conversationStages.add(mode);
             actor.stageConversation(mode, focus, selected);
         }
         @Override public void clearConversationStage() { actor.clearConversationStage(); }
