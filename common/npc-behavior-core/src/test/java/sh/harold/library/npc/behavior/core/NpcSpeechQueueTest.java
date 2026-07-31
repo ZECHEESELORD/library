@@ -5,11 +5,13 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NpcSpeechQueueTest {
@@ -74,14 +76,43 @@ class NpcSpeechQueueTest {
     }
 
     @Test
-    void richWrappingPreservesStylesAndUsesUnlimitedLines() {
-        Component original = Component.text("0123456789012345678901234567890123456789", NamedTextColor.GOLD)
-                .append(Component.text("abcdefghij", NamedTextColor.AQUA));
-        Component wrapped = NpcSpeechText.wrap(original, 10);
+    void richWrappingPreservesStylesAndBalancesWholeWords() {
+        Component original = Component.text("one two three", NamedTextColor.GOLD)
+                .append(Component.text(" four five six", NamedTextColor.AQUA));
+        Component wrapped = NpcSpeechText.wrap(original, 12);
 
-        assertEquals("0123456789\n0123456789\n0123456789\n0123456789\nabcdefghij", plain(wrapped));
+        assertEquals("one two\nthree four\nfive six", plain(wrapped));
         assertEquals(NamedTextColor.GOLD, wrapped.color());
         assertEquals(NamedTextColor.AQUA, wrapped.children().get(0).color());
+    }
+
+    @Test
+    void wrappingNeverSplitsAWordThatExceedsTheTargetWidth() {
+        Component wrapped = NpcSpeechText.wrap(
+                Component.text("short extraordinarilylongword tail"),
+                10
+        );
+
+        assertEquals("short\nextraordinarilylongword\ntail", plain(wrapped));
+    }
+
+    @Test
+    void wrappingBalancesASparseTrailingLineWhenTheWordsStillFit() {
+        Component wrapped = NpcSpeechText.wrap(Component.text("a b c ddddd"), 10);
+
+        assertEquals("a b\nc ddddd", plain(wrapped));
+    }
+
+    @Test
+    void wrappingLargeBarksRemainsBoundedAndPreservesEveryWord() {
+        String text = "word ".repeat(3_000).stripTrailing();
+
+        Component wrapped = assertTimeout(
+                Duration.ofSeconds(2),
+                () -> NpcSpeechText.wrap(Component.text(text), 40)
+        );
+
+        assertEquals(3_000, plain(wrapped).split("\\s+").length);
     }
 
     @Test

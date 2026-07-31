@@ -4,7 +4,9 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -33,7 +35,8 @@ public final class NpcSpeechText {
         if (width < 1) {
             throw new IllegalArgumentException("width must be positive");
         }
-        WrapCursor cursor = new WrapCursor(width);
+        String plain = PlainTextComponentSerializer.plainText().serialize(text);
+        WrapCursor cursor = new WrapCursor(planWords(plain, width));
         return wrapComponent(text, cursor);
     }
 
@@ -79,12 +82,114 @@ public final class NpcSpeechText {
         return transformed.children(children);
     }
 
-    private static final class WrapCursor {
-        private final int width;
-        private int column;
+    private static List<WordLayout> planWords(String plain, int width) {
+        List<WordLayout> planned = new ArrayList<>();
+        List<Integer> paragraph = new ArrayList<>();
+        int wordLength = 0;
+        Matcher matcher = GRAPHEME.matcher(plain);
+        while (matcher.find()) {
+            String grapheme = matcher.group();
+            if (isLineBreak(grapheme)) {
+                if (wordLength > 0) {
+                    paragraph.add(wordLength);
+                    wordLength = 0;
+                }
+                planParagraph(paragraph, width, planned);
+                paragraph.clear();
+            } else if (isWhitespace(grapheme)) {
+                if (wordLength > 0) {
+                    paragraph.add(wordLength);
+                    wordLength = 0;
+                }
+            } else {
+                wordLength++;
+            }
+        }
+        if (wordLength > 0) {
+            paragraph.add(wordLength);
+        }
+        planParagraph(paragraph, width, planned);
+        return planned;
+    }
 
-        private WrapCursor(int width) {
-            this.width = width;
+    private static void planParagraph(List<Integer> words, int width, List<WordLayout> output) {
+        if (words.isEmpty()) {
+            return;
+        }
+        List<PlannedLine> lines = greedyLines(words, width);
+        rebalanceAdjacentLines(words, width, lines);
+        boolean[] breakBefore = new boolean[words.size()];
+        for (PlannedLine line : lines) {
+            if (line.start > 0) {
+                breakBefore[line.start] = true;
+            }
+        }
+        for (int index = 0; index < words.size(); index++) {
+            output.add(new WordLayout(words.get(index), breakBefore[index]));
+        }
+    }
+
+    /** Greedy packing is linear and never joins a word to a line it would overflow. */
+    private static List<PlannedLine> greedyLines(List<Integer> words, int width) {
+        List<PlannedLine> lines = new ArrayList<>();
+        int start = 0;
+        int length = 0;
+        for (int index = 0; index < words.size(); index++) {
+            int wordLength = words.get(index);
+            int candidate = index == start ? wordLength : length + 1 + wordLength;
+            if (index > start && candidate > width) {
+                lines.add(new PlannedLine(start, index, length));
+                start = index;
+                length = wordLength;
+            } else {
+                length = candidate;
+            }
+        }
+        lines.add(new PlannedLine(start, words.size(), length));
+        return lines;
+    }
+
+    /**
+     * Softens a sparse trailing line when the preceding line can donate a word
+     * without overflowing it. Each word moves at most once, keeping the whole
+     * planner linear while producing more consistent word counts.
+     */
+    private static void rebalanceAdjacentLines(
+            List<Integer> words,
+            int width,
+            List<PlannedLine> lines
+    ) {
+        for (int index = lines.size() - 1; index > 0; index--) {
+            PlannedLine left = lines.get(index - 1);
+            PlannedLine right = lines.get(index);
+            while (left.wordCount() > right.wordCount() + 1) {
+                int movedLength = words.get(left.end - 1);
+                if (movedLength + 1 + right.length > width) {
+                    break;
+                }
+                left.removeLast(movedLength);
+                right.prepend(movedLength);
+            }
+        }
+    }
+
+    private static boolean isLineBreak(String grapheme) {
+        return "\n".equals(grapheme) || "\r".equals(grapheme) || "\r\n".equals(grapheme);
+    }
+
+    private static boolean isWhitespace(String grapheme) {
+        return grapheme.codePoints().allMatch(Character::isWhitespace);
+    }
+
+    private static final class WrapCursor {
+        private final Deque<WordLayout> words;
+        private final StringBuilder pendingWhitespace = new StringBuilder();
+        private int column;
+        private int pendingWhitespaceWidth;
+        private boolean inWord;
+
+        private WrapCursor(List<WordLayout> words) {
+            this.words = new ArrayDeque<>(words);
         }
 
         private String wrap(String content) {
@@ -92,18 +197,37 @@ public final class NpcSpeechText {
             Matcher matcher = GRAPHEME.matcher(content);
             while (matcher.find()) {
                 String grapheme = matcher.group();
-                if ("\n".equals(grapheme)) {
+                if (isLineBreak(grapheme)) {
+                    pendingWhitespace.setLength(0);
+                    pendingWhitespaceWidth = 0;
                     output.append(grapheme);
                     column = 0;
+                    inWord = false;
                     continue;
                 }
-                boolean whitespace = grapheme.codePoints().allMatch(Character::isWhitespace);
-                if (column >= width) {
-                    output.append('\n');
-                    column = 0;
-                    if (whitespace) {
-                        continue;
+                if (isWhitespace(grapheme)) {
+                    pendingWhitespace.append(grapheme);
+                    pendingWhitespaceWidth++;
+                    inWord = false;
+                    continue;
+                }
+                if (!inWord) {
+                    WordLayout word = words.pollFirst();
+                    if (word == null) {
+                        throw new IllegalStateException("NPC speech word plan was exhausted early");
                     }
+                    if (word.breakBefore() && column > 0) {
+                        output.append('\n');
+                        column = 0;
+                        pendingWhitespace.setLength(0);
+                        pendingWhitespaceWidth = 0;
+                    } else if (column > 0 && !pendingWhitespace.isEmpty()) {
+                        output.append(pendingWhitespace);
+                        column += pendingWhitespaceWidth;
+                    }
+                    pendingWhitespace.setLength(0);
+                    pendingWhitespaceWidth = 0;
+                    inWord = true;
                 }
                 output.append(grapheme);
                 column++;
@@ -112,14 +236,44 @@ public final class NpcSpeechText {
         }
 
         private void advance(String content) {
-            Matcher matcher = GRAPHEME.matcher(content);
-            while (matcher.find()) {
-                if ("\n".equals(matcher.group())) {
-                    column = 0;
-                } else {
-                    column = (column + 1) % width;
-                }
+            wrap(content);
+        }
+    }
+
+    private record WordLayout(int length, boolean breakBefore) {
+        private WordLayout {
+            if (length < 1) {
+                throw new IllegalArgumentException("word length must be positive");
             }
+        }
+    }
+
+    private static final class PlannedLine {
+        private int start;
+        private int end;
+        private int length;
+
+        private PlannedLine(int start, int end, int length) {
+            this.start = start;
+            this.end = end;
+            this.length = length;
+        }
+
+        private int wordCount() {
+            return end - start;
+        }
+
+        private void removeLast(int wordLength) {
+            end--;
+            length -= wordLength;
+            if (end > start) {
+                length--;
+            }
+        }
+
+        private void prepend(int wordLength) {
+            start--;
+            length += wordLength + 1;
         }
     }
 }
