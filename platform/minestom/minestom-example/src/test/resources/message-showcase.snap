@@ -1,0 +1,777 @@
+ENTRY bank-interest | CORPUS_GOLDEN | Bank Interest
+FEATURES [NOTICE_SUCCESS, SEMANTIC_UI_VALUES]
+SOURCE Corpus chat message
+SOURCE_MESSAGE ac3739f7dfa58597df5477be9abab8acf43d05a40100ac4415d330916186ecd2
+OUTPUT 0 CHAT
+text("")
+  text("You have just received ") color=#55FF55
+  text("636,000 coins") color=#FFAA00
+  text(" as interest in your personal bank account!") color=#55FF55
+END_ENTRY
+
+ENTRY quest-unlocks | CORPUS_GOLDEN | Quest Unlocks
+FEATURES [BLOCK, CLICK_RUN_COMMAND, VALUE_HOVER]
+SOURCE Corpus tick-2 chat burst
+SOURCE_MESSAGE a2824cd5533a581715f3cea1388e549a5a0dfe82299d01ef4f61722fcd5249ab
+SOURCE_MESSAGE 17747e59f045a9d24819d05e601a9a8cf1372bb44301fbcea930d34e3ec315ae
+SOURCE_MESSAGE 06a105e01dd798b84caaf8244cad9e8242817450ae71195218a1b451a377fd4d
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("") color=#AAAAAA click=run_command(/questlog)
+    hover {
+      text("")
+        text("Click to view your Quest Log!") color=#FFFF55
+    }
+    text("NEW QUEST UNLOCKED") color=#FFFF55 bold
+    text(": ") color=#FFFFFF
+    text("Swoop's Instructions") color=#FFFFFF
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("") color=#AAAAAA click=run_command(/questlog)
+    hover {
+      text("")
+        text("Click to view your Quest Log!") color=#FFFF55
+    }
+    text("NEW QUEST UNLOCKED") color=#FFFF55 bold
+    text(": ") color=#FFFFFF
+    text("David's Hunting Lessons") color=#FFFFFF
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Open your Quest Log to find out more!") color=#55FF55 bold click=run_command(/questlog)
+    hover {
+      text("")
+        text("Click to view your Quest Log!") color=#FFFF55
+    }
+  text("\n")
+END_ENTRY
+
+ENTRY area-discovery | CORPUS_GOLDEN | Area Discovery
+FEATURES [BLOCK, BULLETS, TITLE_SUBTITLE]
+SOURCE Corpus tick-12 title and chat burst
+SOURCE_MESSAGE 7d63b379314f15928fdfd0e98dd25626d88d6d04ef40aba95a77f768461c1973
+SOURCE_MESSAGE e07be350e430f2300814534772b3e274d539ab163b4fc0533ab731b2fbaf9a6b
+SOURCE_MESSAGE 34156d7c96c0e8a3c7d17f809cf5b8d3ebe2b24e75be59f514f27f3b1a6349df
+SOURCE_MESSAGE cf01a2cb22fb7990898750263e93c371d069dd4be4d1226f1d103008b8cebe97
+SOURCE_MESSAGE ca8f0c54ed6e4dcc29b85e747c356bd8be89b44ff6e966b874d6e46bcc67a295
+SOURCE_MESSAGE 5ba810d29a6f85e3967d7c62c7e46a8ac594ece04d487e0771aa8a1c3a60779a
+SOURCE_MESSAGE 390f8f104fc61f8031f92e1267c9ec7f96bc9a7db9f5ca8f68e558dc0e933b7e
+SOURCE_MESSAGE 32e13ee4258c674807da6ad33701e59184288b54f2f783b97e0ab388d90facdb
+OUTPUT 0 TITLE fadeIn=PT0.5S stay=PT2.5S fadeOut=PT0.5S
+TITLE
+text("Tangleburg's Path") color=#55FFFF
+SUBTITLE
+text("NEW AREA DISCOVERED!") color=#FFAA00 bold
+OUTPUT 1 BLOCK centered=false
+text("")
+  text("\n")
+  text("NEW AREA DISCOVERED!") color=#FFAA00 bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Tangleburg's Path") color=#55FFFF
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("") color=#AAAAAA
+    text("Talk to ") color=#FFFFFF
+    text("Hina") color=#55FFFF
+    text(" about Heart of the Forest!") color=#FFFFFF
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("") color=#AAAAAA
+    text("Talk to ") color=#FFFFFF
+    text("Swoop") color=#55FFFF
+    text(" about Tree Cutting!") color=#FFFFFF
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("") color=#AAAAAA
+    text("Talk to ") color=#FFFFFF
+    text("David Hunterborough") color=#55FFFF
+    text(" about Hunting!") color=#FFFFFF
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("") color=#AAAAAA
+    text("Compete in ") color=#FFFFFF
+    text("Starlyn Contests") color=#FF55FF
+    text("!") color=#FFFFFF
+  text("\n")
+END_ENTRY
+
+ENTRY quest-complete | CORPUS_GOLDEN | Quest Complete
+FEATURES [BLOCK, CLICK_RUN_COMMAND, VALUE_HOVER]
+SOURCE Corpus tick-5483 chat burst
+SOURCE_MESSAGE a2da72c21a03798d0fb6b3279b7614ecac7d31b80761ac7a3772405394da43b0
+SOURCE_MESSAGE 98676ccb19b532e97a9d8323f37fe129b900272b2e4d0e63ee85382af28a85fb
+SOURCE_MESSAGE 5ca046b1badcec8edc7620572843d8395865c96b736949016ef46d9288ca7f32
+SOURCE_MESSAGE 49512dfc1b2761cd8f7e098827baf4c03a31b23844eda07075767628ac325b73
+SOURCE_MESSAGE 2e1b2dd002e33bb43f890430d836e9045d544e17ed16b29d1489d6b2cee4b2dc
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("QUEST COMPLETE") color=#FFAA00 bold click=run_command(/questlog)
+    hover {
+      text("")
+        text("")
+          text("") color=#AAAAAA
+            text("Quest: ") color=#FFFF55
+            text("Swoop's Instructions") color=#FFFFFF
+        text("\n")
+        text("\n")
+        text("")
+          text("") color=#AAAAAA
+            text("\u2714 ") color=#55FF55
+            text("Talk to Swoop.") color=#FFFFFF
+        text("\n")
+        text("")
+          text("") color=#AAAAAA
+            text("\u2714 ") color=#55FF55
+            text("Collect the Berry.") color=#FFFFFF
+        text("\n")
+        text("")
+          text("") color=#AAAAAA
+            text("\u2714 ") color=#55FF55
+            text("Talk to Swoop.") color=#FFFFFF
+        text("\n")
+        text("")
+          text("") color=#AAAAAA
+            text("\u2714 ") color=#55FF55
+            text("Talk to Swoop.") color=#FFFFFF
+        text("\n")
+        text("")
+          text("") color=#AAAAAA
+            text("\u2714 ") color=#55FF55
+            text("Cut a Fig Tree.") color=#FFFFFF
+        text("\n")
+        text("")
+          text("") color=#AAAAAA
+            text("\u2714 ") color=#55FF55
+            text("Talk to Swoop.") color=#FFFFFF
+        text("\n")
+        text("\n")
+        text("")
+          text("Click to view your Quest Log!") color=#FFFF55
+    }
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("REWARDS") color=#55FF55 bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("") color=#AAAAAA
+    hover {
+      text("")
+        text("")
+          text("") color=#AAAAAA
+            text("These ") color=#AAAAAA
+            text("Coins ") color=#FFAA00
+            text("have been credited to") color=#AAAAAA
+        text("\n")
+        text("")
+          text("") color=#AAAAAA
+            text("your ") color=#AAAAAA
+            text("Purse") color=#FFAA00
+            text(".") color=#AAAAAA
+        text("\n")
+        text("\n")
+        text("")
+          text("To keep them safe and earn interest") color=#AAAAAA
+        text("\n")
+        text("")
+          text("") color=#AAAAAA
+            text("over time, deposit them at the ") color=#AAAAAA
+            text("Bank") color=#FFAA00
+            text("!") color=#AAAAAA
+    }
+    text("+") color=#555555
+    text("10,000") color=#FFAA00
+    text(" Coins") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("") color=#AAAAAA
+    hover {
+      text("")
+        text("") color=#AAAAAA
+          text("+") color=#555555
+          text("5,000") color=#00AAAA
+          text(" Foraging Experience") color=#AAAAAA
+    }
+    text("+") color=#555555
+    text("5,000") color=#00AAAA
+    text(" Foraging Experience") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("") color=#AAAAAA click=run_command(/levels)
+    hover {
+      text("")
+        text("") color=#AAAAAA
+          text("+") color=#555555
+          text("5") color=#55FFFF
+          text(" SkyBlock XP") color=#AAAAAA
+    }
+    text("+") color=#555555
+    text("5") color=#55FFFF
+    text(" SkyBlock XP") color=#AAAAAA
+  text("\n")
+END_ENTRY
+
+ENTRY task-complete | CORPUS_GOLDEN | Task Complete
+FEATURES [BLOCK, CLICK_RUN_COMMAND, VALUE_HOVER]
+SOURCE Corpus tick-5500 chat burst
+SOURCE_MESSAGE aa1420ef8f289bf18c0d0035580158195bc5404d773432f81c37da534923f102
+SOURCE_MESSAGE 198e1701aba290a4be36c85c017da8140fc20629014aa47b9987523089d04e84
+SOURCE_MESSAGE beaaac81c06078f3a34b7aa9b827c025a55d65a0fc03b688cbdf18f01d1cb804
+SOURCE_MESSAGE 5c75bf2889c5d907c2d5499eec3fcc62bd7d99aaa2fe52c1806c0f1bd227d1b3
+SOURCE_MESSAGE 7888181330b0456005faf610d49b643b59729f97ce70d4d1a3ac35d5c5603792
+SOURCE_MESSAGE 03eda5cd7431e5e6c6581a453df3137aed88595eb038cabf68b4dd3b19b7fa74
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("TASK COMPLETE") color=#55FFFF bold click=run_command(/chapters moonglade)
+    hover {
+      text("")
+        text("Click view tasks!") color=#FFFF55
+    }
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("") color=#AAAAAA click=run_command(/chapters moonglade)
+    hover {
+      text("")
+        text("Click view tasks!") color=#FFFF55
+    }
+    text("Moonglade Marsh") color=#00AA00
+    text(" - ") color=#AAAAAA
+    text("Chapter I") color=#FFFFFF
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Talk to Swoop") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("REWARD") color=#55FF55 bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("") color=#AAAAAA
+    hover {
+      text("")
+        text("") color=#AAAAAA
+          text("+") color=#555555
+          text("100") color=#00AAAA
+          text(" Foraging Experience") color=#AAAAAA
+    }
+    text("+") color=#555555
+    text("100") color=#00AAAA
+    text(" Foraging Experience") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("CLICK TO CLAIM") color=#FFAA00 bold click=run_command(/chapters moonglade)
+    hover {
+      text("")
+        text("Click view tasks!") color=#FFFF55
+    }
+  text("\n")
+END_ENTRY
+
+ENTRY material-stash | CORPUS_GOLDEN | Material Stash
+FEATURES [BLOCK, CENTERED_BLOCK, CLICK_RUN_COMMAND, VALUE_HOVER]
+SOURCE Corpus tick-96 chat burst
+SOURCE_MESSAGE a8e6ffdcf30567028bf8f0fec8bd7115b83c5b08c2090a81f1880437eceaf63c
+SOURCE_MESSAGE 58ea2dd60175c76b20b2ed3696c71154e5c3370f5cc7923632773305bb26f649
+SOURCE_MESSAGE 0ad2a5f5a390092998a9c667907dc69557eb89eb9115d017e7053587eb38a2ba
+OUTPUT 0 BLOCK centered=true
+text("")
+  text("\n")
+  text("               ")
+    text("") color=#AAAAAA click=run_command(/viewstash material)
+      hover {
+        text("")
+          text("Click to pickup your materials!") color=#FFFF55
+      }
+      text("You have ") color=#AAAAAA
+      text("53") color=#00AAAA
+      text(" materials stashed away!") color=#AAAAAA
+  text("\n")
+  text("           ")
+    text("(This totals 32 types of materials stashed!)") color=#555555 click=run_command(/viewstash material)
+      hover {
+        text("")
+          text("Click to pickup your materials!") color=#FFFF55
+      }
+  text("\n")
+  text("              ")
+    text("") color=#AAAAAA click=run_command(/viewstash material)
+      hover {
+        text("")
+          text("Click to pickup your materials!") color=#FFFF55
+      }
+      text(">>> ") color=#00AAAA bold
+      text("CLICK HERE") color=#00AAAA bold
+      text(" to pick them up! ") color=#55FFFF
+      text("<<<") color=#00AAAA bold
+  text("\n")
+END_ENTRY
+
+ENTRY rift-warning | CORPUS_GOLDEN | Rift Warning
+FEATURES [BLOCK, BLOCK_SPACING]
+SOURCE Corpus tick-535 chat burst; closing divider normalized from the opening frame
+SOURCE_MESSAGE 6fd5af1e326682b24ce6541f5fd537db6f07297aea40ec1b82a9f513c0875e39
+SOURCE_MESSAGE 2ba8e24df43beb36f05d3e33611028b1292a34b660f8229129e6ac5a9b8f396d
+SOURCE_MESSAGE 0bf3ec1cee4c6057ff8dc6816511eb4986a1f86c71c8df99a7f6ff51178d2ab4
+SOURCE_MESSAGE d06a2b899f7b627612c6abce6448c795bf3b9a15548fb10b9f5500f53b762ca7
+SOURCE_MESSAGE bed3ce91d15b40dac47f695564b615ae6edcc8e55d31f48487af5b508f8a61b9
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text("\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC") color=#AA00AA bold
+  text("\n")
+  text("RIFT INSTABILITY WARNING") color=#FF55FF bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Venturing in the ") color=#AAAAAA
+  text("Rift") color=#FF55FF
+  text(" breaches spacetime.") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("You have ") color=#AAAAAA
+  text("8m00s") color=#55FF55
+  text(" left before the rift collapses!") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Your dimensional infusion has been consumed!") color=#555555
+  text("\n")
+  text("\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC") color=#AA00AA bold
+  text("\n")
+END_ENTRY
+
+ENTRY tree-gift | CORPUS_GOLDEN | Tree Gift
+FEATURES [BLOCK, CENTERED_BLOCK, VALUE_HOVER]
+SOURCE Corpus tick-4980 chat burst
+SOURCE_MESSAGE 7f6ea55df56d8705f2d2ca7644aa005992b6fde8d33a854c855025e9124ea26c
+SOURCE_MESSAGE b1b7757d49320bad5667c0fe5cb8ddb0dbe0222cb158b0536fda27567d273173
+SOURCE_MESSAGE 39fa51d8ab8bb4931f65f03781a9aa28c6a0ace457dd845d085e35fa98f128aa
+SOURCE_MESSAGE cff9d1c558e05eb5731448d755f6651c5f69be6090d193c109476a0a9e009c8a
+OUTPUT 0 BLOCK centered=true
+text("")
+  text("\n")
+  text("\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC") color=#00AA00 bold
+  text("\n")
+  text("                               ")
+    text("TREE GIFT") color=#00AA00 bold
+  text("\n")
+  text("               ")
+    text("You helped cut ") color=#AAAAAA
+    text("100%") color=#55FF55
+    text(" of the ") color=#AAAAAA
+    text("Fig Tree") color=#55FF55
+    text(".") color=#AAAAAA
+  text("\n")
+  text("                     ")
+    text("") color=#AAAAAA
+      hover {
+        text("")
+          text("")
+            text("") color=#AAAAAA
+              text("Forest Essence") color=#00AA00
+              text(" ") color=#AAAAAA
+              text("x4") color=#555555
+          text("\n")
+          text("")
+            text("") color=#AAAAAA
+              text("Foraging Experience") color=#00AAAA
+              text(" ") color=#AAAAAA
+              text("x2,000") color=#555555
+          text("\n")
+          text("")
+            text("") color=#AAAAAA
+              text("HOTF Experience") color=#55FF55
+              text(" ") color=#AAAAAA
+              text("x20") color=#555555
+          text("\n")
+          text("")
+            text("") color=#AAAAAA
+              text("Tender Wood") color=#55FF55
+              text(" ") color=#AAAAAA
+              text("x0-2") color=#555555
+          text("\n")
+          text("")
+            text("") color=#AAAAAA
+              text("Forest Whispers") color=#00AA00
+              text(" ") color=#AAAAAA
+              text("x40") color=#555555
+      }
+      text("+5 rewards gained!") color=#FFFF55
+      text(" ") color=#AAAAAA
+      text("(hover)") color=#555555
+  text("\n")
+END_ENTRY
+
+ENTRY bonus-tree-gift | CORPUS_GOLDEN | Bonus Tree Gift
+FEATURES [BLOCK, BLOCK_SPACING, CENTERED_BLOCK, VALUE_HOVER]
+SOURCE User screenshot transcript; cropped closing edge confirmed as the opening 64-character divider
+SOURCE_SCREENSHOT F4B2EEC793FCCCFFBA11D2CE696B1F6F1A5DD1A42839C90C2D439F76E2348637
+OUTPUT 0 BLOCK centered=true
+text("")
+  text("\n")
+  text("\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC") color=#00AA00 bold
+  text("\n")
+  text("                               ")
+    text("TREE GIFT") color=#00AA00 bold
+  text("\n")
+  text("               ")
+    text("You helped cut ") color=#AAAAAA
+    text("100%") color=#55FF55
+    text(" of the ") color=#AAAAAA
+    text("Fig Tree") color=#55FF55
+    text(".") color=#AAAAAA
+  text("\n")
+  text("                     ")
+    text("") color=#AAAAAA
+      hover {
+        text("")
+          text("")
+            text("") color=#AAAAAA
+              text("Forest Essence") color=#00AA00
+              text(" ") color=#AAAAAA
+              text("x4") color=#555555
+          text("\n")
+          text("")
+            text("") color=#AAAAAA
+              text("Foraging Experience") color=#00AAAA
+              text(" ") color=#AAAAAA
+              text("x2,000") color=#555555
+          text("\n")
+          text("")
+            text("") color=#AAAAAA
+              text("HOTF Experience") color=#55FF55
+              text(" ") color=#AAAAAA
+              text("x20") color=#555555
+          text("\n")
+          text("")
+            text("") color=#AAAAAA
+              text("Tender Wood") color=#55FF55
+              text(" ") color=#AAAAAA
+              text("x0-2") color=#555555
+          text("\n")
+          text("")
+            text("") color=#AAAAAA
+              text("Forest Whispers") color=#00AA00
+              text(" ") color=#AAAAAA
+              text("x40") color=#555555
+      }
+      text("+5 rewards gained!") color=#FFFF55
+      text(" ") color=#AAAAAA
+      text("(hover)") color=#555555
+  text("\n")
+  text("\n")
+  text("                              ")
+    text("BONUS GIFT") color=#FF55FF bold
+  text("\n")
+  text("                         ")
+    text("Sweep Booster") color=#FFFFFF
+    text(" ") color=#AAAAAA
+    text("(0.5%)") color=#55FF55
+  text("\n")
+  text("                       ")
+    text("Chameleon Shard") color=#FFAA00
+    text(" ") color=#AAAAAA
+    text("(0.08%)") color=#55FF55
+  text("\n")
+  text("                         ")
+    text("Tree the Fish") color=#FF5555
+    text(" ") color=#AAAAAA
+    text("(0.05%)") color=#55FF55
+  text("\n")
+  text("                  ")
+    text("A ") color=#AAAAAA
+    text("Phanflare") color=#FF55FF
+    text(" fell from the Tree!") color=#AAAAAA
+  text("\n")
+  text("\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC") color=#00AA00 bold
+  text("\n")
+END_ENTRY
+
+ENTRY staff-notice | SYNTHESIZED | Staff Notice
+FEATURES [NOTICE_INFO, TAG, MESSAGE_HOVER, SEMANTIC_UI_VALUES]
+OUTPUT 0 CHAT
+text("")
+  hover {
+    text("")
+      text("RANK UPDATED") color=#55FFFF bold
+      text("\n")
+      text("")
+        text("Applies across the network.") color=#AAAAAA
+  }
+  text("[STAFF]") color=#55FFFF
+  text(" ")
+  text("Granted ") color=#AAAAAA
+  text("Hqrxld") color=#55FFFF
+  text(" the ") color=#AAAAAA
+  text("MVP+") color=#55FF55
+  text(" rank.") color=#AAAAAA
+END_ENTRY
+
+ENTRY reward-earned | SYNTHESIZED | Reward Earned
+FEATURES [NOTICE_SUCCESS, VALUE_HOVER, SEMANTIC_UI_VALUES]
+OUTPUT 0 CHAT
+text("")
+  text("You earned ") color=#55FF55
+  text("12,500 Coins") color=#FFAA00
+    hover {
+      text("")
+        text("COIN REWARD") color=#FFAA00 bold
+        text("\n")
+        text("")
+          text("Added directly to your purse.") color=#AAAAAA
+    }
+  text(" and ") color=#55FF55
+  text("750 Combat XP") color=#55FF55
+  text(".") color=#55FF55
+END_ENTRY
+
+ENTRY access-denied | SYNTHESIZED | Access Denied
+FEATURES [NOTICE_ERROR, SEMANTIC_UI_VALUES]
+OUTPUT 0 CHAT
+text("")
+  text("You need ") color=#FF5555
+  text("MVP+") color=#55FF55
+  text(" to enter the Crystal Hall.") color=#FF5555
+END_ENTRY
+
+ENTRY debug-trace | SYNTHESIZED | Debug Trace
+FEATURES [NOTICE_DEBUG]
+OUTPUT 0 CHAT
+text("")
+  text("Waypoint ") color=#AAAAAA
+  text("Crystal Hall") color=#555555
+  text(" resolved at ") color=#AAAAAA
+  text("124, 72, -38") color=#555555
+  text(".") color=#AAAAAA
+END_ENTRY
+
+ENTRY collection-discovery | SYNTHESIZED | Collection Discovery
+FEATURES [TOPIC, MESSAGE_HOVER]
+OUTPUT 0 CHAT
+text("")
+  hover {
+    text("")
+      text("ANCIENT RELICS") color=#FFAA00 bold
+      text("\n")
+      text("")
+        text("Found throughout the Crystal Hollows.") color=#AAAAAA
+  }
+  text("COLLECTION!") color=#FFAA00 bold
+  text(" ")
+  text("You discovered ") color=#AAAAAA
+  text("Ancient Relics") color=#FFAA00
+  text("!") color=#AAAAAA
+END_ENTRY
+
+ENTRY objective-progress | SYNTHESIZED | Objective Progress
+FEATURES [NOTICE_SUCCESS, ACTION_BAR]
+OUTPUT 0 ACTION_BAR
+text("")
+  text("Objective: ") color=#55FF55
+  text("3") color=#55FFFF
+  text("/") color=#55FF55
+  text("5") color=#55FFFF
+  text(" Crystals restored") color=#55FF55
+END_ENTRY
+
+ENTRY useful-links | SYNTHESIZED | Useful Links
+FEATURES [BLOCK, CLICK_OPEN_URL, MULTI_CLICK]
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text("USEFUL LINKS") color=#55FF55 bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("CLICK") color=#FFFF55 bold click=open_url(https://example.com/wiki)
+  text(" for the ") color=#AAAAAA
+  text("Wiki") color=#55FF55 click=open_url(https://example.com/wiki)
+  text(", or ") color=#AAAAAA
+  text("CLICK") color=#FFFF55 bold click=open_url(https://example.com/discord)
+  text(" for ") color=#AAAAAA
+  text("Discord") color=#5555FF click=open_url(https://example.com/discord)
+  text(".") color=#AAAAAA
+  text("\n")
+END_ENTRY
+
+ENTRY command-shortcuts | SYNTHESIZED | Command Shortcuts
+FEATURES [BLOCK, CLICK_RUN_COMMAND, CLICK_SUGGEST_COMMAND, CLICK_COPY, MULTI_CLICK]
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text("COMMAND SHORTCUTS") color=#55FFFF bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("CLICK") color=#FFFF55 bold click=run_command(/warp hub)
+  text(" to ") color=#AAAAAA
+  text("Warp") color=#55FF55 click=run_command(/warp hub)
+  text(", ") color=#AAAAAA
+  text("CLICK") color=#FFFF55 bold click=suggest_command(/find )
+  text(" to ") color=#AAAAAA
+  text("Search") color=#55FFFF click=suggest_command(/find )
+  text(", or ") color=#AAAAAA
+  text("CLICK") color=#FFFF55 bold click=copy_to_clipboard(CRYSTAL-7)
+  text(" to copy the ") color=#AAAAAA
+  text("Invite Code") color=#FFAA00 click=copy_to_clipboard(CRYSTAL-7)
+  text(".") color=#AAAAAA
+  text("\n")
+END_ENTRY
+
+ENTRY ready-check | SYNTHESIZED | Ready Check
+FEATURES [BLOCK, CLICK_RUN_COMMAND, MULTI_CLICK, VALUE_HOVER]
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text("DUNGEON READY CHECK") color=#FFAA00 bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("CLICK") color=#FFFF55 bold click=run_command(/ready yes)
+    hover {
+      text("")
+        text("Confirm that you are ready.") color=#AAAAAA
+    }
+  text(" ") color=#AAAAAA
+  text("[READY]") color=#55FF55 bold click=run_command(/ready yes)
+    hover {
+      text("")
+        text("Confirm that you are ready.") color=#AAAAAA
+    }
+  text("     ") color=#AAAAAA
+  text("CLICK") color=#FFFF55 bold click=run_command(/ready no)
+    hover {
+      text("")
+        text("Ask the party to wait.") color=#AAAAAA
+    }
+  text(" ") color=#AAAAAA
+  text("[WAIT]") color=#FF5555 bold click=run_command(/ready no)
+    hover {
+      text("")
+        text("Ask the party to wait.") color=#AAAAAA
+    }
+  text("\n")
+END_ENTRY
+
+ENTRY mission-complete | SYNTHESIZED | Mission Complete
+FEATURES [BLOCK, BLOCK_SPACING, BULLETS, SEMANTIC_UI_VALUES]
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text("MISSION COMPLETE") color=#55FF55 bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("You restored the ") color=#AAAAAA
+  text("Sunken Observatory") color=#FFFF55
+  text(".") color=#AAAAAA
+  text("\n")
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Rewards:") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("8,000 Coins") color=#FFAA00
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("600 Mining XP") color=#55FF55
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("Observatory Fast Travel") color=#55FFFF
+  text("\n")
+END_ENTRY
+
+ENTRY seasonal-event | SYNTHESIZED | Seasonal Event
+FEATURES [BLOCK, CENTERED_BLOCK]
+OUTPUT 0 BLOCK centered=true
+text("")
+  text("\n")
+  text("\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC") color=#AA00AA bold
+  text("\n")
+  text("                        ")
+    text("STARFALL FESTIVAL") color=#FF55FF bold
+  text("\n")
+  text("              ")
+    text("Falling stars now contain ") color=#AAAAAA
+    text("Astral Dust") color=#55FFFF
+    text(".") color=#AAAAAA
+  text("\n")
+  text("                  ")
+    text("The festival ends in ") color=#AAAAAA
+    text("30 minutes") color=#FFAA00
+    text(".") color=#AAAAAA
+  text("\n")
+  text("\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC\u25AC") color=#AA00AA bold
+  text("\n")
+END_ENTRY
+
+ENTRY player-directory | SYNTHESIZED | Player Directory
+FEATURES [BLOCK, CLICK_RUN_COMMAND, CHAT_MENU_PAGING]
+OUTPUT 0 BLOCK centered=false
+text("")
+  text("\n")
+  text("ONLINE ADVENTURERS") color=#57C7FF bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Hqrxld") color=#55FF55
+  text(" - ") color=#AAAAAA
+  text("Hub") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Swoop") color=#55FF55
+  text(" - ") color=#AAAAAA
+  text("Moonglade") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Hina") color=#55FF55
+  text(" - ") color=#AAAAAA
+  text("Tangleburg") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Starlyn") color=#55FF55
+  text(" - ") color=#AAAAAA
+  text("Contest Grounds") color=#AAAAAA
+  text("\n")
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("[PREV]") color=#555555
+  text(" Page ") color=#AAAAAA
+  text("1") color=#AAAAAA
+  text("/") color=#AAAAAA
+  text("3") color=#AAAAAA
+  text(" ") color=#AAAAAA
+  text("[NEXT]") color=#FFFF55 click=run_command(/testmessages chatmenu 2)
+  text("\n")
+END_ENTRY
+
+ENTRY new-area | SYNTHESIZED | New Area
+FEATURES [BLOCK, BULLETS, TITLE_SUBTITLE]
+OUTPUT 0 TITLE fadeIn=PT0.5S stay=PT2.5S fadeOut=PT0.5S
+TITLE
+text("Celestial Ridge") color=#55FFFF
+SUBTITLE
+text("NEW AREA DISCOVERED!") color=#FFAA00 bold
+OUTPUT 1 BLOCK centered=false
+text("")
+  text("\n")
+  text("AREA DISCOVERED") color=#FFAA00 bold
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("Celestial Ridge") color=#55FFFF
+  text(" is now available.") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("Find the Observatory Keeper") color=#AAAAAA
+  text("\n")
+  text(" ") color=#AAAAAA
+  text("\u2022 ") color=#555555
+  text("Restore the western telescope") color=#AAAAAA
+  text("\n")
+END_ENTRY
+

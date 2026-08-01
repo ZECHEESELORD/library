@@ -57,8 +57,9 @@ final class MinestomDevHarnessMessages {
                         Message.slot("command", command("/testmenus"))
                 )
                 .bullet(
-                        "{command} all|notices|topics|clicks|block",
-                        Message.slot("command", command("/testmessages"))
+                        "{command} opens the Message Showcase; {pages} <page> pages the chat directory",
+                        Message.slot("command", command("/testmessages")),
+                        Message.slot("pages", command("/testmessages chatmenu"))
                 )
                 .bullet(
                         "{command} all|menu|npc|confirm|deny|levelup|discovery",

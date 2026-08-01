@@ -68,7 +68,7 @@ public final class MinestomExampleBootstrap {
         MinestomDevHarnessMessages feedback = new MinestomDevHarnessMessages();
         MinestomCameraMotionExamples cameraExamples = new MinestomCameraMotionExamples(camera, feedback);
         MinestomScreenOverlayExamples overlayExamples = new MinestomScreenOverlayExamples(overlays, feedback);
-        MinestomMessageFacadeExamples messageExamples = new MinestomMessageFacadeExamples();
+        MinestomMessageShowcase messageShowcase = new MinestomMessageShowcase();
         MinestomPrimitiveExamples primitiveExamples = new MinestomPrimitiveExamples(
                 MinecraftServer.getSchedulerManager(),
                 sounds,
@@ -93,7 +93,7 @@ public final class MinestomExampleBootstrap {
         }));
 
         MinecraftServer.getCommandManager().register(new MinestomMenuExamplesCommand(menus, examples, feedback));
-        MinecraftServer.getCommandManager().register(new MinestomMessageFacadeCommand(messageExamples, feedback));
+        MinecraftServer.getCommandManager().register(new MinestomMessageFacadeCommand(menus, messageShowcase, feedback));
         MinecraftServer.getCommandManager().register(new MinestomSoundCueCommand(new MinestomSoundCueExamples(sounds, feedback), feedback));
         MinecraftServer.getCommandManager().register(new MinestomCameraMotionCommand(cameraExamples, feedback));
         MinecraftServer.getCommandManager().register(new MinestomScreenOverlayCommand(overlayExamples, feedback));
