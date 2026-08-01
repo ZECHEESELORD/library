@@ -29,6 +29,7 @@ final class DefaultMessageRenderer {
     private static final TextColor CLICK_PROMPT = NamedTextColor.YELLOW;
     private static final String BLOCK_INDENT = " ";
     private static final String BLOCK_BULLET = "\u2022 ";
+    private static final int CHAT_WIDTH_PIXELS = 308;
 
     private DefaultMessageRenderer() {
     }
@@ -44,7 +45,8 @@ final class DefaultMessageRenderer {
     Component renderBlock(MessageBlock block, RenderTarget target) {
         List<Component> lines = new ArrayList<>();
         for (CompiledBlockEntry entry : compiledEntries(block)) {
-            lines.add(renderEntry(entry, target));
+            Component line = renderEntry(entry, target, block.centered());
+            lines.add(target == RenderTarget.CHAT && block.centered() ? center(line) : line);
         }
         if (lines.isEmpty()) {
             return Component.empty();
@@ -83,13 +85,13 @@ final class DefaultMessageRenderer {
         return builder.build();
     }
 
-    private Component renderEntry(CompiledBlockEntry entry, RenderTarget target) {
+    private Component renderEntry(CompiledBlockEntry entry, RenderTarget target, boolean centered) {
         return switch (entry.entry()) {
             case MessageBlock.BlankEntry ignored -> Component.empty();
             case MessageBlock.TitleEntry title -> Component.text(title.text(), title.color(), TextDecoration.BOLD);
             case MessageBlock.LineEntry ignored -> {
                 ComponentBuilder<?, ?> builder = Component.text();
-                if (target == RenderTarget.CHAT) {
+                if (target == RenderTarget.CHAT && !centered) {
                     builder.append(Component.text(BLOCK_INDENT, BLOCK_BODY));
                 }
                 appendTemplate(builder, entry.template(), entry.bindings(), BLOCK_BODY, BLOCK_BODY, target);
@@ -97,7 +99,7 @@ final class DefaultMessageRenderer {
             }
             case MessageBlock.BulletEntry ignored -> {
                 ComponentBuilder<?, ?> builder = Component.text();
-                if (target == RenderTarget.CHAT) {
+                if (target == RenderTarget.CHAT && !centered) {
                     builder.append(Component.text(BLOCK_INDENT, BLOCK_BODY));
                 }
                 builder.append(Component.text(BLOCK_BULLET, BLOCK_BULLET_PREFIX));
@@ -105,6 +107,15 @@ final class DefaultMessageRenderer {
                 yield builder.build();
             }
         };
+    }
+
+    private Component center(Component line) {
+        if (line.equals(Component.empty())) {
+            return line;
+        }
+        int remaining = CHAT_WIDTH_PIXELS - ChatFontMetrics.width(line);
+        int spaces = Math.max(0, remaining / 2 / ChatFontMetrics.spaceWidth());
+        return spaces == 0 ? line : Component.text(" ".repeat(spaces)).append(line);
     }
 
     private List<CompiledBlockEntry> compiledEntries(MessageBlock block) {

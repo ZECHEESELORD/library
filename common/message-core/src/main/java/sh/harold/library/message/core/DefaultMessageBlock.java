@@ -12,8 +12,13 @@ public final class DefaultMessageBlock implements MessageBlock, CompiledMessageB
 
     private final List<CompiledBlockEntry> compiledEntries;
     private final List<Entry> entries;
+    private final boolean centered;
 
     public DefaultMessageBlock(List<CompiledBlockEntry> compiledEntries) {
+        this(compiledEntries, false);
+    }
+
+    public DefaultMessageBlock(List<CompiledBlockEntry> compiledEntries, boolean centered) {
         Objects.requireNonNull(compiledEntries, "compiledEntries");
         ArrayList<CompiledBlockEntry> copiedCompiled = new ArrayList<>();
         ArrayList<Entry> copiedEntries = new ArrayList<>();
@@ -24,11 +29,17 @@ public final class DefaultMessageBlock implements MessageBlock, CompiledMessageB
         }
         this.compiledEntries = List.copyOf(copiedCompiled);
         this.entries = List.copyOf(copiedEntries);
+        this.centered = centered;
     }
 
     @Override
     public List<Entry> entries() {
         return entries;
+    }
+
+    @Override
+    public boolean centered() {
+        return centered;
     }
 
     @Override

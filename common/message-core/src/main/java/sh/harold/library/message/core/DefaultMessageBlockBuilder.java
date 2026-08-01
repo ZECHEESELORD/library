@@ -14,6 +14,15 @@ import java.util.function.BiFunction;
 public final class DefaultMessageBlockBuilder implements MessageBlockBuilder {
 
     private final List<CompiledBlockEntry> entries = new ArrayList<>();
+    private final boolean centered;
+
+    public DefaultMessageBlockBuilder() {
+        this(false);
+    }
+
+    public DefaultMessageBlockBuilder(boolean centered) {
+        this.centered = centered;
+    }
 
     @Override
     public MessageBlockBuilder title(String text, TextColor color) {
@@ -75,7 +84,7 @@ public final class DefaultMessageBlockBuilder implements MessageBlockBuilder {
 
     @Override
     public MessageBlock build() {
-        return new DefaultMessageBlock(List.copyOf(entries));
+        return new DefaultMessageBlock(List.copyOf(entries), centered);
     }
 
     private static int requireRgb(int rgbHex) {

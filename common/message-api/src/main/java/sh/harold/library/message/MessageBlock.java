@@ -14,6 +14,10 @@ public interface MessageBlock {
 
     List<Entry> entries();
 
+    default boolean centered() {
+        return false;
+    }
+
     Component component();
 
     void send(Audience audience);

@@ -5,6 +5,7 @@ import net.kyori.adventure.text.ComponentLike;
 import sh.harold.library.ui.value.UiValue;
 import sh.harold.library.message.core.DefaultMessageBlockBuilder;
 import sh.harold.library.message.core.DefaultNoticeMessage;
+import sh.harold.library.message.core.DefaultTitleMessage;
 import sh.harold.library.message.core.DefaultTopicMessage;
 import sh.harold.library.message.core.MessageBindings;
 
@@ -37,7 +38,19 @@ public final class Message {
     }
 
     public static MessageBlockBuilder block() {
-        return new DefaultMessageBlockBuilder();
+        return new DefaultMessageBlockBuilder(false);
+    }
+
+    public static MessageBlockBuilder centeredBlock() {
+        return new DefaultMessageBlockBuilder(true);
+    }
+
+    public static TitleMessage title(ComponentLike title) {
+        return title(title, Component.empty());
+    }
+
+    public static TitleMessage title(ComponentLike title, ComponentLike subtitle) {
+        return DefaultTitleMessage.create(title, subtitle);
     }
 
     public static ChatMenuBuilder chatMenu(String title) {
