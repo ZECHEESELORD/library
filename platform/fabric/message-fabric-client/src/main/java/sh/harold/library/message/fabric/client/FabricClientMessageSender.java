@@ -5,8 +5,10 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.HolderLookup;
 import sh.harold.library.message.InlineMessage;
 import sh.harold.library.message.MessageBlock;
+import sh.harold.library.message.TitleMessage;
 import sh.harold.library.message.fabric.FabricMessageComponents;
 
+import java.time.Duration;
 import java.util.Objects;
 
 public final class FabricClientMessageSender {
@@ -33,6 +35,36 @@ public final class FabricClientMessageSender {
 
     public void sendActionBar(LocalPlayer player, InlineMessage message) {
         Objects.requireNonNull(player, "player").sendOverlayMessage(FabricMessageComponents.toNative(FabricMessageComponents.renderActionBar(message), requireRegistries()));
+    }
+
+    public void showTitleToClient(TitleMessage message) {
+        showTitle(Objects.requireNonNull(message, "message"));
+    }
+
+    public void showTitle(LocalPlayer player, TitleMessage message) {
+        Objects.requireNonNull(player, "player");
+        showTitle(Objects.requireNonNull(message, "message"));
+    }
+
+    private static void showTitle(TitleMessage message) {
+        var hud = Minecraft.getInstance().gui.hud;
+        var registries = requireRegistries();
+        hud.setTimes(toTitleTicks(message.fadeIn()), toTitleTicks(message.stay()), toTitleTicks(message.fadeOut()));
+        hud.setSubtitle(FabricMessageComponents.toNative(message.subtitle(), registries));
+        hud.setTitle(FabricMessageComponents.toNative(message.title(), registries));
+    }
+
+    private static int toTitleTicks(Duration duration) {
+        Objects.requireNonNull(duration, "duration");
+        if (duration.isNegative()) {
+            throw new IllegalArgumentException("duration cannot be negative");
+        }
+        long ticks = Math.multiplyExact(duration.getSeconds(), 20L);
+        ticks = Math.addExact(ticks, duration.getNano() / 50_000_000L);
+        if (duration.getNano() % 50_000_000 != 0) {
+            ticks = Math.addExact(ticks, 1L);
+        }
+        return Math.toIntExact(ticks);
     }
 
     private static LocalPlayer requirePlayer() {

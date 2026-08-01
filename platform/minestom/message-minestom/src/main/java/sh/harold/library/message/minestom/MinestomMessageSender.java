@@ -4,6 +4,7 @@ import net.kyori.adventure.audience.Audience;
 import net.minestom.server.entity.Player;
 import sh.harold.library.message.InlineMessage;
 import sh.harold.library.message.MessageBlock;
+import sh.harold.library.message.TitleMessage;
 
 public final class MinestomMessageSender {
 
@@ -17,6 +18,10 @@ public final class MinestomMessageSender {
 
     public void sendActionBar(Player player, InlineMessage message) {
         message.sendActionBar(asAudience(player));
+    }
+
+    public void showTitle(Player player, TitleMessage message) {
+        message.show(asAudience(player));
     }
 
     private Audience asAudience(Player player) {
