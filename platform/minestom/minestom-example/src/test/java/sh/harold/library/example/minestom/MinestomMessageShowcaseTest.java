@@ -7,6 +7,7 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.minestom.server.item.Material;
 import org.junit.jupiter.api.Test;
 import sh.harold.library.menu.ActionVerb;
 import sh.harold.library.menu.Menu;
@@ -51,6 +52,14 @@ class MinestomMessageShowcaseTest {
         assertTrue(showcase.goldens().stream()
                 .flatMap(entry -> entry.source().orElseThrow().messageSha256().stream())
                 .allMatch(hash -> hash.matches("[0-9a-f]{64}")));
+    }
+
+    @Test
+    void everySpecimenIconResolvesInTheMinestomMaterialRegistry() {
+        MinestomMessageShowcase showcase = new MinestomMessageShowcase();
+
+        showcase.entries().forEach(entry ->
+                assertNotNull(Material.fromKey(entry.icon()), entry.id() + ": " + entry.icon()));
     }
 
     @Test

@@ -603,7 +603,7 @@ final class MinestomMessageShowcase {
         return synthesized(
                 "useful-links",
                 "Useful Links",
-                "chain",
+                "iron_chain",
                 "Two independent destinations.",
                 features(Feature.BLOCK, Feature.CLICK_OPEN_URL, Feature.MULTI_CLICK),
                 new BlockOutput(block)
