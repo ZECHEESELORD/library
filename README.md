@@ -90,7 +90,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 > Paper NPC behavior uses native mannequins and requires PacketEvents `2.13.0`; the adapter fails fast if PacketEvents is absent, disabled, uninitialized, or running an unsupported protocol. Velocity has no scoreboard adapter because a proxy cannot render a Minecraft sidebar.
 
 > [!NOTE]
-> `menu-paper` uses viewer- and region-aware scheduling and is compatible with Folia during normal operation. A consuming plugin must still declare `folia-supported: true` in its own plugin descriptor; this does not imply Folia support for unrelated Paper adapters. Folia hot-disable or reload with active menu sessions is unsupported because owner-thread work can no longer be scheduled after disable; disable only after those sessions are gone. Reactive runtimes skip native rendering after an unchanged reducer result. Keep high-frequency reactive titles stable: Paper and Fabric must rebuild and reopen the native inventory when a title changes.
+> The current Paper lane targets Paper/ShreddedPaper `26.2`. Player and entity mutations in menu, sound, camera, overlay, scoreboard, impulse, and entity adapters are dispatched through the appropriate region or entity scheduler. Global telegraph and ambient ticks remain host-neutral coordination points: their supplied resolvers and sinks must dispatch any native world access to the owning region. A consuming plugin must declare `folia-supported: true`; hot reload with active native sessions is unsupported.
 
 ### Observability
 
@@ -174,7 +174,7 @@ Example modules (not published):
 | Lane | Target | Java |
 | --- | --- | --- |
 | Common modules | any platform | 21 |
-| Paper (latest) | Paper API `26.1.2.build.66-stable` (MC `26.1.2`) | 25 |
+| Paper (latest) | Paper API `26.2.build.112-stable` (MC `26.2`) | 25 |
 | Paper (legacy) | Paper API `1.21.11-R0.1-SNAPSHOT` | 21 |
 | Fabric (latest) | MC `26.2`, Loader `0.19.3`, API `0.155.2+26.2` | 25 |
 | Fabric (legacy) | MC `1.21.11`, Loader `0.18.6`, API `0.141.3+1.21.11` | 21 |

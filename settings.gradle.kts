@@ -63,6 +63,7 @@ val projectPaths = listOf(
     ":common:npc-behavior-core",
     ":common:house-service-entity",
     ":platform:paper:message-paper",
+    ":platform:paper:message-paper-1_8_8",
     ":platform:paper:message-paper-1_21_11",
     ":platform:paper:sound-paper",
     ":platform:paper:sound-paper-1_21_11",
@@ -139,6 +140,7 @@ dependencyResolutionManagement {
         mavenCentral()
         maven("https://maven.fabricmc.net/")
         maven("https://repo.papermc.io/repository/maven-public/")
+        maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
         maven("https://repo.codemc.io/repository/maven-releases/")
         maven("https://repo.codemc.io/repository/maven-snapshots/")
         maven("https://repo.minebench.de")

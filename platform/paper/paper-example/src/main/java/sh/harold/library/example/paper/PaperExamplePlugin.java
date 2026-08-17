@@ -3,7 +3,6 @@ package sh.harold.library.example.paper;
 import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
@@ -112,7 +111,7 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         populateTestingHotbar(event.getPlayer());
         sounds.play(event.getPlayer(), SoundCueKeys.REWARD_DISCOVERY);
-        Bukkit.getScheduler().runTask(this, () -> menus.open(event.getPlayer(), examples.gallery()));
+        event.getPlayer().getScheduler().run(this, ignored -> menus.open(event.getPlayer(), examples.gallery()), () -> { });
         feedback.info(
                 event.getPlayer(),
                 "Use {menus} to reopen the menu gallery, {overlays} to preview the screen overlay subsystem, {primitives} for the primitive harness commands, and {cooldowns} to test scoped cooldown keys.",
@@ -141,7 +140,7 @@ public final class PaperExamplePlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
         discardPrimitiveState(event.getPlayer());
-        Bukkit.getScheduler().runTask(this, () -> populateTestingHotbar(event.getPlayer()));
+        event.getPlayer().getScheduler().run(this, ignored -> populateTestingHotbar(event.getPlayer()), () -> { });
     }
 
     @EventHandler

@@ -2,7 +2,7 @@ package sh.harold.library.ambient.paper;
 
 import net.kyori.adventure.key.Key;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import sh.harold.library.ambient.ViewerAmbientState;
 import sh.harold.library.ambient.ZoneSpec;
 import sh.harold.library.ambient.core.StandardAmbientZoneController;
@@ -19,7 +19,7 @@ public final class PaperAmbientZonePlatform implements AutoCloseable {
     private final Supplier<List<ViewerAmbientState>> viewers;
     private final AnchorResolver anchorResolver;
     private final PaperAmbientSink sink;
-    private final BukkitTask task;
+    private final ScheduledTask task;
     private boolean closed;
 
     public PaperAmbientZonePlatform(
@@ -33,23 +33,28 @@ public final class PaperAmbientZonePlatform implements AutoCloseable {
         this.viewers = Objects.requireNonNull(viewers, "viewers");
         this.anchorResolver = Objects.requireNonNull(anchorResolver, "anchorResolver");
         this.sink = Objects.requireNonNull(sink, "sink");
-        this.task = owningPlugin.getServer().getScheduler().runTaskTimer(owningPlugin, this::tick, 1L, 1L);
+        this.task = owningPlugin.getServer().getGlobalRegionScheduler().runAtFixedRate(
+                owningPlugin,
+                ignored -> tick(),
+                1L,
+                1L
+        );
     }
 
-    public KeyedHandle start(ZoneSpec spec) {
+    public synchronized KeyedHandle start(ZoneSpec spec) {
         return controller.start(spec);
     }
 
-    public boolean stop(Key key) {
+    public synchronized boolean stop(Key key) {
         return controller.stop(key);
     }
 
-    public void stopAll() {
+    public synchronized void stopAll() {
         controller.stopAll();
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         if (closed) {
             return;
         }
@@ -58,7 +63,7 @@ public final class PaperAmbientZonePlatform implements AutoCloseable {
         controller.close();
     }
 
-    private void tick() {
+    private synchronized void tick() {
         if (closed) {
             return;
         }

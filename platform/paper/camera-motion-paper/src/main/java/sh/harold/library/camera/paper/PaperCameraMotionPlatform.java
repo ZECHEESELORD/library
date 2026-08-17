@@ -1,68 +1,58 @@
 package sh.harold.library.camera.paper;
 
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.kyori.adventure.key.Key;
-import io.papermc.paper.entity.TeleportFlag;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitScheduler;
-import org.bukkit.scheduler.BukkitTask;
 import sh.harold.library.camera.CameraDelta;
 import sh.harold.library.camera.CameraMotion;
 import sh.harold.library.camera.CameraMotionPlayback;
 import sh.harold.library.camera.CameraMotionService;
 import sh.harold.library.camera.core.StandardCameraMotionService;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+/** Paper/Folia camera motion adapter. Every native player mutation runs on that player's scheduler. */
 public final class PaperCameraMotionPlatform implements CameraMotionService, Listener {
 
-    private static final TeleportFlag[] VIEW_TELEPORT_FLAGS = {
-            TeleportFlag.Relative.YAW,
-            TeleportFlag.Relative.PITCH,
-            TeleportFlag.Relative.VELOCITY_X,
-            TeleportFlag.Relative.VELOCITY_Y,
-            TeleportFlag.Relative.VELOCITY_Z,
-            TeleportFlag.EntityState.RETAIN_VEHICLE,
-            TeleportFlag.EntityState.RETAIN_OPEN_INVENTORY
-    };
-
+    private final Plugin plugin;
     private final StandardCameraMotionService motions;
     private final Function<UUID, Player> playerLookup;
-    private final BukkitTask tickTask;
-    private boolean closed;
+    private final boolean scheduleTicks;
+    private final Map<UUID, ScheduledTask> tickTasks = new ConcurrentHashMap<>();
+    private volatile boolean closed;
 
     public PaperCameraMotionPlatform(JavaPlugin plugin) {
-        this(plugin, new StandardCameraMotionService(), plugin.getServer().getScheduler(), plugin.getServer()::getPlayer, true);
+        this(plugin, new StandardCameraMotionService(), plugin.getServer()::getPlayer, true);
     }
 
     PaperCameraMotionPlatform(
             Plugin plugin,
             StandardCameraMotionService motions,
-            BukkitScheduler scheduler,
             Function<UUID, Player> playerLookup,
             boolean registerListener
     ) {
-        Plugin owningPlugin = Objects.requireNonNull(plugin, "plugin");
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.motions = Objects.requireNonNull(motions, "motions");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
-        BukkitScheduler bukkitScheduler = Objects.requireNonNull(scheduler, "scheduler");
+        this.scheduleTicks = registerListener;
         if (registerListener) {
-            owningPlugin.getServer().getPluginManager().registerEvents(this, owningPlugin);
+            plugin.getServer().getPluginManager().registerEvents(this, plugin);
         }
-        this.tickTask = bukkitScheduler.runTaskTimer(owningPlugin, this::tick, 1L, 1L);
     }
 
     public CameraMotionPlayback start(Player player, CameraMotion motion) {
@@ -79,17 +69,25 @@ public final class PaperCameraMotionPlatform implements CameraMotionService, Lis
 
     @Override
     public CameraMotionPlayback start(UUID viewerId, CameraMotion motion) {
-        return motions.start(viewerId, motion);
+        ensureOpen();
+        CameraMotionPlayback playback = motions.start(viewerId, motion);
+        if (scheduleTicks) {
+            ensureTicking(viewerId);
+        }
+        return playback;
     }
 
     @Override
     public boolean stop(UUID viewerId, Key key) {
-        return motions.stop(viewerId, key);
+        boolean stopped = motions.stop(viewerId, key);
+        cancelIfIdle(viewerId);
+        return stopped;
     }
 
     @Override
     public void stopAll(UUID viewerId) {
         motions.stopAll(viewerId);
+        cancelIfIdle(viewerId);
     }
 
     @Override
@@ -98,70 +96,118 @@ public final class PaperCameraMotionPlatform implements CameraMotionService, Lis
             return;
         }
         closed = true;
-        tickTask.cancel();
+        tickTasks.values().forEach(ScheduledTask::cancel);
+        tickTasks.clear();
         HandlerList.unregisterAll(this);
         motions.close();
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        motions.discardViewer(event.getPlayer().getUniqueId());
+        discard(event.getPlayer().getUniqueId());
     }
 
     @EventHandler
     public void onPlayerKick(PlayerKickEvent event) {
-        motions.discardViewer(event.getPlayer().getUniqueId());
+        discard(event.getPlayer().getUniqueId());
     }
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        motions.discardViewer(event.getEntity().getUniqueId());
+        discard(event.getEntity().getUniqueId());
     }
 
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
-        motions.discardViewer(event.getPlayer().getUniqueId());
+        discard(event.getPlayer().getUniqueId());
     }
 
     @EventHandler
     public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
-        motions.discardViewer(event.getPlayer().getUniqueId());
+        discard(event.getPlayer().getUniqueId());
     }
 
     void tick() {
         for (UUID viewerId : motions.activeViewers()) {
-            Player player = playerLookup.apply(viewerId);
-            if (player == null || !player.isOnline()) {
-                motions.discardViewer(viewerId);
-                continue;
-            }
-            CameraDelta delta = motions.tick(viewerId);
-            if (!delta.isZero()) {
-                applyDelta(player, delta);
-            }
+            tickViewer(viewerId);
+        }
+    }
+
+    private void ensureTicking(UUID viewerId) {
+        if (tickTasks.containsKey(viewerId)) {
+            return;
+        }
+        Player player = playerLookup.apply(viewerId);
+        if (player == null || !player.isOnline()) {
+            motions.discardViewer(viewerId);
+            return;
+        }
+        ScheduledTask task = player.getScheduler().runAtFixedRate(
+                plugin,
+                ignored -> tickViewer(viewerId),
+                () -> discard(viewerId),
+                1L,
+                1L
+        );
+        if (task == null) {
+            motions.discardViewer(viewerId);
+            return;
+        }
+        ScheduledTask existing = tickTasks.putIfAbsent(viewerId, task);
+        if (existing != null) {
+            task.cancel();
+        }
+    }
+
+    private void tickViewer(UUID viewerId) {
+        if (closed) {
+            discard(viewerId);
+            return;
+        }
+        Player player = playerLookup.apply(viewerId);
+        if (player == null || !player.isOnline()) {
+            discard(viewerId);
+            return;
+        }
+        CameraDelta delta = motions.tick(viewerId);
+        if (!delta.isZero()) {
+            applyDelta(player, delta);
+        }
+        cancelIfIdle(viewerId);
+    }
+
+    private void discard(UUID viewerId) {
+        motions.discardViewer(viewerId);
+        ScheduledTask task = tickTasks.remove(viewerId);
+        if (task != null) {
+            task.cancel();
+        }
+    }
+
+    private void cancelIfIdle(UUID viewerId) {
+        if (motions.activeViewers().contains(viewerId)) {
+            return;
+        }
+        ScheduledTask task = tickTasks.remove(viewerId);
+        if (task != null) {
+            task.cancel();
         }
     }
 
     private static void applyDelta(Player player, CameraDelta delta) {
         Location current = player.getLocation();
-        float pitchDelta = clampPitchDelta(current.getPitch(), delta.pitchDegrees());
-        Location target = current.clone();
-        target.setYaw((float) delta.yawDegrees());
-        target.setPitch(pitchDelta);
-        player.teleport(target, PlayerTeleportEvent.TeleportCause.PLUGIN, VIEW_TELEPORT_FLAGS);
+        float yaw = (float) (current.getYaw() + delta.yawDegrees());
+        float pitch = clampPitch((float) (current.getPitch() + delta.pitchDegrees()));
+        player.setRotation(yaw, pitch);
     }
 
-    private static float clampPitchDelta(float currentPitch, double pitchDelta) {
-        return clampPitch((float) (currentPitch + pitchDelta)) - currentPitch;
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("Paper camera motion platform is closed");
+        }
     }
 
     private static float clampPitch(float pitch) {
-        if (pitch < -90.0f) {
-            return -90.0f;
-        }
-        if (pitch > 90.0f) {
-            return 90.0f;
-        }
-        return pitch;
+        return Math.max(-90.0f, Math.min(90.0f, pitch));
     }
 }

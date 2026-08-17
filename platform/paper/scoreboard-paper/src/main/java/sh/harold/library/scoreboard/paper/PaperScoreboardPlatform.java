@@ -1,6 +1,7 @@
 package sh.harold.library.scoreboard.paper;
 
 import io.papermc.paper.scoreboard.numbers.NumberFormat;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -11,7 +12,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
@@ -43,7 +43,7 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
     private final StandardScoreboardService scoreboards = new StandardScoreboardService();
     private final Map<UUID, PaperScoreboardSession> sessions = new ConcurrentHashMap<>();
 
-    private BukkitTask tickTask;
+    private ScheduledTask tickTask;
     private int ticksUntilReconcile;
     private boolean closed;
 
@@ -68,27 +68,26 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
         return scoreboards;
     }
 
-    public void register(ScoreboardSpec spec) {
+    public synchronized void register(ScoreboardSpec spec) {
         scoreboards.register(spec);
     }
 
-    public void unregister(Key key) {
-        requirePrimaryThread("unregister Paper scoreboards");
+    public synchronized void unregister(Key key) {
         scoreboards.unregister(key);
         reconcileAll();
     }
 
-    public void show(Player player, Key scoreboardKey) {
-        requirePrimaryThread("show Paper scoreboards");
+    public synchronized void show(Player player, Key scoreboardKey) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "show Paper scoreboards");
         scoreboards.show(target.getUniqueId(), Objects.requireNonNull(scoreboardKey, "scoreboardKey"));
         session(target).reconcile(target);
         ensureTicking();
     }
 
-    public void hide(Player player) {
-        requirePrimaryThread("hide Paper scoreboards");
+    public synchronized void hide(Player player) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "hide Paper scoreboards");
         scoreboards.hide(target.getUniqueId());
         PaperScoreboardSession session = sessions.remove(target.getUniqueId());
         if (session != null) {
@@ -101,74 +100,73 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
         hide(player);
     }
 
-    public void overrideTitle(Player player, Component title) {
-        requirePrimaryThread("override Paper scoreboard titles");
+    public synchronized void overrideTitle(Player player, Component title) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "override Paper scoreboard titles");
         scoreboards.overrideTitle(target.getUniqueId(), Objects.requireNonNull(title, "title"));
         reconcile(target);
     }
 
-    public void clearTitleOverride(Player player) {
-        requirePrimaryThread("clear Paper scoreboard title overrides");
+    public synchronized void clearTitleOverride(Player player) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "clear Paper scoreboard title overrides");
         scoreboards.clearTitleOverride(target.getUniqueId());
         reconcile(target);
     }
 
-    public void overrideSection(Player player, String sectionId, ScoreboardSection replacement) {
-        requirePrimaryThread("override Paper scoreboard sections");
+    public synchronized void overrideSection(Player player, String sectionId, ScoreboardSection replacement) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "override Paper scoreboard sections");
         scoreboards.overrideSection(target.getUniqueId(), sectionId, replacement);
         reconcile(target);
     }
 
-    public void clearSectionOverride(Player player, String sectionId) {
-        requirePrimaryThread("clear Paper scoreboard section overrides");
+    public synchronized void clearSectionOverride(Player player, String sectionId) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "clear Paper scoreboard section overrides");
         scoreboards.clearSectionOverride(target.getUniqueId(), sectionId);
         reconcile(target);
     }
 
-    public void hideSection(Player player, String sectionId) {
-        requirePrimaryThread("hide Paper scoreboard sections");
+    public synchronized void hideSection(Player player, String sectionId) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "hide Paper scoreboard sections");
         scoreboards.hideSection(target.getUniqueId(), sectionId);
         reconcile(target);
     }
 
-    public void showSection(Player player, String sectionId) {
-        requirePrimaryThread("show Paper scoreboard sections");
+    public synchronized void showSection(Player player, String sectionId) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "show Paper scoreboard sections");
         scoreboards.showSection(target.getUniqueId(), sectionId);
         reconcile(target);
     }
 
-    public KeyedHandle pushTransient(Player player, TransientSectionSpec spec) {
-        requirePrimaryThread("push Paper scoreboard transients");
+    public synchronized KeyedHandle pushTransient(Player player, TransientSectionSpec spec) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "push Paper scoreboard transients");
         KeyedHandle handle = scoreboards.pushTransient(target.getUniqueId(), spec);
         reconcile(target);
         ensureTicking();
         return handle;
     }
 
-    public void clearTransient(Player player, Key key) {
-        requirePrimaryThread("clear Paper scoreboard transients");
+    public synchronized void clearTransient(Player player, Key key) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "clear Paper scoreboard transients");
         scoreboards.clearTransient(target.getUniqueId(), key);
         reconcile(target);
     }
 
-    public void clearTransients(Player player) {
-        requirePrimaryThread("clear Paper scoreboard transients");
+    public synchronized void clearTransients(Player player) {
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "clear Paper scoreboard transients");
         scoreboards.clearTransients(target.getUniqueId());
         reconcile(target);
     }
 
     @Override
-    public void close() {
-        requirePrimaryThread("close Paper scoreboard platform");
+    public synchronized void close() {
         if (closed) {
             return;
         }
@@ -180,7 +178,7 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
         }
         List<PaperScoreboardSession> currentSessions = new ArrayList<>(sessions.values());
         sessions.clear();
-        currentSessions.forEach(PaperScoreboardSession::close);
+        currentSessions.forEach(PaperScoreboardSession::closeOnOwner);
         scoreboards.close();
     }
 
@@ -203,7 +201,7 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
         });
     }
 
-    private void cleanup(Player player) {
+    private synchronized void cleanup(Player player) {
         scoreboards.clearViewer(player.getUniqueId());
         PaperScoreboardSession session = sessions.remove(player.getUniqueId());
         if (session != null) {
@@ -212,7 +210,7 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
         cancelTickingIfIdle();
     }
 
-    private void reconcile(Player player) {
+    private synchronized void reconcile(Player player) {
         PaperScoreboardSession session = sessions.get(player.getUniqueId());
         if (session != null) {
             session.reconcile(player);
@@ -226,13 +224,17 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
             if (player == null || !player.isOnline()) {
                 cleanupById(playerId);
             } else {
-                reconcile(player);
+                player.getScheduler().run(
+                        plugin,
+                        ignored -> reconcile(player),
+                        () -> cleanupById(playerId)
+                );
             }
         }
         cancelTickingIfIdle();
     }
 
-    private void cleanupById(UUID playerId) {
+    private synchronized void cleanupById(UUID playerId) {
         scoreboards.clearViewer(playerId);
         PaperScoreboardSession session = sessions.remove(playerId);
         if (session != null) {
@@ -242,7 +244,12 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
 
     private void ensureTicking() {
         if (tickTask == null && !sessions.isEmpty()) {
-            tickTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
+            tickTask = plugin.getServer().getGlobalRegionScheduler().runAtFixedRate(
+                    plugin,
+                    ignored -> tick(),
+                    1L,
+                    1L
+            );
         }
     }
 
@@ -253,7 +260,7 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
         }
     }
 
-    private void tick() {
+    private synchronized void tick() {
         if (closed) {
             return;
         }
@@ -264,9 +271,9 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
         }
     }
 
-    private static void requirePrimaryThread(String action) {
-        if (!Bukkit.isPrimaryThread()) {
-            throw new IllegalStateException(action + " must run on the Paper primary server thread");
+    private static void requireOwned(Player player, String action) {
+        if (!Bukkit.isOwnedByCurrentRegion(player)) {
+            throw new IllegalStateException(action + " must run on the player's owning region thread");
         }
     }
 
@@ -361,6 +368,18 @@ public final class PaperScoreboardPlatform implements Listener, AutoCloseable {
                 return;
             }
             closed = true;
+        }
+
+        private void closeOnOwner() {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player == null || !player.isOnline() || Bukkit.isOwnedByCurrentRegion(player)) {
+                close();
+                return;
+            }
+            ScheduledTask task = player.getScheduler().run(plugin, ignored -> close(player), this::close);
+            if (task == null) {
+                closed = true;
+            }
         }
 
         private void close(Player player) {

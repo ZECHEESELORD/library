@@ -25,6 +25,10 @@ public final class PaperMessageSender {
         message.show(asAudience(player));
     }
 
+    public void disconnect(Player player, InlineMessage message) {
+        player.kick(message.component());
+    }
+
     private Audience asAudience(CommandSender sender) {
         if (sender instanceof Audience audience) {
             return audience;

@@ -74,6 +74,9 @@ val paperLegacy12111ProjectPaths = listOf(
     ":platform:paper:menu-paper-1_21_11",
     ":platform:paper:scoreboard-paper-1_21_11",
 )
+val paperLegacy188ProjectPaths = listOf(
+    ":platform:paper:message-paper-1_8_8",
+)
 
 // JitPack serves multi-module repos under com.github.<owner>.<repo>.
 group = if (isJitPackBuild && jitPackGroup != null) jitPackGroup else configuredGroup
@@ -211,6 +214,12 @@ tasks.register("paperLegacy12111Check") {
 
 tasks.register("paperCompatibilityCheck") {
     group = "verification"
-    description = "Runs both latest and Paper 1.21.11 adapter checks."
-    dependsOn("paperLatestCheck", "paperLegacy12111Check")
+    description = "Runs latest and legacy Paper adapter checks."
+    dependsOn("paperLatestCheck", "paperLegacy12111Check", "paperLegacy188Check")
+}
+
+tasks.register("paperLegacy188Check") {
+    group = "verification"
+    description = "Runs the Paper 1.8.8 message adapter checks."
+    dependsOn(paperLegacy188ProjectPaths.map { "$it:check" })
 }

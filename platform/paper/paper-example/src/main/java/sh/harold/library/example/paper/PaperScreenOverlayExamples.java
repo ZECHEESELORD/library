@@ -34,20 +34,14 @@ final class PaperScreenOverlayExamples {
                 Message.slot("command", feedback.command("/testoverlays")));
 
         overlays.show(player, request(HAZE, 0x4F6D8A, 0.36f, 15, 80, 30, OverlayConflictPolicy.STACK));
-        plugin.getServer().getScheduler().runTaskLater(plugin,
-                () -> showIfOnline(player, request(FLASH, 0xFFFFFF, 0.75f, 0, 2, 8, OverlayConflictPolicy.STACK)),
-                20L);
-        plugin.getServer().getScheduler().runTaskLater(plugin,
-                () -> showIfOnline(player, request(FLASH, 0xFFF1C2, 0.95f, 0, 2, 10, OverlayConflictPolicy.STACK)),
-                24L);
-        plugin.getServer().getScheduler().runTaskLater(plugin,
-                () -> showIfOnline(player, request(WARNING, 0xAA2A2A, 0.82f, 5, 35, 20, OverlayConflictPolicy.REPLACE_ALL)),
-                60L);
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        later(player, 20L, () -> showIfOnline(player, request(FLASH, 0xFFFFFF, 0.75f, 0, 2, 8, OverlayConflictPolicy.STACK)));
+        later(player, 24L, () -> showIfOnline(player, request(FLASH, 0xFFF1C2, 0.95f, 0, 2, 10, OverlayConflictPolicy.STACK)));
+        later(player, 60L, () -> showIfOnline(player, request(WARNING, 0xAA2A2A, 0.82f, 5, 35, 20, OverlayConflictPolicy.REPLACE_ALL)));
+        later(player, 140L, () -> {
             if (player.isOnline()) {
                 clear(player);
             }
-        }, 140L);
+        });
     }
 
     void clear(Player player) {
@@ -58,6 +52,10 @@ final class PaperScreenOverlayExamples {
         if (player.isOnline()) {
             overlays.show(player, request);
         }
+    }
+
+    private void later(Player player, long delayTicks, Runnable action) {
+        player.getScheduler().runDelayed(plugin, ignored -> action.run(), () -> { }, delayTicks);
     }
 
     private static ScreenOverlayRequest request(

@@ -9,13 +9,13 @@ class PaperPacketEventsRequirementTest {
 
     @Test
     void acceptsOnlyReadyStable2130OnSupportedProtocol() {
-        assertDoesNotThrow(() -> PaperPacketEventsRequirement.verify(state(true, true, true, true, 2, 13, 0, false, "V_26_1_2")));
+        assertDoesNotThrow(() -> PaperPacketEventsRequirement.verify(state(true, true, true, true, 2, 13, 0, false, "V_26_2")));
         assertThrows(IllegalStateException.class,
-                () -> PaperPacketEventsRequirement.verify(state(true, true, true, true, 2, 13, 1, false, "V_26_1_2")));
+                () -> PaperPacketEventsRequirement.verify(state(true, true, true, true, 2, 13, 1, false, "V_26_2")));
         assertThrows(IllegalStateException.class,
-                () -> PaperPacketEventsRequirement.verify(state(true, true, true, true, 2, 13, 0, true, "V_26_1_2")));
+                () -> PaperPacketEventsRequirement.verify(state(true, true, true, true, 2, 13, 0, true, "V_26_2")));
         assertThrows(IllegalStateException.class,
-                () -> PaperPacketEventsRequirement.verify(state(true, true, true, true, 2, 13, 0, false, "V_26_2")));
+                () -> PaperPacketEventsRequirement.verify(state(true, true, true, true, 2, 13, 0, false, "V_26_1_2")));
     }
 
     @Test
@@ -25,9 +25,9 @@ class PaperPacketEventsRequirementTest {
         assertThrows(IllegalStateException.class,
                 () -> PaperPacketEventsRequirement.verify(state(true, false, false, false, -1, -1, -1, false, "unknown")));
         assertThrows(IllegalStateException.class,
-                () -> PaperPacketEventsRequirement.verify(state(true, true, false, false, 2, 13, 0, false, "V_26_1_2")));
+                () -> PaperPacketEventsRequirement.verify(state(true, true, false, false, 2, 13, 0, false, "V_26_2")));
         assertThrows(IllegalStateException.class,
-                () -> PaperPacketEventsRequirement.verify(state(true, true, true, false, 2, 13, 0, false, "V_26_1_2")));
+                () -> PaperPacketEventsRequirement.verify(state(true, true, true, false, 2, 13, 0, false, "V_26_2")));
     }
 
     private static PaperPacketEventsRequirement.RuntimeState state(

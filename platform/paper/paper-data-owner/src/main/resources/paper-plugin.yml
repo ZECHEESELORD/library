@@ -1,5 +1,6 @@
 name: paper-data-owner
 main: sh.harold.library.data.paper.owner.PaperDataOwnerPlugin
 version: ${version}
-api-version: '26.1.2'
+api-version: '26.2'
+folia-supported: true
 description: Shared data owner plugin for the creative library.

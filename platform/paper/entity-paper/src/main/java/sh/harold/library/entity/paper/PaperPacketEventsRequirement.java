@@ -12,7 +12,7 @@ final class PaperPacketEventsRequirement {
     private static final int REQUIRED_MAJOR = 2;
     private static final int REQUIRED_MINOR = 13;
     private static final int REQUIRED_PATCH = 0;
-    private static final ServerVersion SUPPORTED_PROTOCOL = ServerVersion.V_26_1_2;
+    private static final ServerVersion SUPPORTED_PROTOCOL = ServerVersion.V_26_2;
 
     private PaperPacketEventsRequirement() {
     }

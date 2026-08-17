@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * The only class that knows PacketEvents wrappers and 26.1.2 metadata indices.
+ * The only class that knows PacketEvents wrappers and 26.2 metadata indices.
  * Platform code composes semantic frames; protocol details remain contained
  * here and are guarded by {@link PaperPacketEventsRequirement}.
  */
@@ -51,7 +51,7 @@ final class PaperMannequinPacketCodec extends SimplePacketListenerAbstract imple
     private static final int ENTITY_POSE_INDEX = 6;
     private static final int LIVING_ACTIVE_HAND_INDEX = 8;
 
-    // TextDisplay indices for the one supported server protocol (26.1.2).
+    // TextDisplay indices for the one supported server protocol (26.2).
     private static final int DISPLAY_BILLBOARD_INDEX = 15;
     private static final int DISPLAY_VIEW_RANGE_INDEX = 17;
     private static final int TEXT_INDEX = 23;

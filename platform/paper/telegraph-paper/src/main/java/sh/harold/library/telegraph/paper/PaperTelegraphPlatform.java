@@ -2,7 +2,7 @@ package sh.harold.library.telegraph.paper;
 
 import net.kyori.adventure.key.Key;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import sh.harold.library.spatial.AnchorResolver;
 import sh.harold.library.telegraph.TelegraphSpec;
 import sh.harold.library.telegraph.core.StandardTelegraphController;
@@ -15,7 +15,7 @@ public final class PaperTelegraphPlatform implements AutoCloseable {
     private final StandardTelegraphController controller;
     private final AnchorResolver anchorResolver;
     private final PaperTelegraphSink sink;
-    private final BukkitTask tickTask;
+    private final ScheduledTask tickTask;
     private boolean closed;
 
     public PaperTelegraphPlatform(JavaPlugin plugin, AnchorResolver anchorResolver, PaperTelegraphSink sink) {
@@ -23,23 +23,28 @@ public final class PaperTelegraphPlatform implements AutoCloseable {
         this.controller = new StandardTelegraphController();
         this.anchorResolver = Objects.requireNonNull(anchorResolver, "anchorResolver");
         this.sink = Objects.requireNonNull(sink, "sink");
-        this.tickTask = owningPlugin.getServer().getScheduler().runTaskTimer(owningPlugin, this::tick, 1L, 1L);
+        this.tickTask = owningPlugin.getServer().getGlobalRegionScheduler().runAtFixedRate(
+                owningPlugin,
+                ignored -> tick(),
+                1L,
+                1L
+        );
     }
 
-    public KeyedHandle start(TelegraphSpec spec) {
+    public synchronized KeyedHandle start(TelegraphSpec spec) {
         return controller.start(spec);
     }
 
-    public boolean stop(Key key) {
+    public synchronized boolean stop(Key key) {
         return controller.stop(key);
     }
 
-    public void stopAll() {
+    public synchronized void stopAll() {
         controller.stopAll();
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         if (closed) {
             return;
         }
@@ -48,7 +53,7 @@ public final class PaperTelegraphPlatform implements AutoCloseable {
         controller.close();
     }
 
-    private void tick() {
+    private synchronized void tick() {
         if (closed) {
             return;
         }

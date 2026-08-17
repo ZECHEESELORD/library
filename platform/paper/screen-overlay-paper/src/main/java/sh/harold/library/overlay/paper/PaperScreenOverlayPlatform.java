@@ -15,12 +15,11 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import sh.harold.library.overlay.ScreenOverlayHandle;
 import sh.harold.library.overlay.ScreenOverlayRequest;
 import sh.harold.library.overlay.core.OverlayFace;
@@ -48,8 +47,8 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
     }
 
     public ScreenOverlayHandle show(Player player, ScreenOverlayRequest request) {
-        requirePrimaryThread("show Paper screen overlays");
         Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "show Paper screen overlays");
         PaperOverlaySession session = sessions.compute(target.getUniqueId(), (ignored, existing) ->
                 existing == null || existing.closed() ? new PaperOverlaySession(target.getUniqueId()) : existing
         );
@@ -57,16 +56,18 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
     }
 
     public void clear(Player player, Key key) {
-        requirePrimaryThread("clear Paper screen overlays");
-        PaperOverlaySession session = sessions.get(Objects.requireNonNull(player, "player").getUniqueId());
+        Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "clear Paper screen overlays");
+        PaperOverlaySession session = sessions.get(target.getUniqueId());
         if (session != null) {
             session.clear(Objects.requireNonNull(player, "player"), Objects.requireNonNull(key, "key"));
         }
     }
 
     public void clearAll(Player player) {
-        requirePrimaryThread("clear Paper screen overlays");
-        PaperOverlaySession session = sessions.get(Objects.requireNonNull(player, "player").getUniqueId());
+        Player target = Objects.requireNonNull(player, "player");
+        requireOwned(target, "clear Paper screen overlays");
+        PaperOverlaySession session = sessions.get(target.getUniqueId());
         if (session != null) {
             session.clearAll(player);
         }
@@ -74,19 +75,10 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
 
     @Override
     public void close() {
-        requirePrimaryThread("close Paper screen overlay platform");
         HandlerList.unregisterAll(this);
         List<PaperOverlaySession> currentSessions = new ArrayList<>(sessions.values());
         sessions.clear();
-        currentSessions.forEach(PaperOverlaySession::close);
-    }
-
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player joining = event.getPlayer();
-        for (PaperOverlaySession session : sessions.values()) {
-            session.hideFrom(joining);
-        }
+        currentSessions.forEach(PaperOverlaySession::closeOnOwner);
     }
 
     @EventHandler
@@ -121,9 +113,9 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
         }
     }
 
-    private static void requirePrimaryThread(String action) {
-        if (!Bukkit.isPrimaryThread()) {
-            throw new IllegalStateException(action + " must run on the Paper primary server thread");
+    private static void requireOwned(Player player, String action) {
+        if (!Bukkit.isOwnedByCurrentRegion(player)) {
+            throw new IllegalStateException(action + " must run on the player's owning region thread");
         }
     }
 
@@ -132,7 +124,7 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
         private final StandardScreenOverlayController controller = new StandardScreenOverlayController();
 
         private PaperOverlayShell shell;
-        private BukkitTask tickTask;
+        private ScheduledTask tickTask;
         private boolean closed;
 
         private PaperOverlaySession(UUID playerId) {
@@ -143,7 +135,7 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
             ensureOpen();
             ScreenOverlayHandle handle = controller.show(request);
             reconcile(player);
-            ensureTicking();
+            ensureTicking(player);
             return handle;
         }
 
@@ -161,12 +153,6 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
             }
             controller.clearAll();
             reconcile(player);
-        }
-
-        private void hideFrom(Player viewer) {
-            if (shell != null && !viewer.getUniqueId().equals(playerId)) {
-                shell.hideFrom(viewer);
-            }
         }
 
         private boolean closed() {
@@ -189,9 +175,30 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
             }
         }
 
-        private void ensureTicking() {
+        private void closeOnOwner() {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player == null || !player.isOnline() || Bukkit.isOwnedByCurrentRegion(player)) {
+                close();
+                return;
+            }
+            ScheduledTask task = player.getScheduler().run(plugin, ignored -> close(), this::close);
+            if (task == null) {
+                close();
+            }
+        }
+
+        private void ensureTicking(Player player) {
             if (tickTask == null) {
-                tickTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
+                tickTask = player.getScheduler().runAtFixedRate(
+                        plugin,
+                        ignored -> tick(),
+                        () -> {
+                            sessions.remove(playerId, this);
+                            close();
+                        },
+                        1L,
+                        1L
+                );
             }
         }
 
@@ -236,24 +243,20 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
     }
 
     private final class PaperOverlayShell {
+        private final World world;
         private final List<PaperOverlayFace> faces = new ArrayList<>(ScreenOverlayShellGeometry.faces().size());
 
         private PaperOverlayShell(Player owner) {
+            this.world = owner.getWorld();
             for (OverlayFace face : ScreenOverlayShellGeometry.faces()) {
-                TextDisplay display = owner.getWorld().spawn(faceLocation(owner, face), TextDisplay.class, textDisplay -> configure(textDisplay, face));
+                TextDisplay display = world.spawn(faceLocation(owner, face), TextDisplay.class, textDisplay -> configure(textDisplay, face));
                 owner.showEntity(plugin, display);
                 faces.add(new PaperOverlayFace(face, display));
-            }
-            for (Player viewer : plugin.getServer().getOnlinePlayers()) {
-                if (viewer.getUniqueId().equals(owner.getUniqueId())) {
-                    continue;
-                }
-                hideFrom(viewer);
             }
         }
 
         private World world() {
-            return faces.getFirst().display().getWorld();
+            return world;
         }
 
         private void update(Player owner, ScreenOverlayComposite composite) {
@@ -261,26 +264,34 @@ public final class PaperScreenOverlayPlatform implements Listener, AutoCloseable
             byte opacity = (byte) composite.alphaByte();
             for (PaperOverlayFace face : faces) {
                 TextDisplay display = face.display();
-                display.teleport(faceLocation(owner, face.face()));
-                display.setBackgroundColor(background);
-                display.setTextOpacity(opacity);
-            }
-        }
-
-        private void hideFrom(Player viewer) {
-            for (PaperOverlayFace face : faces) {
-                viewer.hideEntity(plugin, face.display());
+                Location target = faceLocation(owner, face.face());
+                Runnable update = () -> {
+                    display.teleportAsync(target);
+                    display.setBackgroundColor(background);
+                    display.setTextOpacity(opacity);
+                };
+                if (plugin.getServer().isOwnedByCurrentRegion(display)) {
+                    update.run();
+                } else {
+                    display.getScheduler().execute(plugin, update, () -> { }, 1L);
+                }
             }
         }
 
         private void close() {
             for (PaperOverlayFace face : faces) {
-                face.display().remove();
+                TextDisplay display = face.display();
+                if (plugin.getServer().isOwnedByCurrentRegion(display)) {
+                    display.remove();
+                } else {
+                    display.getScheduler().execute(plugin, display::remove, () -> { }, 1L);
+                }
             }
             faces.clear();
         }
 
         private void configure(TextDisplay display, OverlayFace face) {
+            display.setVisibleByDefault(false);
             display.text(BLANK_TEXT);
             display.setLineWidth(ScreenOverlayShellGeometry.BLANK_TEXT_LINE_WIDTH);
             display.setAlignment(TextDisplay.TextAlignment.CENTER);

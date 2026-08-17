@@ -13,8 +13,7 @@ import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.scheduler.BukkitRunnable;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.util.Transformation;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -2155,7 +2154,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
     private final class Session implements AutoCloseable {
 
         private final UUID ownerId;
-        private final List<BukkitTask> tasks = new ArrayList<>();
+        private final List<ScheduledTask> tasks = new ArrayList<>();
         private final List<AutoCloseable> handles = new ArrayList<>();
         private final PaperTelegraphPlatform telegraphs;
         private final PaperAmbientZonePlatform ambient;
@@ -2192,24 +2191,34 @@ final class PaperPrimitiveExamples implements AutoCloseable {
         }
 
         private void schedule(long delayTicks, Runnable action) {
-            tasks.add(plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            Player owner = owner();
+            if (owner == null) {
+                return;
+            }
+            ScheduledTask task = owner.getScheduler().runDelayed(plugin, ignored -> {
                 if (!closed && owner() != null) {
                     action.run();
                 }
-            }, delayTicks));
+            }, () -> { }, delayTicks);
+            if (task != null) {
+                tasks.add(task);
+            }
         }
 
         private void repeat(long delayTicks, long periodTicks, java.util.function.LongPredicate action) {
-            tasks.add(new BukkitRunnable() {
-                private long tick;
-
-                @Override
-                public void run() {
-                    if (closed || owner() == null || !action.test(tick++)) {
-                        cancel();
-                    }
+            Player owner = owner();
+            if (owner == null) {
+                return;
+            }
+            long[] tick = {0L};
+            ScheduledTask task = owner.getScheduler().runAtFixedRate(plugin, scheduled -> {
+                if (closed || owner() == null || !action.test(tick[0]++)) {
+                    scheduled.cancel();
                 }
-            }.runTaskTimer(plugin, delayTicks, periodTicks));
+            }, () -> { }, delayTicks, periodTicks);
+            if (task != null) {
+                tasks.add(task);
+            }
         }
 
         private Optional<AnchorSnapshot> resolveAnchor(AnchorRef anchorRef) {
@@ -2533,7 +2542,7 @@ final class PaperPrimitiveExamples implements AutoCloseable {
                 } catch (Exception ignored) {
                 }
             }
-            tasks.forEach(BukkitTask::cancel);
+            tasks.forEach(ScheduledTask::cancel);
             Player owner = Bukkit.getPlayer(ownerId);
             if (owner != null) {
                 overlays.clearAll(owner);
