@@ -45,6 +45,7 @@ import sh.harold.library.menu.MenuFrame;
 import sh.harold.library.menu.MenuGeometry;
 import sh.harold.library.menu.MenuIcon;
 import sh.harold.library.menu.MenuInteraction;
+import sh.harold.library.menu.MenuItemTemplate;
 import sh.harold.library.menu.MenuSlot;
 import sh.harold.library.menu.MenuSlotAction;
 import sh.harold.library.menu.MenuStack;
@@ -453,6 +454,89 @@ class MinestomMenuRuntimeTest {
 
         runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(10)));
         assertEquals(3, triggered.get());
+    }
+
+    @Test
+    void compiledMenusPreferAuthoredShiftActions() {
+        verifyAuthoredShiftActions(false);
+    }
+
+    @Test
+    void reactiveMenusPreferAuthoredShiftActions() {
+        verifyAuthoredShiftActions(true);
+    }
+
+    private static void verifyAuthoredShiftActions(boolean reactive) {
+        TestPlayer player = player();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
+        List<String> actions = new ArrayList<>();
+        MenuButton button = MenuButton.builder(MenuIcon.vanilla("stone")).name("Buy")
+                .action(ActionVerb.BUY, context -> actions.add("normal:" + context.click()))
+                .onShiftLeftClick(ActionVerb.BUY, "buy maximum", context -> actions.add("shift-left:" + context.click()))
+                .onShiftRightClick(ActionVerb.BUY, "buy maximum", context -> actions.add("shift-right:" + context.click())).build();
+        StandardMenuService menus = new StandardMenuService();
+        runtime.open(player, reactive
+                ? menus.reactive().stateFactory(Object::new).rows(3)
+                        .render(state -> ReactiveMenuView.builder("Shop").place(10, button).build())
+                        .reduce((state, input) -> ReactiveMenuResult.unchanged()).build()
+                : menus.canvas().title("Shop").rows(3).place(10, button).build());
+        Inventory inventory = player.lastOpenedInventory();
+        for (Click click : List.of(new Click.LeftShift(10), new Click.RightShift(10), new Click.Left(10))) {
+            InventoryPreClickEvent event = new InventoryPreClickEvent(inventory, player, click);
+            runtime.onInventoryPreClick(event);
+            assertTrue(event.isCancelled());
+            drainScheduled(scheduled);
+        }
+        assertEquals(List.of("shift-left:SHIFT_LEFT", "shift-right:SHIFT_RIGHT", "normal:LEFT"), actions);
+        InventoryPreClickEvent unsupported = new InventoryPreClickEvent(inventory, player, new Click.Double(10));
+        runtime.onInventoryPreClick(unsupported);
+        assertTrue(unsupported.isCancelled());
+        InventoryPreClickEvent bottom = new InventoryPreClickEvent(player.getInventory(), player, new Click.LeftShift(10));
+        runtime.onInventoryPreClick(bottom);
+        assertTrue(bottom.isCancelled());
+        assertEquals(3, actions.size());
+    }
+
+    @Test
+    void reactiveShiftClickKeepsExistingBaseDispatchAndModifier() {
+        TestPlayer player = player();
+        Deque<Runnable> scheduled = new ArrayDeque<>();
+        MinestomMenuRuntime runtime = runtime(new RecordingSoundCueService(), scheduled);
+        List<ReactiveMenuInput.Click> inputs = new ArrayList<>();
+        var shifted = MenuItemTemplate.<Boolean, Boolean>builder(MenuIcon.vanilla("stone"), state -> state)
+                .base((state, draft) -> draft.name("Shift Dispatch")
+                        .emit(ActionVerb.VIEW, "left").onRightEmit(ActionVerb.VIEW, "right"))
+                .variant(true, (state, draft) -> draft
+                        .interaction(MenuClick.SHIFT_LEFT, MenuInteraction.of(ActionVerb.BUY,
+                                new MenuSlotAction.Dispatch("shift-left")))
+                        .interaction(MenuClick.SHIFT_RIGHT, MenuInteraction.of(ActionVerb.BUY,
+                                new MenuSlotAction.Dispatch("shift-right"))))
+                .build().render(true);
+        runtime.open(player, new StandardMenuService().reactive().stateFactory(Object::new).rows(3)
+                .render(state -> ReactiveMenuView.builder("Dispatch")
+                        .place(10, MenuButton.builder(MenuIcon.vanilla("stone")).name("Action")
+                                .emit(ActionVerb.VIEW, "left").onRightEmit(ActionVerb.VIEW, "right").build())
+                        .place(11, shifted).build())
+                .reduce((state, input) -> {
+                    if (input instanceof ReactiveMenuInput.Click click) inputs.add(click);
+                    return ReactiveMenuResult.unchanged();
+                }).build());
+        Inventory inventory = player.lastOpenedInventory();
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.LeftShift(10)));
+        drainScheduled(scheduled);
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.RightShift(10)));
+        drainScheduled(scheduled);
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.LeftShift(11)));
+        drainScheduled(scheduled);
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.RightShift(11)));
+        drainScheduled(scheduled);
+        runtime.onInventoryPreClick(new InventoryPreClickEvent(inventory, player, new Click.Left(11)));
+        assertEquals(List.of(new ReactiveMenuInput.Click(10, MenuClick.LEFT, true, "left"),
+                new ReactiveMenuInput.Click(10, MenuClick.RIGHT, true, "right"),
+                new ReactiveMenuInput.Click(11, MenuClick.LEFT, true, "shift-left"),
+                new ReactiveMenuInput.Click(11, MenuClick.RIGHT, true, "shift-right"),
+                new ReactiveMenuInput.Click(11, MenuClick.LEFT, false, "left")), inputs);
     }
 
     @Test

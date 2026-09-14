@@ -140,14 +140,12 @@ final class FabricMenuRuntime implements AutoCloseable {
             });
             return;
         }
-        if (shift) {
-            return;
-        }
+        MenuClick interactionClick = button.withShift(shift);
         MenuInteraction interaction;
         long callbackGeneration = session.callbackGeneration();
         try {
             interaction = session.invokeUserCallback(
-                    () -> session.state().interaction(slot, button).orElse(null));
+                    () -> session.state().interaction(slot, interactionClick).orElse(null));
         } catch (RuntimeException exception) {
             quarantine(session);
             return;
@@ -164,10 +162,10 @@ final class FabricMenuRuntime implements AutoCloseable {
             MenuTrace.field("slot", slot);
             MenuTrace.field("button", button);
             traceRenderedTitle(session);
-            if (!allowInput(session, new CompiledClickInput(slot, button))) {
+            if (!allowInput(session, new CompiledClickInput(slot, interactionClick))) {
                 return;
             }
-            handleDirectInteraction(session, player, button, interaction);
+            handleDirectInteraction(session, player, interactionClick, interaction);
         });
     }
 
@@ -614,11 +612,13 @@ final class FabricMenuRuntime implements AutoCloseable {
             String custodyTarget = session.custodyEnabled()
                     ? session.state().custodyTargetAt(slot).orElse(null)
                     : null;
+            MenuClick interactionClick = custodyTarget == null
+                    ? session.state().resolveInteractionClick(slot, button, shift)
+                    : button;
             MenuInteraction interaction = custodyTarget == null
-                    ? session.state().interaction(slot, button).orElse(null)
-                    : null;
+                    ? session.state().interaction(slot, interactionClick).orElse(null) : null;
             boolean acceptsReactiveClick = interaction != null || session.state().acceptsReactiveClick(slot);
-            return new ReactiveClickRoute(custodyTarget, interaction, acceptsReactiveClick);
+            return new ReactiveClickRoute(custodyTarget, interactionClick, interaction, acceptsReactiveClick);
         });
         if (!activeAfterCallback(session, callbackGeneration)
                 || !liveContainer(session, player, container)) {
@@ -637,7 +637,7 @@ final class FabricMenuRuntime implements AutoCloseable {
             if (!allowInput(session, new ReactiveTopClickInput(slot, button, shift))) {
                 return;
             }
-            handleDirectInteraction(session, player, button, interaction);
+            handleDirectInteraction(session, player, route.interactionClick(), interaction);
             return;
         }
         if (!route.acceptsReactiveClick()) {
@@ -1440,6 +1440,7 @@ final class FabricMenuRuntime implements AutoCloseable {
 
     private record ReactiveClickRoute(
             String custodyTarget,
+            MenuClick interactionClick,
             MenuInteraction interaction,
             boolean acceptsReactiveClick
     ) {

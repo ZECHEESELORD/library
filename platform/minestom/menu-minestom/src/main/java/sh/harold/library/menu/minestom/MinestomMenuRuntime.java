@@ -261,7 +261,8 @@ final class MinestomMenuRuntime implements AutoCloseable {
         }
 
         int slot = event.getSlot();
-        MenuInteraction interaction = session.state().interaction(slot, click).orElse(null);
+        MenuClick interactionClick = session.state().resolveInteractionClick(slot, click, isShiftClick(event.getClick()));
+        MenuInteraction interaction = session.state().interaction(slot, interactionClick).orElse(null);
         if (interaction == null) {
             return;
         }
@@ -277,7 +278,7 @@ final class MinestomMenuRuntime implements AutoCloseable {
             MenuTrace.field("button", click);
             MenuTrace.title(session.renderedTitle());
 
-            MenuTrace.time("runtime.handleDirectInteraction", () -> handleDirectInteraction(session, click, interaction));
+            MenuTrace.time("runtime.handleDirectInteraction", () -> handleDirectInteraction(session, interactionClick, interaction));
         });
     }
 
@@ -651,13 +652,14 @@ final class MinestomMenuRuntime implements AutoCloseable {
                         isShiftClick(click)));
                 return;
             }
-            MenuInteraction interaction = session.state().interaction(slot, button).orElse(null);
+            MenuClick interactionClick = session.state().resolveInteractionClick(slot, button, isShiftClick(click));
+            MenuInteraction interaction = session.state().interaction(slot, interactionClick).orElse(null);
             if (interaction != null && !(interaction.action() instanceof MenuSlotAction.Dispatch)) {
                 if (!session.tryAcquireInputGuard()) {
                     trace(session.viewer(), cause(click), () -> recordSuppressedInput("reactive-top", slot, button, "tick-cap"));
                     return;
                 }
-                handleDirectInteraction(session, button, interaction);
+                handleDirectInteraction(session, interactionClick, interaction);
                 return;
             }
             if (interaction == null && !session.state().acceptsReactiveClick(slot)) {

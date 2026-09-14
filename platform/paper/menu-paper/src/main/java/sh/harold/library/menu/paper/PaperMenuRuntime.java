@@ -1930,13 +1930,14 @@ final class PaperMenuRuntime implements AutoCloseable {
             return;
         }
         MenuTrace.field("button", click.button());
-        MenuInteraction interaction = session.state().interaction(rawSlot, click.button()).orElse(null);
+        MenuClick interactionClick = session.state().resolveInteractionClick(rawSlot, click.button(), click.shift());
+        MenuInteraction interaction = session.state().interaction(rawSlot, interactionClick).orElse(null);
         ReactiveTopClickInput fingerprint = new ReactiveTopClickInput(rawSlot, click.button(), click.shift());
         if (interaction != null && !(interaction.action() instanceof MenuSlotAction.Dispatch)) {
             if (!allowInput(session, fingerprint)) {
                 return;
             }
-            handleDirectInteraction(session, player, click.button(), interaction);
+            handleDirectInteraction(session, player, interactionClick, interaction);
             return;
         }
         if (interaction == null && !session.state().acceptsReactiveClick(rawSlot)) {
@@ -2373,6 +2374,8 @@ final class PaperMenuRuntime implements AutoCloseable {
         return switch (clickType) {
             case LEFT -> MenuClick.LEFT;
             case RIGHT -> MenuClick.RIGHT;
+            case SHIFT_LEFT -> MenuClick.SHIFT_LEFT;
+            case SHIFT_RIGHT -> MenuClick.SHIFT_RIGHT;
             default -> null;
         };
     }

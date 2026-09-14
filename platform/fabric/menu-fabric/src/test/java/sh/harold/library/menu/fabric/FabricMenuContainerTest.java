@@ -49,6 +49,8 @@ class FabricMenuContainerTest {
         assertTrue(shiftedLeft.shift());
         assertEquals(MenuClick.RIGHT, shiftedRight.button());
         assertTrue(shiftedRight.shift());
+        assertEquals(MenuClick.SHIFT_LEFT, shiftedLeft.button().withShift(shiftedLeft.shift()));
+        assertEquals(MenuClick.SHIFT_RIGHT, shiftedRight.button().withShift(shiftedRight.shift()));
     }
 
     @Test

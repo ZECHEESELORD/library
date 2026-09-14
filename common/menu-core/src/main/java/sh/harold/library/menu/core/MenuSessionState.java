@@ -97,6 +97,12 @@ public final class MenuSessionState {
         return slot(slot).map(menuSlot -> menuSlot.interactions().get(click));
     }
 
+    /** Prefer an authored shift action while retaining existing base-button fallback behavior. */
+    public MenuClick resolveInteractionClick(int slot, MenuClick button, boolean shift) {
+        MenuClick shifted = button.withShift(shift);
+        return shift && interaction(slot, shifted).isPresent() ? shifted : button;
+    }
+
     public boolean acceptsReactiveClick(int slot) {
         return currentView().acceptsReactiveClick(slot);
     }

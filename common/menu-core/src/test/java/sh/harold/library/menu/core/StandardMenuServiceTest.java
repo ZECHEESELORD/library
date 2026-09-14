@@ -48,6 +48,22 @@ class StandardMenuServiceTest {
     private final StandardMenuService menus = new StandardMenuService();
 
     @Test
+    void authoredShiftBindingTakesPrecedenceWithoutChangingUnboundFallback() {
+        MenuSessionState state = new MenuSessionState(menus.canvas().title("Shift Actions").rows(3)
+                .place(10, MenuButton.builder(MenuIcon.vanilla("stone")).name("Action")
+                        .action(ActionVerb.VIEW, context -> { })
+                        .onRightClick(ActionVerb.VIEW, context -> { })
+                        .onShiftLeftClick(ActionVerb.BUY, "buy maximum", context -> { }).build()).build());
+
+        assertEquals(MenuClick.LEFT, state.resolveInteractionClick(10, MenuClick.LEFT, false));
+        assertEquals(MenuClick.SHIFT_LEFT, state.resolveInteractionClick(10, MenuClick.LEFT, true));
+        assertEquals(MenuClick.RIGHT, state.resolveInteractionClick(10, MenuClick.RIGHT, true));
+        assertEquals(MenuClick.LEFT, state.resolveInteractionClick(11, MenuClick.LEFT, true));
+        assertEquals(MenuClick.SHIFT_RIGHT, MenuClick.RIGHT.withShift(true));
+        assertEquals(MenuClick.RIGHT, MenuClick.SHIFT_RIGHT.withShift(false));
+    }
+
+    @Test
     void listMenuUsesStableHouseFooterGrammar() {
         Menu menu = menus.list()
                 .title("Profiles")
