@@ -1,8 +1,8 @@
 package sh.harold.library.camera.paper;
 
+import io.papermc.paper.math.Angle;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.kyori.adventure.key.Key;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
@@ -195,19 +195,12 @@ public final class PaperCameraMotionPlatform implements CameraMotionService, Lis
     }
 
     private static void applyDelta(Player player, CameraDelta delta) {
-        Location current = player.getLocation();
-        float yaw = (float) (current.getYaw() + delta.yawDegrees());
-        float pitch = clampPitch((float) (current.getPitch() + delta.pitchDegrees()));
-        player.setRotation(yaw, pitch);
+        player.setRotation(Angle.relative((float) delta.yawDegrees()), Angle.relative((float) delta.pitchDegrees()));
     }
 
     private void ensureOpen() {
         if (closed) {
             throw new IllegalStateException("Paper camera motion platform is closed");
         }
-    }
-
-    private static float clampPitch(float pitch) {
-        return Math.max(-90.0f, Math.min(90.0f, pitch));
     }
 }
