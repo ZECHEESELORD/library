@@ -21,6 +21,7 @@ import net.minecraft.server.dialog.action.ParsedTemplate;
 import net.minecraft.server.dialog.body.PlainMessage;
 import net.minecraft.server.dialog.input.TextInput;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Prediction;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
@@ -1413,7 +1414,7 @@ final class FabricMenuRuntime implements AutoCloseable {
 
         @Override
         public boolean drop(ItemStack item) {
-            return player.drop(copyItem(item), false) != null;
+            return player.drop(copyItem(item), false, Prediction.SERVER_ONLY) != null;
         }
 
         private int targetSlot(String key) {

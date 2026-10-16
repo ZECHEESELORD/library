@@ -176,7 +176,7 @@ Example modules (not published):
 | Common modules | any platform | 21 |
 | Paper (latest) | Paper API `26.2.build.112-stable` (MC `26.2`) | 25 |
 | Paper (legacy) | Paper API `1.21.11-R0.1-SNAPSHOT` | 21 |
-| Fabric (latest) | MC `26.2`, Loader `0.19.3`, API `0.155.2+26.2` | 25 |
+| Fabric (latest) | MC `26.3`, Loader `0.19.5`, API `0.163.0+26.3` | 25 |
 | Fabric (legacy) | MC `1.21.11`, Loader `0.18.6`, API `0.141.3+1.21.11` | 21 |
 | Minestom | `2026.03.03-1.21.11` | 25 |
 | Velocity | `3.3.0-SNAPSHOT` | 21 |
