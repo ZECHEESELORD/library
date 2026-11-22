@@ -28,6 +28,7 @@ public final class FabricSoundSupport {
             case PLAYER -> SoundSource.PLAYERS;
             case AMBIENT -> SoundSource.AMBIENT;
             case VOICE -> SoundSource.VOICE;
+            case UI -> SoundSource.UI;
         };
     }
 }

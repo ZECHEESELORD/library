@@ -181,7 +181,7 @@ Example modules (not published):
 | Minestom | `2026.10.07-26.2` (MC `26.2`) | 25 |
 | Velocity | Velocity API `4.3.1` | 25 |
 
-All text compiles against Adventure `4.17.0`. Minestom `2026.10.07-26.2` brings Adventure `5.2.0` at runtime, and the Minestom adapters run on it.
+Common modules compile against Adventure `4.26.1`, the version Paper `1.21.11` ships. Paper `26.3`, Minestom `2026.10.07-26.2`, and Velocity `4.3.1` bring Adventure `5.2.0`, and their adapters compile and run on it. Fabric does not ship Adventure, so Fabric mods bundle their own.
 
 > [!WARNING]
 > The Java 25 lanes require a compatible toolchain. Use IntelliJ IDEA `2025.3` or later when working on the latest Paper and Fabric modules.

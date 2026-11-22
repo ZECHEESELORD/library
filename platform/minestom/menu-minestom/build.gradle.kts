@@ -4,5 +4,5 @@ dependencies {
     implementation(project(":common:sound-core"))
     compileOnlyApi("net.minestom:minestom:${rootProject.property("minestomVersion")}")
     testImplementation("net.minestom:minestom:${rootProject.property("minestomVersion")}")
-    testImplementation("org.mockito:mockito-core:5.15.2")
+    testImplementation("org.mockito:mockito-core:${rootProject.property("mockitoVersion")}")
 }
