@@ -15,17 +15,19 @@ dependencies {
 loom {
     runs {
         named("client") {
-            runDir("run/client")
+            runDirectory.set(layout.projectDirectory.dir("run/client"))
         }
         named("server") {
-            runDir("run/client")
-            ideConfigGenerated(false)
+            runDirectory.set(layout.projectDirectory.dir("run/client"))
+            generateRunConfig.set(false)
         }
     }
 }
 
 tasks.processResources {
+    val expandedVersion = project.version.toString()
+    inputs.property("version", expandedVersion)
     filesMatching("fabric.mod.json") {
-        expand("version" to project.version)
+        expand("version" to expandedVersion)
     }
 }

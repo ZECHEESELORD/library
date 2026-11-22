@@ -14,7 +14,9 @@ dependencies {
 }
 
 tasks.processResources {
+    val expandedVersion = project.version.toString()
+    inputs.property("version", expandedVersion)
     filesMatching("fabric.mod.json") {
-        expand("version" to project.version)
+        expand("version" to expandedVersion)
     }
 }

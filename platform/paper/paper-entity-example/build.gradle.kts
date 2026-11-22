@@ -6,7 +6,9 @@ dependencies {
 }
 
 tasks.processResources {
+    val expandedVersion = project.version.toString()
+    inputs.property("version", expandedVersion)
     filesMatching("paper-plugin.yml") {
-        expand("version" to project.version)
+        expand("version" to expandedVersion)
     }
 }
