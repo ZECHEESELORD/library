@@ -116,10 +116,12 @@ subprojects {
     apply<JavaLibraryPlugin>()
     val isLegacyFabric12111 = path.startsWith(":platform:fabric:") && name.endsWith("-1_21_11")
     val isLegacyPaper12111 = path.startsWith(":platform:paper:") && name.endsWith("-1_21_11")
-    val isLatestPaper = path.startsWith(":platform:paper:") && !isLegacyPaper12111
+    // Spigot 1.8.8 servers cannot run Java 25 bytecode; 21 is the floor message-core already sets.
+    val isLegacyPaper188 = path in paperLegacy188ProjectPaths
+    val isLatestPaper = path.startsWith(":platform:paper:") && !isLegacyPaper12111 && !isLegacyPaper188
 
     val targetJava = when {
-        isLegacyFabric12111 || isLegacyPaper12111 -> 21
+        isLegacyFabric12111 || isLegacyPaper12111 || isLegacyPaper188 -> 21
         isLatestPaper || path.startsWith(":platform:minestom:") || path.startsWith(":platform:fabric:") -> 25
         path.startsWith(":platform:velocity:") -> 25
         else -> 21

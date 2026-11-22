@@ -7,6 +7,7 @@
 - Minestom adapters are `compileOnlyApi` on Minestom `2026.10.07-26.2` (Minecraft `26.2`). Minestom has no `26.3` build yet, so `26.3` clients cannot join Minestom servers. It brings Adventure `5.2.0`; `ClickEvent.value()` is replaced by a typed `payload()`, `Block.isAir()` is now `Block.air()` (likewise solid and liquid), and building an `ItemStack` needs bound registries (`MinecraftServer.init()`), which matters for consumer unit tests.
 - `message-velocity` and `data-velocity` are compiled for Java 25 against Velocity API `4.3.1`. Consumers need a Java 25 toolchain and a Velocity 4.x proxy. The library API did not change.
 - Latest-lane Fabric mods now require Fabric Loader `0.20.1` or newer and `fabric-api` `0.166.2` or newer. The retained `1.21.11` lane keeps its v11 runtime requirements (Loader `0.18.6` or newer, any `fabric-api`); it is now built against Fabric API `0.141.6+1.21.11`.
+- `message-paper-1_8_8` is now compiled for Java 21 instead of Java 25, so Spigot 1.8.8 servers and Gradle consumers on Java 21 can load and resolve it. It still needs a Java 21 runtime.
 - The `minestom-example` harness port can be overridden with `-Dminestom.example.port=<port>`; the default is still `25565`.
 
 ## v9
