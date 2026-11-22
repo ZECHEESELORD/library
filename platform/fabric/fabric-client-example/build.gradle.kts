@@ -24,6 +24,32 @@ loom {
     }
 }
 
+// Client gametests live in src/gametest and never reach the published jars or the release bundle.
+fabricApi {
+    configureTests {
+        createSourceSet.set(true)
+        modId.set("creative_library_fabric_client_example_gametest")
+        enableGameTests.set(false)
+        enableClientGameTests.set(true)
+        // Accepts the Minecraft EULA for the throwaway gametest run directory only.
+        eula.set(true)
+    }
+}
+
+dependencies {
+    // Load every latest-lane library Fabric mod, plus the server example, in the client gametest world.
+    listOf(
+        ":platform:fabric:data-fabric",
+        ":platform:fabric:entity-fabric",
+        ":platform:fabric:entity-fabric-client",
+        ":platform:fabric:menu-fabric",
+        ":platform:fabric:menu-fabric-client",
+        ":platform:fabric:message-fabric",
+        ":platform:fabric:sound-fabric",
+        ":platform:fabric:fabric-example",
+    ).forEach { "gametestRuntimeOnly"(project(it)) }
+}
+
 tasks.processResources {
     val expandedVersion = project.version.toString()
     inputs.property("version", expandedVersion)

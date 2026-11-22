@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_fabric_example_gametest",
+  "version": "1.0.0",
+  "name": "Creative Library Fabric Example Gametests",
+  "description": "Server gametests for the Fabric library adapters. Not published.",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "sh.harold.library.example.fabric.gametest.FabricExampleGameTests"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "fabric-api": ">=0.166.2",
+    "creative_library_fabric_example": "*"
+  }
+}
