@@ -43,13 +43,15 @@ loom.runs.named("gameTest") {
 }
 
 // Loom hooks runGameTest into check. Keep build and the release workflow free of game launches;
-// run the gametests on purpose with :platform:fabric:fabric-example:runGameTest.
+// run the gametests on purpose with :platform:fabric:fabric-example:runGameTest. Compiling them
+// stays in check so an API bump that breaks the gametests fails CI.
 tasks.named("check") {
     setDependsOn(dependsOn.filterNot { dependency ->
         (dependency as? NamedDomainObjectProvider<*>)?.name == "runGameTest" ||
             (dependency as? Task)?.name == "runGameTest" ||
             dependency.toString() == "runGameTest"
     })
+    dependsOn("compileGametestJava")
 }
 
 tasks.processResources {

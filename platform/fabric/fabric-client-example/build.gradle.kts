@@ -50,6 +50,12 @@ dependencies {
     ).forEach { "gametestRuntimeOnly"(project(it)) }
 }
 
+// Client gametests launch a game, so they stay out of build; check still compiles them so an
+// API bump that breaks them fails CI. Run them on purpose with runClientGameTest.
+tasks.named("check") {
+    dependsOn("compileGametestJava")
+}
+
 tasks.processResources {
     val expandedVersion = project.version.toString()
     inputs.property("version", expandedVersion)
