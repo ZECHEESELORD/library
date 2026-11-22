@@ -410,6 +410,67 @@ class StandardCameraRigTest {
         assertEquals(0.0, rig.sample(hostEye(1.62), 6.5).layers().eyeHeight());
     }
 
+    private static CameraCue tuckFromEye(String name) {
+        return CameraCue.builder(key(name))
+                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT, CueCurve.constant(1.62, 20))
+                        .absoluteEyeHeightFrom(eye -> CueCurve.track(Track.scalar()
+                                .eased(0.0, eye, Easing.LINEAR)
+                                .eased(4.0, 0.9, Easing.LINEAR)
+                                .eased(20.0, 0.9, Easing.LINEAR)
+                                .build())))
+                .build();
+    }
+
+    @Test
+    void absoluteEyeHeightFromTheCurrentEyeStartsWhereTheLastFrameDrew() {
+        StandardCameraRig rig = new StandardCameraRig();
+        // A crouching host: the last frame drew 1.445 with no cue live.
+        rig.evaluate(hostEye(1.445), 0.0);
+        assertEquals(1.445, rig.drawnEyeHeight(), EPS);
+        rig.start(tuckFromEye("tuck"), 0.0);
+        assertEquals(1.445, rig.sample(hostEye(1.3575), 0.0).layers().eyeTarget(), EPS, "no jump back up to 1.62");
+        assertEquals(1.445 + (0.9 - 1.445) * 0.5, rig.sample(hostEye(1.3), 2.0).layers().eyeTarget(), EPS);
+        assertEquals(0.9, rig.sample(hostEye(0.765), 4.0).layers().eyeTarget(), EPS);
+    }
+
+    @Test
+    void absoluteEyeHeightFromTheCurrentEyeCountsTheRigsOwnOffset() {
+        StandardCameraRig rig = new StandardCameraRig();
+        rig.start(absoluteEye("held", 0.5, 40), 0.0);
+        rig.evaluate(hostEye(0.51), 1.0);
+        assertEquals(0.5, rig.drawnEyeHeight(), EPS, "the drawn eye, not the host's");
+        CameraCueHandle tuck = rig.start(tuckFromEye("tuck"), 1.0);
+        assertEquals(0.5, rig.sample(hostEye(0.51), 1.0).layers().eyeTarget(), EPS);
+        // A replace through the handle starts from the eye drawn at that moment too.
+        rig.evaluate(hostEye(0.51), 3.0);
+        double drawn = rig.drawnEyeHeight();
+        tuck.replace(tuckFromEye("tuck"));
+        assertEquals(drawn, rig.sample(hostEye(0.51), rig.now()).layers().eyeTarget(), EPS);
+    }
+
+    @Test
+    void absoluteEyeHeightFromTheCurrentEyeFallsBackWithoutAFrame() {
+        StandardCameraRig rig = new StandardCameraRig();
+        rig.start(tuckFromEye("fresh"), 0.0);
+        assertEquals(1.62, rig.sample(hostEye(1.62), 1.0).layers().eyeTarget(), EPS, "no frame yet: the fallback");
+        rig.evaluate(hostEye(1.3), 1.0);
+        rig.skipFrame();
+        assertTrue(Double.isNaN(rig.drawnEyeHeight()), "a skipped frame forgets the drawn eye");
+        rig.start(tuckFromEye("skipped"), 1.0);
+        assertEquals(1.62, rig.sample(hostEye(1.3), 1.0).layers().eyeTarget(), EPS);
+        StandardCameraRig unknownHost = new StandardCameraRig();
+        unknownHost.evaluate(VIEW, 0.0);
+        assertTrue(Double.isNaN(unknownHost.drawnEyeHeight()), "a host without an eye height gives no drawn eye");
+    }
+
+    @Test
+    void onlyAbsoluteEyeHeightCurvesStartFromTheCurrentEye() {
+        ChannelCurve additive = ChannelCurve.of(CameraChannel.EYE_HEIGHT, CueCurve.constant(-0.1, 4));
+        assertThrows(IllegalArgumentException.class, () -> new ChannelCurve(additive.channel(), additive.curve(),
+                additive.reduced(), false, false, java.util.Optional.of(eye -> additive.curve())));
+        assertSame(additive, additive.startingFrom(1.3));
+    }
+
     @Test
     void onlyEyeHeightCurvesCanBeAbsolute() {
         assertThrows(IllegalArgumentException.class,

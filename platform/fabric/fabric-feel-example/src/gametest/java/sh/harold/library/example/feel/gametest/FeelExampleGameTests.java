@@ -525,6 +525,21 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
             if (full) {
                 checks.near(move, "eye height 0.9 by T2 (drawn camera_eye_height)", 0.9,
                         t.d(t0 + 2, "camera_eye_height"), 0.02, t.ref(t0 + 2));
+                int press = t0 - 1;
+                while (press > 0 && !(t.b(press, "input_shift") && !t.b(press - 1, "input_shift"))) {
+                    press--;
+                }
+                double maxRise = 0.0;
+                int riseRow = press;
+                for (int row = press + 1; row <= t0 + 2; row++) {
+                    double rise = t.d(row, "camera_eye_height") - t.d(row - 1, "camera_eye_height");
+                    if (rise > maxRise) {
+                        maxRise = rise;
+                        riseRow = row;
+                    }
+                }
+                checks.near(move, "drawn eye never rises from the sneak press through T2 (max rise per row)", 0.0,
+                        maxRise, 1.0e-4, t.ref(press) + " to " + t.ref(t0 + 2) + ", largest at " + t.ref(riseRow));
                 for (int k = 3; k <= 6; k++) {
                     checks.near(move, "eye height stays 0.9 at T" + k + " (drawn camera_eye_height)", 0.9,
                             t.d(t0 + k, "camera_eye_height"), 0.02, t.ref(t0 + k));

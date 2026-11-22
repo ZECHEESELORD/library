@@ -110,7 +110,6 @@ public final class SlideMove implements MoveDefinition {
         private int flatTicks;
         private int airTicks;
         private boolean crawling;
-        private double designedEye = BodyState.PLAYER_EYE_HEIGHT;
 
         Instance(SlideTuning tuning, long startTick, Vec3 direction, double speed, boolean fromJump, double groundY) {
             this.tuning = tuning;
@@ -151,7 +150,7 @@ public final class SlideMove implements MoveDefinition {
             BodyOverride low = new BodyOverride(tuning.height(), tuning.eyeHeight(), BodyOverride.RenderPose.CRAWLING);
             if (crawling) {
                 if (Probe.fits(context.world(), body, BodyState.PLAYER_HEIGHT)) {
-                    out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, designedEye, false)));
+                    out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, false)));
                     context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
                     return Step.end(MoveEnd.EndReason.COMPLETED);
                 }
@@ -180,7 +179,7 @@ public final class SlideMove implements MoveDefinition {
                     double launch = speed + tuning.jumpBonus();
                     out.jump().horizontal(direction.x() * launch, direction.z() * launch);
                     context.markLaunch(MoveKeys.SLIDE, 0.42);
-                    out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, designedEye, false)));
+                    out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, false)));
                     out.cameraSignals(MoveOutput.CameraSignals.REST);
                     context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
                     return Step.end(MoveEnd.EndReason.COMPLETED);
@@ -195,7 +194,6 @@ public final class SlideMove implements MoveDefinition {
                     .discardFriction()
                     .inputScale(0.0)
                     .body(low);
-            designedEye = MoveCameras.slideDesignedEye(tuning).sample(k + 1.0);
             SlideTuning.Camera camera = tuning.camera();
             double fov = k < camera.fovTick()
                     ? camera.fov() * (k + 1.0) / (camera.fovTick() + 1.0)
@@ -235,7 +233,7 @@ public final class SlideMove implements MoveDefinition {
                 out.body(low).cameraSignals(MoveOutput.CameraSignals.REST);
                 return Step.CONTINUE;
             }
-            out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, designedEye, false)));
+            out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, false)));
             out.cameraSignals(MoveOutput.CameraSignals.REST);
             context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
             return end;
@@ -257,7 +255,6 @@ public final class SlideMove implements MoveDefinition {
             copy.flatTicks = flatTicks;
             copy.airTicks = airTicks;
             copy.crawling = crawling;
-            copy.designedEye = designedEye;
             return copy;
         }
     }

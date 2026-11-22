@@ -95,17 +95,23 @@ public final class MoveCameras {
                 .build();
     }
 
-    /**
-     * The roll's eye height, absolute: 1.62 through T0, an ease-in to the tuck by the end of T2, held to the end of T6,
-     * back to standing by the end of T9, then held standing for {@link #EYE_HOLD_TICKS} more so the host camera is
-     * standing with the body before the curve lets go.
-     */
+    /** The roll's eye height from a standing start: {@link #rollDesignedEye(RollTuning, double)} from 1.62. */
     public static Track<Double> rollDesignedEye(RollTuning tuning) {
+        return rollDesignedEye(tuning, STAND);
+    }
+
+    /**
+     * The roll's eye height, absolute: held where the camera was ({@code from}) through T0, an ease-in to the tuck by
+     * the end of T2, held to the end of T6, back to standing by the end of T9, then held standing for
+     * {@link #EYE_HOLD_TICKS} more so the host camera is standing with the body before the curve lets go. 02 draws
+     * {@code from} as 1.62; the sneak press usually has the player crouching already, and the tuck starts from there.
+     */
+    public static Track<Double> rollDesignedEye(RollTuning tuning, double from) {
         RollTuning.Camera camera = tuning.camera();
         double standing = camera.eyeRiseTick() + 1.0;
         return Track.scalar()
-                .eased(0.0, STAND, Easing.LINEAR)
-                .eased(1.0, STAND, Easing.QUAD_IN)
+                .eased(0.0, from, Easing.LINEAR)
+                .eased(1.0, from, Easing.QUAD_IN)
                 .eased(camera.eyeLowTick() + 1.0, camera.eyeLow(), Easing.LINEAR)
                 .eased(camera.eyeRiseFromTick() + 1.0, camera.eyeLow(), Easing.QUAD_IN_OUT)
                 .eased(standing, STAND, Easing.LINEAR)
@@ -141,49 +147,60 @@ public final class MoveCameras {
                         .withReduced(CueCurve.track(dip)))
                 .channel(CameraChannel.FOV, CueCurve.track(fov))
                 .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT, CueCurve.track(rollDesignedEye(tuning)))
-                        .absoluteEyeHeight())
+                        .absoluteEyeHeightFrom(eye -> CueCurve.track(rollDesignedEye(tuning, eye))))
                 .lookScale(tuning.lookScale(), tuning.ticks())
                 .build();
     }
 
-    /** The slide's designed eye height while sliding: eased out to the low height, then held. */
+    /** The slide's eye height from a standing start: {@link #slideDesignedEye(SlideTuning, double)} from 1.62. */
     public static Track<Double> slideDesignedEye(SlideTuning tuning) {
+        return slideDesignedEye(tuning, STAND);
+    }
+
+    /** The slide's designed eye height while sliding: eased out from {@code from} to the low height, then held. */
+    public static Track<Double> slideDesignedEye(SlideTuning tuning, double from) {
         SlideTuning.Camera camera = tuning.camera();
         return Track.scalar()
-                .eased(0.0, STAND, Easing.QUAD_OUT)
+                .eased(0.0, from, Easing.QUAD_OUT)
                 .eased(camera.eyeLowTick() + 1.0, camera.eyeLow(), Easing.LINEAR)
                 .build();
     }
 
-    /** The slide's held eye cue, absolute, from T0 until the slide ends. */
+    /** The slide's held eye cue, absolute and from the current eye, from T0 until the slide ends. */
     public static CameraCue slideEye(SlideTuning tuning) {
         return CameraCue.builder(SLIDE_EYE).owner(MoveKeys.SLIDE)
-                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT,
-                        CueCurve.sampled(slideDesignedEye(tuning)::sample, Double.POSITIVE_INFINITY))
-                        .absoluteEyeHeight())
+                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT, held(slideDesignedEye(tuning)))
+                        .absoluteEyeHeightFrom(eye -> held(slideDesignedEye(tuning, eye))))
                 .build();
     }
 
     /**
-     * The slide's exit: the eye, absolute, returns from {@code fromDesigned} to standing over {@code eyeReturnTicks},
-     * then holds standing for {@link #EYE_HOLD_TICKS} more so the host camera is standing with the body before the
-     * curve lets go.
+     * The slide's exit: the eye, absolute, returns from wherever the camera is to standing over
+     * {@code eyeReturnTicks}, then holds standing for {@link #EYE_HOLD_TICKS} more so the host camera is standing with
+     * the body before the curve lets go.
      *
      * @param stayLow the body stays low (no headroom, crawling): the eye goes to the body's own low height and stays
      */
-    public static CameraCue slideExit(SlideTuning tuning, double fromDesigned, boolean stayLow) {
+    public static CameraCue slideExit(SlideTuning tuning, boolean stayLow) {
+        return CameraCue.builder(SLIDE_EYE).owner(MoveKeys.SLIDE)
+                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT, slideExitEye(tuning, tuning.camera().eyeLow(), stayLow))
+                        .absoluteEyeHeightFrom(eye -> slideExitEye(tuning, eye, stayLow)))
+                .build();
+    }
+
+    private static CueCurve slideExitEye(SlideTuning tuning, double from, boolean stayLow) {
         double target = stayLow ? tuning.eyeHeight() : STAND;
         int ticks = Math.max(1, tuning.camera().eyeReturnTicks());
         Track<Double> designed = Track.scalar()
-                .eased(0.0, fromDesigned, Easing.QUAD_IN_OUT)
+                .eased(0.0, from, Easing.QUAD_IN_OUT)
                 .eased(ticks, target, Easing.LINEAR)
                 .eased(ticks + EYE_HOLD_TICKS, target, Easing.LINEAR)
                 .build();
-        return CameraCue.builder(SLIDE_EYE).owner(MoveKeys.SLIDE)
-                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT,
-                        CueCurve.sampled(designed::sample, stayLow ? Double.POSITIVE_INFINITY : designed.endTime()))
-                        .absoluteEyeHeight())
-                .build();
+        return stayLow ? held(designed) : CueCurve.track(designed);
+    }
+
+    private static CueCurve held(Track<Double> track) {
+        return CueCurve.sampled(track::sample, Double.POSITIVE_INFINITY);
     }
 
     /** The wall kick: roll leaning away from the wall ({@code awaySign}) and FOV, held, then eased back. */

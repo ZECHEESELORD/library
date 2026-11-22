@@ -90,6 +90,7 @@ class TuningAndCameraTest {
         ChannelCurve eye = MoveCameras.roll(roll).curves().stream()
                 .filter(c -> c.channel() == CameraChannel.EYE_HEIGHT).findFirst().orElseThrow();
         assertTrue(eye.absolute(), "the roll owns the drawn eye height");
+        assertTrue(eye.fromEye().isPresent(), "the tuck starts from the current eye");
         var designed = MoveCameras.rollDesignedEye(roll);
         assertEquals(1.62, designed.sample(1.0), 1.0e-9, "standing at the end of T0");
         assertEquals(1.44, designed.sample(2.0), 1.0e-9, "ease-in: a quarter of the way at the end of T1");
@@ -98,72 +99,100 @@ class TuningAndCameraTest {
         }
         assertEquals(1.62, designed.sample(10.0), 1.0e-9, "standing by the end of T9");
         assertEquals(10.0 + MoveCameras.EYE_HOLD_TICKS, designed.endTime(), 1.0e-9, "held past the body standing");
+        var crouched = MoveCameras.rollDesignedEye(roll, 1.445);
+        assertEquals(1.445, crouched.sample(1.0), 1.0e-9, "from a crouch: held where the camera was through T0");
+        assertEquals(0.9, crouched.sample(3.0), 1.0e-9, "and the same tuck by T2");
+        for (double t = 3.0; t <= 12.0; t += 0.25) {
+            assertEquals(designed.sample(t), crouched.sample(t), 1.0e-12, "T3 onward unchanged, t=" + t);
+        }
     }
 
     /**
      * The roll through the real rig against a model of the host's camera: vanilla's eye eases halfway to the body's
      * eye each tick, held at the body's eye while the last frame held an absolute eye (the adapter's rule). The
-     * player crouched for the sneak press, so the host camera starts mid-ease at 1.31375, as the gametest recorded.
+     * sneak press crouched the player the tick before, so the last frame before the roll drew 1.445 (as the gametest
+     * recorded) and vanilla is still easing down toward the crouch's 1.27.
      */
     @Test
-    void rollDrawnEyeFollows02FromACrouchedStart() {
+    void rollDrawnEyeTucksFromACrouchedStartWithoutRising() {
         RollTuning roll = Moveset.DEFAULT.roll();
-        double[] drawn = new double[16];
-        double[] offset = new double[16];
-        boolean[] held = new boolean[16];
-        simulate(MoveCameras.roll(roll), 1.31375, 1.27,
-                k -> k < roll.ticks() ? roll.eyeHeight() : 1.62, drawn, offset, held);
-        assertEquals(1.44, drawn[1], 1.0e-9, "T1");
+        Run run = simulate(MoveCameras.roll(roll), 1.62, 1.27, k -> k < roll.ticks() ? roll.eyeHeight() : 1.62, 16);
+        assertEquals(1.445, run.before(), 1.0e-9, "the last frame before the roll");
+        assertEquals(1.445, run.drawn()[0], 1.0e-9, "T0 starts where the camera was");
+        assertEquals(1.445 - (1.445 - 0.9) * 0.25, run.drawn()[1], 1.0e-9, "T1: the ease-in from there");
+        double previous = run.before();
+        for (int k = 0; k <= 2; k++) {
+            assertTrue(run.drawn()[k] <= previous + 1.0e-12, "no rise at T" + k);
+            previous = run.drawn()[k];
+        }
         for (int k = 2; k <= 6; k++) {
-            assertEquals(0.9, drawn[k], 1.0e-9, "T" + k + " stays tucked");
+            assertEquals(0.9, run.drawn()[k], 1.0e-9, "T" + k + " stays tucked");
         }
-        assertTrue(drawn[8] > 0.9 && drawn[8] < 1.62, "rising at T8");
-        for (int k = 9; k < drawn.length; k++) {
-            assertEquals(1.62, drawn[k], 1.0e-6, "standing at T" + k);
+        assertTrue(run.drawn()[8] > 0.9 && run.drawn()[8] < 1.62, "rising at T8");
+        for (int k = 9; k < run.drawn().length; k++) {
+            assertEquals(1.62, run.drawn()[k], 1.0e-6, "standing at T" + k);
         }
-        for (int k = 11; k < offset.length; k++) {
-            assertEquals(0.0, offset[k], "no offset after T10 (T" + k + ")");
+        for (int k = 11; k < run.offset().length; k++) {
+            assertEquals(0.0, run.offset()[k], "no offset after T10 (T" + k + ")");
         }
-        assertTrue(held[11] && !held[13], "the hold lets go once the body and camera stand");
+        assertTrue(run.held()[11] && !run.held()[13], "the hold lets go once the body and camera stand");
+    }
+
+    @Test
+    void rollFromStandingIs02Exactly() {
+        RollTuning roll = Moveset.DEFAULT.roll();
+        Run run = simulate(MoveCameras.roll(roll), 1.62, 1.62, k -> k < roll.ticks() ? roll.eyeHeight() : 1.62, 12);
+        var designed = MoveCameras.rollDesignedEye(roll);
+        for (int k = 0; k < run.drawn().length; k++) {
+            assertEquals(designed.sample(k + 1.0), run.drawn()[k], 1.0e-9, "T" + k);
+        }
     }
 
     @Test
     void slideDrawnEyeReaches05AtT3AndReturnsOver3Ticks() {
         SlideTuning slide = Moveset.DEFAULT.slide();
-        double[] drawn = new double[12];
-        double[] offset = new double[12];
-        boolean[] held = new boolean[12];
-        simulate(MoveCameras.slideEye(slide), 1.62, 1.62, k -> slide.eyeHeight(), drawn, offset, held);
-        assertEquals(0.5, drawn[3], 1.0e-9, "eye 0.5 at T3");
-        assertEquals(0.5, drawn[11], 1.0e-9, "held while sliding");
+        Run run = simulate(MoveCameras.slideEye(slide), 1.62, 1.62, k -> slide.eyeHeight(), 12);
+        assertEquals(1.62, run.before(), 1.0e-9);
+        assertEquals(MoveCameras.slideDesignedEye(slide).sample(1.0), run.drawn()[0], 1.0e-9, "T0 eases out from 1.62");
+        assertEquals(0.5, run.drawn()[3], 1.0e-9, "eye 0.5 at T3");
+        assertEquals(0.5, run.drawn()[11], 1.0e-9, "held while sliding");
 
-        double[] exitDrawn = new double[10];
-        double[] exitOffset = new double[10];
-        boolean[] exitHeld = new boolean[10];
-        double from = MoveCameras.slideDesignedEye(slide).sample(12.0);
-        simulate(MoveCameras.slideExit(slide, from, false), slide.eyeHeight(), slide.eyeHeight(), k -> 1.62,
-                exitDrawn, exitOffset, exitHeld);
-        assertTrue(exitDrawn[0] < 1.62, "still returning on the end tick");
-        assertEquals(1.62, exitDrawn[slide.camera().eyeReturnTicks() - 1], 1.0e-9, "standing after 3 ticks");
-        for (int k = slide.camera().eyeReturnTicks() + 1; k < exitOffset.length; k++) {
-            assertEquals(0.0, exitOffset[k], "no offset once standing (k=" + k + ")");
-            assertEquals(1.62, exitDrawn[k], 1.0e-6);
+        Run crouched = simulate(MoveCameras.slideEye(slide), 1.62, 1.27, k -> slide.eyeHeight(), 6);
+        assertTrue(crouched.drawn()[0] < crouched.before(), "from a crouching camera the slide still only falls");
+        assertEquals(0.5, crouched.drawn()[3], 1.0e-9);
+
+        Run exit = simulate(MoveCameras.slideExit(slide, false), slide.eyeHeight(), slide.eyeHeight(), k -> 1.62, 10);
+        assertTrue(exit.drawn()[0] > exit.before() && exit.drawn()[0] < 1.62, "returning from where the camera was");
+        assertEquals(1.62, exit.drawn()[slide.camera().eyeReturnTicks() - 1], 1.0e-9, "standing after 3 ticks");
+        for (int k = slide.camera().eyeReturnTicks() + 1; k < exit.offset().length; k++) {
+            assertEquals(0.0, exit.offset()[k], "no offset once standing (k=" + k + ")");
+            assertEquals(1.62, exit.drawn()[k], 1.0e-6);
         }
     }
 
+    /** One simulated move: the drawn eye of the last frame before it, then per move tick drawn, offset and hold. */
+    private record Run(double before, double[] drawn, double[] offset, boolean[] held) {
+    }
+
     /**
-     * Plays {@code cue} from move tick 0 as the client does (started one rig tick back, so local time {@code k + 1}
-     * is the end of {@code Tk}) and records, per tick, the drawn eye (host eye plus the rig's offset), the offset and
-     * whether the frame held an absolute eye.
+     * Draws one frame with no cue, then plays {@code cue} from move tick 0 as the client does (started one rig tick
+     * back, so local time {@code k + 1} is the end of {@code Tk}) and records, per tick, the drawn eye (host eye plus
+     * the rig's offset), the offset and whether the frame held an absolute eye.
      */
-    private static void simulate(CameraCue cue, double startCamera, double startBody, IntUnaryDouble bodyEye,
-                                 double[] drawn, double[] offset, boolean[] held) {
+    private static Run simulate(CameraCue cue, double startCamera, double startBody, IntUnaryDouble bodyEye,
+                                int ticks) {
+        double[] drawn = new double[ticks];
+        double[] offset = new double[ticks];
+        boolean[] held = new boolean[ticks];
         StandardCameraRig rig = new StandardCameraRig();
         double camera = startCamera;
         double body = startBody;
+        rig.tick();
+        camera += (body - camera) * 0.5;
+        double before = rig.evaluate(view(camera), rig.now() - 1.0).position().y() - 64.0;
         boolean hold = false;
         double start = Double.NaN;
-        for (int k = 0; k < drawn.length; k++) {
+        for (int k = 0; k < ticks; k++) {
             rig.tick();
             camera += (body - camera) * 0.5;
             if (hold) {
@@ -174,13 +203,17 @@ class TuningAndCameraTest {
                 start = rig.now() - 1.0;
                 rig.start(cue, start);
             }
-            ViewInput view = new ViewInput(new Vec3(0.0, 64.0 + camera, 0.0), 0.0, 0.0, 70.0, camera);
-            CameraState state = rig.evaluate(view, start + k + 1.0);
+            CameraState state = rig.evaluate(view(camera), start + k + 1.0);
             offset[k] = state.layers().eyeHeight();
             drawn[k] = state.position().y() - 64.0;
             hold = !Double.isNaN(state.layers().eyeTarget());
             held[k] = hold;
         }
+        return new Run(before, drawn, offset, held);
+    }
+
+    private static ViewInput view(double eyeHeight) {
+        return new ViewInput(new Vec3(0.0, 64.0 + eyeHeight, 0.0), 0.0, 0.0, 70.0, eyeHeight);
     }
 
     @FunctionalInterface

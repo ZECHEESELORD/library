@@ -21,11 +21,17 @@ final class CueStack {
 
     private final Object lock;
     private final DoubleSupplier now;
+    private final DoubleSupplier drawnEye;
     private final List<LiveCue> cues = new ArrayList<>();
 
-    CueStack(Object lock, DoubleSupplier now) {
+    /**
+     * @param drawnEye the eye height the camera last drew, {@code NaN} when unknown: curves that start from the
+     *                 current eye are built from it when their cue starts
+     */
+    CueStack(Object lock, DoubleSupplier now, DoubleSupplier drawnEye) {
         this.lock = lock;
         this.now = now;
+        this.drawnEye = drawnEye;
     }
 
     CameraCueHandle start(CameraCue cue, double startTime) {
@@ -34,6 +40,7 @@ final class CueStack {
             throw new IllegalArgumentException("startTime must be finite");
         }
         synchronized (lock) {
+            cue = bind(cue);
             LiveCue existing = find(cue.key());
             if (existing != null) {
                 switch (cue.conflict()) {
@@ -94,6 +101,11 @@ final class CueStack {
                 cue.closeLocked();
             }
         }
+    }
+
+    /** Builds the cue's from-current-eye curves from the drawn eye, before the new cue changes it. */
+    private CameraCue bind(CameraCue cue) {
+        return cue.startsFromEye() ? cue.startingFrom(drawnEye.getAsDouble()) : cue;
     }
 
     private LiveCue find(Key key) {
@@ -234,7 +246,7 @@ final class CueStack {
             Objects.requireNonNull(next, "next");
             synchronized (lock) {
                 closeLocked();
-                LiveCue live = new LiveCue(next, now.getAsDouble());
+                LiveCue live = new LiveCue(bind(next), now.getAsDouble());
                 LiveCue clash = find(next.key());
                 if (clash != null) {
                     clash.closeLocked();

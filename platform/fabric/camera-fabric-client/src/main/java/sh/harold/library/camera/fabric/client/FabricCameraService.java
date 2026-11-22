@@ -42,6 +42,7 @@ final class FabricCameraService implements CameraService {
     /** Marks a frame the rig does not drive (third person, panoramic, no player). */
     void skipFrame() {
         frameState = null;
+        rig.skipFrame();
     }
 
     /** The last driven frame, or {@code null} when the last frame was vanilla or skipped. */

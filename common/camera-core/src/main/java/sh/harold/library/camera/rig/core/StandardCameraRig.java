@@ -42,6 +42,7 @@ public final class StandardCameraRig implements CameraService, AdditiveStage {
     private final SignalLayers signals;
     private volatile IntensityProfile profile = IntensityProfile.FULL;
     private volatile CameraState lastState;
+    private volatile double lastDrawnEye = Double.NaN;
     private volatile boolean closed;
     private long tick;
 
@@ -51,7 +52,7 @@ public final class StandardCameraRig implements CameraService, AdditiveStage {
 
     public StandardCameraRig(CameraRigSettings settings) {
         this.settings = Objects.requireNonNull(settings, "settings");
-        this.cues = new CueStack(lock, this::now);
+        this.cues = new CueStack(lock, this::now, () -> lastDrawnEye);
         this.trauma = new TraumaBus(settings.traumaDecayPerTick());
         this.signals = new SignalLayers(lock);
         this.pipeline = CameraPipeline.firstPerson(this, new IntensityConstraints(settings));
@@ -86,7 +87,22 @@ public final class StandardCameraRig implements CameraService, AdditiveStage {
     public CameraState evaluate(ViewInput input, double time) {
         CameraState state = sample(input, time);
         lastState = state;
+        lastDrawnEye = input.eyeHeight() + state.layers().eyeHeight();
         return state;
+    }
+
+    /**
+     * The eye height above the feet the last evaluated frame drew (the host's eye plus the rig's offset), or
+     * {@code NaN} when the host gave no eye height, no frame has been evaluated or the last frame was skipped. Curves
+     * that start from the current eye start here.
+     */
+    public double drawnEyeHeight() {
+        return lastDrawnEye;
+    }
+
+    /** Marks a frame the host drew without the rig: the last drawn eye is no longer known. */
+    public void skipFrame() {
+        lastDrawnEye = Double.NaN;
     }
 
     /** Evaluates the stack at {@code time} without remembering it (for seeks and samplers). */
@@ -203,6 +219,7 @@ public final class StandardCameraRig implements CameraService, AdditiveStage {
             signals.closeAll();
             trauma.clear();
             lastState = null;
+            lastDrawnEye = Double.NaN;
         }
     }
 

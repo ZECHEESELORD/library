@@ -45,6 +45,20 @@ public record CameraCue(
         Objects.requireNonNull(conflict, "conflict");
     }
 
+    /** Whether a curve starts from the current eye ({@link ChannelCurve#absoluteEyeHeightFrom}). */
+    public boolean startsFromEye() {
+        return curves.stream().anyMatch(curve -> curve.fromEye().isPresent());
+    }
+
+    /** This cue with every curve that starts from the current eye built from {@code eye}; itself when there are none. */
+    public CameraCue startingFrom(double eye) {
+        if (!startsFromEye() || !Double.isFinite(eye)) {
+            return this;
+        }
+        return new CameraCue(key, owner, curves.stream().map(curve -> curve.startingFrom(eye)).toList(),
+                releaseTicks, releaseEasing, conflict);
+    }
+
     public static Builder builder(Key key) {
         return new Builder(key);
     }
