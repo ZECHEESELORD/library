@@ -48,6 +48,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | `tween` | Keyed interpolation with easing, envelopes, hold behavior, and repeat modes; keyframe tracks (Hermite, eased, stepped and cut keys, unwound angles, quaternions, markers, layers), springs with impulse kicks, signal-driven channels, seeded smooth noise, and overshoot, anticipation and squash generators | common |
 | `curve` | Catmull-Rom spline paths with sampling and splitting | common |
 | `camera` | Client-first camera rig: a full camera state (position, yaw, pitch and roll quaternion, FOV, eye height, projection, look-input scale), keyed cues on additive pitch, roll, FOV, eye-height, shake and look-scale channels with cancel and replace handles, signal-driven spring layers, trauma shake, a Reduced profile with per-cue substitutes, safety clamps and telemetry columns; the adapter drives the vanilla first-person camera every rendered frame | Fabric client |
+| `movement` | Pluggable moves layered over vanilla physics: a host-free engine with a shared input buffer, coyote time, chords and arbitration, five stock moves (variable jump presets A/B/C, mantle, roll, slide S1/S2, wall jump with wall slide), one hot-reloadable tuning file per move, camera cues, and a vanilla-physics reference integrator for unit tests; the server adapter checks claims and applies fall damage and hitbox changes, the client adapter predicts, reconciles rejected claims with smoothing and offers a simulated-input test hook | Fabric, Fabric client |
 | `camera-motion` | Camera moves controlled by the server, with blend modes and playback for each viewer | Paper, Minestom |
 | `trajectory-preview` | Projectile path previews with collision queries and recompute rules | Paper, Minestom |
 | `impulse` | Knockback and dash impulses with stacking, compose modes, and axis masks | Paper, Minestom |
@@ -169,7 +170,7 @@ Legacy artifacts add a version suffix when their source differs from the current
 
 Example modules (not published):
 
-`menu-showcase`, `paper-example`, `paper-entity-example`, `minestom-example`, `minestom-entity-example`, `velocity-example`, `fabric-example`, `fabric-client-example`
+`menu-showcase`, `paper-example`, `paper-entity-example`, `minestom-example`, `minestom-entity-example`, `velocity-example`, `fabric-example`, `fabric-client-example`, `fabric-feel-example`
 
 </details>
 

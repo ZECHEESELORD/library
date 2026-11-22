@@ -41,6 +41,7 @@ val unpublishedProjectPaths = setOf(
     ":platform:velocity:velocity-example",
     ":platform:fabric:fabric-example",
     ":platform:fabric:fabric-client-example",
+    ":platform:fabric:fabric-feel-example",
 )
 val publishedLibraryProjectPaths = subprojects
     .filter { it.buildFile.isFile }
