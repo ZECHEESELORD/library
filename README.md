@@ -179,7 +179,7 @@ Example modules (not published):
 | Fabric (latest) | MC `26.3`, Loader `0.19.5`, API `0.163.0+26.3` | 25 |
 | Fabric (legacy) | MC `1.21.11`, Loader `0.18.6`, API `0.141.3+1.21.11` | 21 |
 | Minestom | `2026.03.03-1.21.11` | 25 |
-| Velocity | `3.3.0-SNAPSHOT` | 21 |
+| Velocity | Velocity API `4.3.1` | 25 |
 
 All text uses Adventure `4.17.0`.
 

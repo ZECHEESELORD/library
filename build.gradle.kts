@@ -121,6 +121,7 @@ subprojects {
     val targetJava = when {
         isLegacyFabric12111 || isLegacyPaper12111 -> 21
         isLatestPaper || path.startsWith(":platform:minestom:") || path.startsWith(":platform:fabric:") -> 25
+        path.startsWith(":platform:velocity:") -> 25
         else -> 21
     }
     val javaExtension = extensions.getByType<JavaPluginExtension>()
