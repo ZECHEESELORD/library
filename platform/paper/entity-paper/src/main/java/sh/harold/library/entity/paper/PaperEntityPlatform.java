@@ -1366,7 +1366,14 @@ public final class PaperEntityPlatform implements Listener, AutoCloseable {
                     @Override
                     public void profession(net.kyori.adventure.key.Key profession) {
                         PaperManagedEntity.this.requireMutable();
-                        villager.setProfession(Villager.Profession.valueOf(profession.value().toUpperCase(Locale.ROOT).replace('-', '_')));
+                        String value = profession.value().toLowerCase(Locale.ROOT).replace('-', '_');
+                        Villager.Profession resolved = io.papermc.paper.registry.RegistryAccess.registryAccess()
+                                .getRegistry(io.papermc.paper.registry.RegistryKey.VILLAGER_PROFESSION)
+                                .get(net.kyori.adventure.key.Key.key(profession.namespace(), value));
+                        if (resolved == null) {
+                            throw new IllegalArgumentException("Unknown villager profession " + profession.asString());
+                        }
+                        villager.setProfession(resolved);
                     }
 
                     @Override

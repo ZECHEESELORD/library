@@ -1,6 +1,6 @@
 # Paper entity and NPC behavior example
 
-This plugin builds two managed dioramas beside the default-world spawn. It requires PacketEvents 2.13.0, declares Folia support, uses only async entity lifecycle methods, and does not change permanent world blocks. Lecterns, shelves, tables, and the anvil are nonpersistent managed `BLOCK_DISPLAY` scenery; `PaperEntityPlatform.closeAsync()` removes them with the NPCs.
+This plugin builds two managed dioramas beside the default-world spawn. It requires PacketEvents 2.14.0, declares Folia support, uses only async entity lifecycle methods, and does not change permanent world blocks. Lecterns, shelves, tables, and the anvil are nonpersistent managed `BLOCK_DISPLAY` scenery; `PaperEntityPlatform.closeAsync()` removes them with the NPCs.
 
 ## Scenes
 

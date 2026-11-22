@@ -95,7 +95,8 @@ class PaperCameraMotionPlatformTest {
         platform.start(viewerId, impulse("cleanup", 1.0, 0.0));
 
         org.bukkit.event.player.PlayerQuitEvent quit =
-                new org.bukkit.event.player.PlayerQuitEvent(player, net.kyori.adventure.text.Component.text("quit"));
+                new org.bukkit.event.player.PlayerQuitEvent(player, net.kyori.adventure.text.Component.text("quit"),
+                        org.bukkit.event.player.PlayerQuitEvent.QuitReason.DISCONNECTED);
 
         platform.onPlayerQuit(quit);
 

@@ -10,9 +10,9 @@ import java.util.Objects;
 
 final class PaperPacketEventsRequirement {
     private static final int REQUIRED_MAJOR = 2;
-    private static final int REQUIRED_MINOR = 13;
+    private static final int REQUIRED_MINOR = 14;
     private static final int REQUIRED_PATCH = 0;
-    private static final ServerVersion SUPPORTED_PROTOCOL = ServerVersion.V_26_2;
+    private static final ServerVersion SUPPORTED_PROTOCOL = ServerVersion.V_26_3;
 
     private PaperPacketEventsRequirement() {
     }
@@ -61,7 +61,7 @@ final class PaperPacketEventsRequirement {
     static void verify(RuntimeState state) {
         Objects.requireNonNull(state, "state");
         if (!state.pluginPresent()) {
-            throw new IllegalStateException("PaperEntityPlatform requires the PacketEvents 2.13.0 server plugin");
+            throw new IllegalStateException("PaperEntityPlatform requires the PacketEvents 2.14.0 server plugin");
         }
         if (!state.pluginEnabled()) {
             throw new IllegalStateException("PacketEvents is installed but disabled; PaperEntityPlatform cannot start");
@@ -76,7 +76,7 @@ final class PaperPacketEventsRequirement {
                 || state.minor() != REQUIRED_MINOR
                 || state.patch() != REQUIRED_PATCH
                 || state.snapshot()) {
-            throw new IllegalStateException("PaperEntityPlatform requires PacketEvents 2.13.0 exactly; found "
+            throw new IllegalStateException("PaperEntityPlatform requires PacketEvents 2.14.0 exactly; found "
                     + state.versionLabel());
         }
         if (!SUPPORTED_PROTOCOL.name().equals(state.protocol())) {

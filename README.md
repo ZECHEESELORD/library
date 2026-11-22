@@ -87,10 +87,10 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | `house-service-entity` | Service NPC implementation built on `entity-core` | common |
 
 > [!NOTE]
-> Paper NPC behavior uses native mannequins and requires PacketEvents `2.13.0`; the adapter fails fast if PacketEvents is absent, disabled, uninitialized, or running an unsupported protocol. Velocity has no scoreboard adapter because a proxy cannot render a Minecraft sidebar.
+> Paper NPC behavior uses native mannequins and requires PacketEvents `2.14.0`; the adapter fails fast if PacketEvents is absent, disabled, uninitialized, or running an unsupported protocol. Velocity has no scoreboard adapter because a proxy cannot render a Minecraft sidebar.
 
 > [!NOTE]
-> The current Paper lane targets Paper/ShreddedPaper `26.2`. Player and entity mutations in menu, sound, camera, overlay, scoreboard, impulse, and entity adapters are dispatched through the appropriate region or entity scheduler. Global telegraph and ambient ticks remain host-neutral coordination points: their supplied resolvers and sinks must dispatch any native world access to the owning region. A consuming plugin must declare `folia-supported: true`; hot reload with active native sessions is unsupported.
+> The current Paper lane targets Paper/ShreddedPaper `26.3`. Player and entity mutations in menu, sound, camera, overlay, scoreboard, impulse, and entity adapters are dispatched through the appropriate region or entity scheduler. Global telegraph and ambient ticks remain host-neutral coordination points: their supplied resolvers and sinks must dispatch any native world access to the owning region. A consuming plugin must declare `folia-supported: true`; hot reload with active native sessions is unsupported.
 
 ### Observability
 
@@ -174,7 +174,7 @@ Example modules (not published):
 | Lane | Target | Java |
 | --- | --- | --- |
 | Common modules | any platform | 21 |
-| Paper (latest) | Paper API `26.2.build.112-stable` (MC `26.2`) | 25 |
+| Paper (latest) | Paper API `26.3.build.257-stable` (MC `26.3`) | 25 |
 | Paper (legacy) | Paper API `1.21.11-R0.1-SNAPSHOT` | 21 |
 | Fabric (latest) | MC `26.3`, Loader `0.19.5`, API `0.163.0+26.3` | 25 |
 | Fabric (legacy) | MC `1.21.11`, Loader `0.18.6`, API `0.141.3+1.21.11` | 21 |
@@ -224,7 +224,7 @@ Omitting `behaviorProfile` leaves a House service motionless. Calling `speak`, `
 
 `attendTo(UUID)` is the behavior identity boundary. Its `Identified` overload accepts Adventure identities and platform players; `Audience` is not used as player or group membership. Platform adapters use audiences only as permitted sound recipients.
 
-Paper consumers must install PacketEvents `2.13.0`, declare it as a required server dependency, and construct `PaperEntityPlatform` only after PacketEvents has loaded and initialized. The adapter rejects missing or unsupported PacketEvents/protocol combinations instead of guessing packet layouts. Paper/Folia code should use `spawnAsync`, `spawnServiceAsync`, `teleportAsync`, and `closeAsync`; synchronous methods are owner-region fast paths and fail on the wrong lane. PacketEvents' repository and dependency coordinates are documented in its [development setup guide](https://docs.packetevents.com/introduction/development-setup/).
+Paper consumers must install PacketEvents `2.14.0`, declare it as a required server dependency, and construct `PaperEntityPlatform` only after PacketEvents has loaded and initialized. The adapter rejects missing or unsupported PacketEvents/protocol combinations instead of guessing packet layouts. Paper/Folia code should use `spawnAsync`, `spawnServiceAsync`, `teleportAsync`, and `closeAsync`; synchronous methods are owner-region fast paths and fail on the wrong lane. PacketEvents' repository and dependency coordinates are documented in its [development setup guide](https://docs.packetevents.com/introduction/development-setup/).
 
 The platform examples are persistent walk-up showcases rather than one-shot smoke sequences. Both include a working library, a forge and supporting roles that cover all eight personalities, all four shipped prop routines, custom sequence primitives, weighted ambient idles, attention barks, shared and overlapping conversations, application chat callbacks, base-equipment restoration, and explicit controls for speech, playback, manual attention, snapshots, disable, and reconfiguration. See the [Paper NPC dioramas](platform/paper/paper-entity-example) and [Minestom NPC dioramas](platform/minestom/minestom-entity-example) for scene maps, controls, and two-player verification instructions. Run the standalone Minestom version with:
 

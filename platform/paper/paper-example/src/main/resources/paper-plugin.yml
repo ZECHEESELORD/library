@@ -1,5 +1,5 @@
 name: paper-example
 version: '${version}'
 main: sh.harold.library.example.paper.PaperExamplePlugin
-api-version: '26.2'
+api-version: '26.3'
 folia-supported: true
