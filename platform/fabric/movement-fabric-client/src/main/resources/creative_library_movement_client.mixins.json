@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "sh.harold.library.movement.fabric.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "CameraOffsetMixin",
+    "KeyboardInputMixin",
+    "LivingEntityMovementMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

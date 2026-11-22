@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_movement_fabric",
+  "version": "${version}",
+  "name": "Creative Library Movement Fabric",
+  "description": "Server side of the shared library's movement moves: claim checks, fall damage and hitbox overrides, moveset sync and tuning hot reload.",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "sh.harold.library.movement.fabric.MovementFabricInit"
+    ]
+  },
+  "mixins": [
+    "creative_library_movement.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "fabric-api": ">=0.166.2",
+    "creative_library_net_fabric": "*",
+    "creative_library_telemetry_fabric": "*"
+  }
+}

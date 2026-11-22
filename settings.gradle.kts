@@ -135,6 +135,8 @@ val projectPaths = listOf(
     ":platform:fabric:devtools-fabric-client",
     ":platform:fabric:fabric-example",
     ":platform:fabric:fabric-client-example",
+    ":platform:fabric:movement-fabric",
+    ":platform:fabric:movement-fabric-client",
 )
 
 val buildProfile = providers.gradleProperty("buildProfile").orElse("full").get()
