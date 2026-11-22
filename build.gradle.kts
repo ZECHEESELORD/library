@@ -166,13 +166,15 @@ if (!isNonFabricBuildProfile) {
         destinationDirectory.set(layout.buildDirectory.dir("release"))
         duplicatesStrategy = DuplicatesStrategy.FAIL
 
-        dependsOn(publishedLibraryProjectPaths.flatMap { listOf("$it:jar", "$it:sourcesJar") })
-
+        // Remapping Loom modules (the Fabric 1.21.11 lane) build a Mojang-named dev jar in `jar`;
+        // production loaders need the intermediary output of `remapJar` and `remapSourcesJar`.
         publishedLibraryProjectPaths.forEach { projectPath ->
             val publishedProject = project(projectPath)
+            val binaryJarTask = if ("remapJar" in publishedProject.tasks.names) "remapJar" else "jar"
+            val sourcesJarTask = if ("remapSourcesJar" in publishedProject.tasks.names) "remapSourcesJar" else "sourcesJar"
             into(publishedProject.name) {
-                from(publishedProject.tasks.named("jar"))
-                from(publishedProject.tasks.named("sourcesJar"))
+                from(publishedProject.tasks.named(binaryJarTask))
+                from(publishedProject.tasks.named(sourcesJarTask))
             }
         }
     }
