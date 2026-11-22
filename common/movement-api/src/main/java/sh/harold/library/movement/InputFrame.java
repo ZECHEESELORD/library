@@ -11,6 +11,31 @@ public record InputFrame(boolean forward, boolean back, boolean left, boolean ri
 
     public static final InputFrame EMPTY = new InputFrame(false, false, false, false, false, false, false);
 
+    /**
+     * Parses held keys from letters, in any order: {@code F} forward, {@code B} back, {@code L} left, {@code R} right,
+     * {@code J} jump, {@code N} sneak, {@code S} sprint; {@code -} and spaces are ignored, so {@link #compact()}
+     * output parses back. {@code keys("FSN")} is sprinting forward with sneak held.
+     *
+     * @throws IllegalArgumentException for any other character
+     */
+    public static InputFrame keys(String letters) {
+        InputFrame frame = EMPTY;
+        for (char c : letters.toCharArray()) {
+            frame = switch (c) {
+                case 'F' -> frame.withForward(true);
+                case 'B' -> frame.withBack(true);
+                case 'L' -> frame.withLeft(true);
+                case 'R' -> frame.withRight(true);
+                case 'J' -> frame.withJump(true);
+                case 'N' -> frame.withSneak(true);
+                case 'S' -> frame.withSprint(true);
+                case '-', ' ' -> frame;
+                default -> throw new IllegalArgumentException("unknown key letter '" + c + "' in \"" + letters + "\"");
+            };
+        }
+        return frame;
+    }
+
     /** {@code +1} forward, {@code -1} back, {@code 0} neither or both. */
     public double forwardImpulse() {
         return forward == back ? 0.0 : forward ? 1.0 : -1.0;
