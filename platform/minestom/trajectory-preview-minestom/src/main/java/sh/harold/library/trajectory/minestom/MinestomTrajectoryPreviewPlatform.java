@@ -37,7 +37,7 @@ public final class MinestomTrajectoryPreviewPlatform {
             int blockX = (int) Math.floor(point.x());
             int blockY = (int) Math.floor(point.y());
             int blockZ = (int) Math.floor(point.z());
-            if (!instance.getBlock(blockX, blockY, blockZ).isAir()) {
+            if (!instance.getBlock(blockX, blockY, blockZ).air()) {
                 return Optional.of(new CollisionHit(point, Vec3.ZERO, segment, 0L));
             }
         }

@@ -103,7 +103,7 @@ class MinestomMenuRuntimeTest {
 
     @BeforeAll
     static void initServer() {
-        if (!serverInitialized) {
+        if (!serverInitialized && MinecraftServer.process() == null) {
             MinecraftServer.init();
             serverInitialized = true;
         }

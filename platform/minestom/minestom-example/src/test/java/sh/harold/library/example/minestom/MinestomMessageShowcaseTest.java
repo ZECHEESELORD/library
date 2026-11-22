@@ -230,9 +230,17 @@ class MinestomMessageShowcaseTest {
 
     private static void collectClickCommands(Component component, List<String> commands) {
         if (component.clickEvent() != null) {
-            commands.add(component.clickEvent().value());
+            commands.add(clickValue(component.clickEvent()));
         }
         component.children().forEach(child -> collectClickCommands(child, commands));
+    }
+
+    private static String clickValue(ClickEvent<?> click) {
+        return switch (click.payload()) {
+            case ClickEvent.Payload.Text text -> text.value();
+            case ClickEvent.Payload.Int number -> Integer.toString(number.integer());
+            default -> click.payload().toString();
+        };
     }
 
     private static String snapshot(MinestomMessageShowcase showcase) {
@@ -296,10 +304,10 @@ class MinestomMessageShowcaseTest {
 
         output.append(" ".repeat(indent)).append(componentLabel(component));
         appendStyle(output, component.style());
-        ClickEvent click = component.clickEvent();
+        ClickEvent<?> click = component.clickEvent();
         if (click != null) {
             output.append(" click=").append(click.action().name().toLowerCase())
-                    .append('(').append(escape(click.value())).append(')');
+                    .append('(').append(escape(clickValue(click))).append(')');
         }
         output.append('\n');
 

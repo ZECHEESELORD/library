@@ -1,8 +1,10 @@
 package sh.harold.library.menu.minestom;
 
 import net.kyori.adventure.text.Component;
+import net.minestom.server.MinecraftServer;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sh.harold.library.menu.ActionVerb;
 import sh.harold.library.menu.MenuClick;
@@ -19,6 +21,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 class MinestomMenuRendererTest {
+
+    @BeforeAll
+    static void initServer() {
+        // Item prototypes resolve through the bound registries since Minestom 26.x.
+        if (MinecraftServer.process() == null) {
+            MinecraftServer.init();
+        }
+    }
 
     @Test
     void cachesByVisualStateOnly() {
