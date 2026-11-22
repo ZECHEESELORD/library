@@ -1,6 +1,11 @@
 package sh.harold.library.tween;
 
-public enum Easing {
+/**
+ * Fixed easing curves. Each maps {@code u} in {@code [0, 1]} to eased progress, with {@code apply(0) == 0}
+ * and {@code apply(1) == 1}. {@link #BACK} and {@link #ELASTIC} are the "in" shapes; {@link #BOUNCE} has always
+ * been the "out" bounce, and {@link #BOUNCE_OUT} names the same curve explicitly.
+ */
+public enum Easing implements EasingFunction {
     LINEAR {
         @Override
         public double apply(double u) {
@@ -134,7 +139,45 @@ public enum Easing {
             double t = u - 2.625 / d1;
             return n1 * t * t + 0.984375;
         }
+    },
+    BACK_OUT {
+        @Override
+        public double apply(double u) {
+            double c1 = 1.70158;
+            double c3 = c1 + 1.0;
+            double v = u - 1.0;
+            return 1.0 + (c3 * v * v * v) + (c1 * v * v);
+        }
+    },
+    BACK_IN_OUT {
+        @Override
+        public double apply(double u) {
+            double c2 = 1.70158 * 1.525;
+            if (u < 0.5) {
+                double v = 2.0 * u;
+                return (v * v * (((c2 + 1.0) * v) - c2)) / 2.0;
+            }
+            double v = (2.0 * u) - 2.0;
+            return ((v * v * (((c2 + 1.0) * v) + c2)) + 2.0) / 2.0;
+        }
+    },
+    ELASTIC_OUT {
+        @Override
+        public double apply(double u) {
+            if (u == 0.0 || u == 1.0) {
+                return u;
+            }
+            double c4 = (2.0 * Math.PI) / 3.0;
+            return (Math.pow(2.0, -10.0 * u) * Math.sin((u * 10.0 - 0.75) * c4)) + 1.0;
+        }
+    },
+    BOUNCE_OUT {
+        @Override
+        public double apply(double u) {
+            return BOUNCE.apply(u);
+        }
     };
 
+    @Override
     public abstract double apply(double u);
 }
