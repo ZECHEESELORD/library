@@ -17,6 +17,7 @@ final class MinestomScreenOverlayExamples {
 
     private static final Key HAZE = Key.key("creative", "demo/haze");
     private static final Key FLASH = Key.key("creative", "demo/flash");
+    private static final Key WHITEOUT = Key.key("creative", "demo/whiteout");
     private static final Key WARNING = Key.key("creative", "demo/warning");
 
     private final MinestomScreenOverlayPlatform overlays;
@@ -45,6 +46,21 @@ final class MinestomScreenOverlayExamples {
 
     void clear(Player player) {
         overlays.clearAll(player);
+    }
+
+    void whiteout(Player player, Duration duration) {
+        clear(player);
+        overlays.show(player, new ScreenOverlayRequest(
+                WHITEOUT,
+                new ScreenOverlay(
+                        TextColor.color(0xFFFFFF),
+                        1.0f,
+                        Duration.ZERO,
+                        duration,
+                        Duration.ZERO,
+                        OverlayConflictPolicy.REPLACE_ALL
+                )
+        ));
     }
 
     private void showIfOnline(Player player, ScreenOverlayRequest request) {

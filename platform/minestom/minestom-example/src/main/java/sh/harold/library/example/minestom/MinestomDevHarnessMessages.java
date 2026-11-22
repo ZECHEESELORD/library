@@ -70,7 +70,7 @@ final class MinestomDevHarnessMessages {
                         Message.slot("command", command("/testcamera"))
                 )
                 .bullet(
-                        "{command} demo|clear",
+                        "{command} demo|whiteout <duration>|clear",
                         Message.slot("command", command("/testoverlays"))
                 )
                 .bullet(

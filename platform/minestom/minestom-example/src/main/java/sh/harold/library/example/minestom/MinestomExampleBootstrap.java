@@ -3,9 +3,11 @@ package sh.harold.library.example.minestom;
 import net.minestom.server.MinecraftServer;
 import net.minestom.server.coordinate.Pos;
 import net.minestom.server.entity.Player;
+import net.minestom.server.event.instance.InstanceChunkLoadEvent;
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent;
 import net.minestom.server.event.player.PlayerDisconnectEvent;
 import net.minestom.server.event.player.PlayerSpawnEvent;
+import net.minestom.server.instance.Chunk;
 import net.minestom.server.instance.InstanceContainer;
 import net.minestom.server.instance.block.Block;
 import net.minestom.server.item.ItemStack;
@@ -17,6 +19,7 @@ import sh.harold.library.sound.minestom.MinestomSoundCuePlatform;
 import sh.harold.library.overlay.minestom.MinestomScreenOverlayPlatform;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -24,6 +27,7 @@ public final class MinestomExampleBootstrap {
 
     private static final String HOST = "0.0.0.0";
     private static final int PORT = 25565;
+    private static final byte[] FULL_LIGHT = new byte[16 * 16 * 16 / 2];
     private static final List<Material> TEST_HOTBAR_POOL = List.of(
             Material.COMPASS,
             Material.SLIME_BALL,
@@ -52,6 +56,8 @@ public final class MinestomExampleBootstrap {
         MinecraftServer minecraftServer = MinecraftServer.init();
 
         InstanceContainer instance = MinecraftServer.getInstanceManager().createInstanceContainer();
+        Arrays.fill(FULL_LIGHT, (byte) 0xFF);
+        instance.eventNode().addListener(InstanceChunkLoadEvent.class, event -> setFullLight(event.getChunk()));
         instance.enableAutoChunkLoad(true);
         instance.setGenerator(unit -> {
             unit.modifier().fillHeight(0, 40, Block.STONE);
@@ -188,6 +194,13 @@ public final class MinestomExampleBootstrap {
 
     private static void log(String message) {
         System.out.println("[minestom-example] " + message);
+    }
+
+    private static void setFullLight(Chunk chunk) {
+        chunk.getSections().forEach(section -> {
+            section.setSkyLight(FULL_LIGHT.clone());
+            section.setBlockLight(FULL_LIGHT.clone());
+        });
     }
 
     private static void populateTestingHotbar(Player player) {

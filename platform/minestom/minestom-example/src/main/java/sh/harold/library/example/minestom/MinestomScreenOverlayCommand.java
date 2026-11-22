@@ -34,5 +34,15 @@ public final class MinestomScreenOverlayCommand extends Command {
                 default -> throw new IllegalStateException("Unhandled overlay variant");
             }
         }, variant);
+
+        var whiteout = ArgumentType.Literal("whiteout");
+        var duration = ArgumentType.Time("duration").min(1);
+        addSyntax((sender, context) -> {
+            Player player = MinestomCommandPlayers.requirePlayer(sender);
+            if (player == null) {
+                return;
+            }
+            examples.whiteout(player, context.get(duration));
+        }, whiteout, duration);
     }
 }
