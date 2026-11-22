@@ -126,10 +126,10 @@ Add the repositories required by the adapters you use:
 | Repository | Needed for |
 | --- | --- |
 | `https://maven.fabricmc.net/` | Fabric adapters |
-| `https://repo.papermc.io/repository/maven-public/` | Paper adapters |
+| `https://repo.papermc.io/repository/maven-public/` | Paper and Velocity adapters |
+| `https://hub.spigotmc.org/nexus/content/repositories/snapshots/` | `message-paper-1_8_8` (Spigot API `1.8.8`) |
 | `https://repo.codemc.io/repository/maven-releases/` | PacketEvents for native Paper mannequin composition |
 | `https://repo.codemc.io/repository/maven-snapshots/` | PacketEvents snapshot transitive resolution |
-| `https://repo.minebench.de` | Velocity adapters |
 
 ### Coordinates
 
