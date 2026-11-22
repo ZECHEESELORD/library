@@ -176,12 +176,12 @@ Example modules (not published):
 | Common modules | any platform | 21 |
 | Paper (latest) | Paper API `26.3.build.257-stable` (MC `26.3`) | 25 |
 | Paper (legacy) | Paper API `1.21.11-R0.1-SNAPSHOT` | 21 |
-| Fabric (latest) | MC `26.3`, Loader `0.19.5`, API `0.163.0+26.3` | 25 |
-| Fabric (legacy) | MC `1.21.11`, Loader `0.18.6`, API `0.141.3+1.21.11` | 21 |
-| Minestom | `2026.03.03-1.21.11` | 25 |
+| Fabric (latest) | MC `26.3`, Loader `0.20.1`, API `0.166.2+26.3` | 25 |
+| Fabric (legacy) | MC `1.21.11`, Loader `0.20.1`, API `0.141.6+1.21.11` | 21 |
+| Minestom | `2026.10.07-26.2` (MC `26.2`) | 25 |
 | Velocity | Velocity API `4.3.1` | 25 |
 
-All text uses Adventure `4.17.0`.
+All text compiles against Adventure `4.17.0`. Minestom `2026.10.07-26.2` brings Adventure `5.2.0` at runtime, and the Minestom adapters run on it.
 
 > [!WARNING]
 > The Java 25 lanes require a compatible toolchain. Use IntelliJ IDEA `2025.3` or later when working on the latest Paper and Fabric modules.
