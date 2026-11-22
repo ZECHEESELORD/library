@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_camera_fabric_client",
+  "version": "${version}",
+  "name": "Creative Library Camera Fabric Client",
+  "description": "Drives the vanilla first-person camera from the shared library's camera rig stack: additive pitch, roll, FOV, eye height, shake and look scale, with a Reduced intensity setting.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "sh.harold.library.camera.fabric.client.CameraFabricClientInit"
+    ]
+  },
+  "mixins": [
+    "creative_library_camera.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "fabric-api": ">=0.166.2",
+    "creative_library_telemetry_fabric_client": "*"
+  }
+}

@@ -47,6 +47,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | --- | --- | --- |
 | `tween` | Keyed interpolation with easing, envelopes, hold behavior, and repeat modes; keyframe tracks (Hermite, eased, stepped and cut keys, unwound angles, quaternions, markers, layers), springs with impulse kicks, signal-driven channels, seeded smooth noise, and overshoot, anticipation and squash generators | common |
 | `curve` | Catmull-Rom spline paths with sampling and splitting | common |
+| `camera` | Client-first camera rig: a full camera state (position, yaw, pitch and roll quaternion, FOV, eye height, projection, look-input scale), keyed cues on additive pitch, roll, FOV, eye-height, shake and look-scale channels with cancel and replace handles, signal-driven spring layers, trauma shake, a Reduced profile with per-cue substitutes, safety clamps and telemetry columns; the adapter drives the vanilla first-person camera every rendered frame | Fabric client |
 | `camera-motion` | Camera moves controlled by the server, with blend modes and playback for each viewer | Paper, Minestom |
 | `trajectory-preview` | Projectile path previews with collision queries and recompute rules | Paper, Minestom |
 | `impulse` | Knockback and dash impulses with stacking, compose modes, and axis masks | Paper, Minestom |
@@ -69,6 +70,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | Module | What it does | Adapters |
 | --- | --- | --- |
 | `data` | Document persistence with `-memory`, `-yaml`, and `-mongodb` backends | Paper, Minestom, Velocity, Fabric |
+| `hot-reload` | Watches JSON data files and swaps decoded values in at a tick boundary; a strict JSON reader whose errors name the file, field path and line, and a bad edit keeps the last good value | common |
 
 ### Player interaction
 
@@ -100,6 +102,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | --- | --- | --- |
 | `metrics` | A `Telemetry` facade with a memory registry, JVM and process collectors, and Prometheus export through `-prometheus` | common |
 | `telemetry` | Per-tick and per-frame feel recordings: a column registry, CSV and memory sinks, and a headless frame sampler; Fabric adapters record position, velocity, view angles, roll, FOV, eye height and input | Fabric, Fabric client |
+| `devtools` | Dev-build tools: a deterministic capture clock that fixes each frame's game-time step and partial tick for repeatable frame strips | Fabric client |
 
 ---
 

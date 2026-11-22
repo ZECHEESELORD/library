@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "sh.harold.library.devtools.fabric.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "DeltaTrackerTimerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
