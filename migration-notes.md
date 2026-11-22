@@ -1,5 +1,16 @@
 # Migration Notes
 
+## v12
+
+- Paper consumers on the latest lane move to Paper/ShreddedPaper `26.3` (`api-version: '26.3'`). Servers still on `26.2` should stay on v11 or use the retained `1.21.11` lane.
+- `entity-paper` now requires the PacketEvents `2.14.0` server plugin. `PaperEntityPlatform` rejects `2.13.0` and any protocol other than `V_26_3`.
+- Minestom adapters are `compileOnlyApi` on Minestom `2026.10.07-26.2` (Minecraft `26.2`). Minestom has no `26.3` build yet, so `26.3` clients cannot join Minestom servers. It brings Adventure `5.2.0`; `ClickEvent.value()` is replaced by a typed `payload()`, `Block.isAir()` is now `Block.air()` (likewise solid and liquid), and building an `ItemStack` needs bound registries (`MinecraftServer.init()`), which matters for consumer unit tests.
+- `message-velocity` and `data-velocity` are compiled for Java 25 against Velocity API `4.3.1`. Consumers need a Java 25 toolchain and a Velocity 4.x proxy. The library API did not change.
+- Fabric mods on both lanes now require Fabric Loader `0.20.1` or newer. Latest-lane mods require `fabric-api` `0.166.2` or newer, and legacy-lane mods require `0.141.6` or newer.
+- The `minestom-example` harness port can be overridden with `-Dminestom.example.port=<port>`; the default is still `25565`.
+
+## v9
+
 - The NPC behavior expansion is a source-breaking v9 re-release. Paper now uses native mannequins and requires PacketEvents `2.13.0`; the Citizens adapter, repository, dependency, settings, and examples have been removed completely.
 - Entity interactions now use `EntityInteractionAction` (`USE` or `ATTACK`), an optional `InteractionHand`, and an `EntityInteractionResult` (`PASS` or `CONSUME`). Use `EntityInteractionHandler.observing(...)` when migrating a former void observer lambda.
 - `PLAYER_LIKE_HUMANOID` exposes `HumanoidBehaviorCapable` on Paper and Minestom. Behavior remains opt-in: a mannequin without an `NpcBehaviorProfile` is inert, and explicit behavior commands fail fast until configured.

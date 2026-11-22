@@ -137,7 +137,7 @@ Import the BOM once, then name the modules without repeating the tag:
 
 ```kotlin
 dependencies {
-    implementation(platform("com.github.ZECHEESELORD.library:library-bom:v9"))
+    implementation(platform("com.github.ZECHEESELORD.library:library-bom:v12"))
 
     implementation("com.github.ZECHEESELORD.library:cooldown-api")
     implementation("com.github.ZECHEESELORD.library:cooldown-core")
