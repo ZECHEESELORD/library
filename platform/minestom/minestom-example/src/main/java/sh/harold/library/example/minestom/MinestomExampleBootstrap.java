@@ -26,7 +26,7 @@ import java.util.List;
 public final class MinestomExampleBootstrap {
 
     private static final String HOST = "0.0.0.0";
-    private static final int PORT = 25565;
+    private static final int PORT = Integer.getInteger("minestom.example.port", 25565);
     private static final byte[] FULL_LIGHT = new byte[16 * 16 * 16 / 2];
     private static final List<Material> TEST_HOTBAR_POOL = List.of(
             Material.COMPASS,
