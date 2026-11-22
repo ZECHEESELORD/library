@@ -8,7 +8,7 @@
 - `message-velocity` and `data-velocity` are compiled for Java 25 against Velocity API `4.3.1`. Consumers need a Java 25 toolchain and a Velocity 4.x proxy. The library API did not change.
 - Latest-lane Fabric mods now require Fabric Loader `0.20.1` or newer and `fabric-api` `0.166.2` or newer. The retained `1.21.11` lane keeps its v11 runtime requirements (Loader `0.18.6` or newer, any `fabric-api`); it is now built against Fabric API `0.141.6+1.21.11`.
 - `message-paper-1_8_8` is now compiled for Java 21 instead of Java 25, so Spigot 1.8.8 servers and Gradle consumers on Java 21 can load and resolve it. It still needs a Java 21 runtime.
-- The `minestom-example` harness port can be overridden with `-Dminestom.example.port=<port>`; the default is still `25565`.
+- The `minestom-example` harness port can be overridden with `-Dminestom.example.port=<port>`, either on `./gradlew runMinestomExample` or when launching the main class directly; the default is still `25565`.
 
 ## v9
 

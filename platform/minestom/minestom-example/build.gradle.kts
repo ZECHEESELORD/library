@@ -34,5 +34,7 @@ application {
 
 tasks.named<org.gradle.api.tasks.JavaExec>("run") {
     group = "application"
-    description = "Runs the embedded Minestom dev harness on localhost:25565."
+    description = "Runs the embedded Minestom dev harness on localhost:25565 (override with -Dminestom.example.port=<port>)."
+    // Gradle keeps command-line -D properties in its own JVM; hand the port override to the forked harness.
+    providers.systemProperty("minestom.example.port").orNull?.let { systemProperty("minestom.example.port", it) }
 }
