@@ -348,4 +348,71 @@ class StandardCameraRigTest {
         assertTrue(rig.active());
         assertTrue(rig.idle());
     }
+
+    private static ViewInput hostEye(double eyeHeight) {
+        return new ViewInput(new Vec3(3.5, 64.0 + eyeHeight, -7.25), 33.0, 12.5, 70.0, eyeHeight);
+    }
+
+    private static CameraCue absoluteEye(String name, double value, double ticks) {
+        return CameraCue.builder(key(name))
+                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT, CueCurve.constant(value, ticks)).absoluteEyeHeight())
+                .build();
+    }
+
+    @Test
+    void absoluteEyeHeightLandsOnItsValueWhateverTheHostEyeIs() {
+        StandardCameraRig rig = new StandardCameraRig();
+        rig.start(absoluteEye("tuck", 0.9, 20));
+        for (double host : new double[] {1.62, 1.31375, 0.765, 0.9}) {
+            CameraState state = rig.sample(hostEye(host), 2.0);
+            assertEquals(0.9, state.layers().eyeTarget(), EPS);
+            assertEquals(0.9 - host, state.layers().eyeHeight(), EPS, "host " + host);
+            assertEquals(64.0 + 0.9, state.position().y(), EPS, "drawn eye on the target, host " + host);
+        }
+        // The host keeps its eye height as a float: a settled host gets no offset at all.
+        assertEquals(0.0, rig.sample(hostEye((float) 0.9), 2.0).layers().eyeHeight());
+        // No host eye: the target adds nothing rather than guessing.
+        CameraState unknown = rig.sample(VIEW, 2.0);
+        assertEquals(0.0, unknown.layers().eyeHeight());
+        assertEquals(VIEW.eyePosition(), unknown.position());
+        // After the curve, nothing is held and the camera is the host's again.
+        CameraState after = rig.sample(hostEye(0.765), 25.0);
+        assertTrue(Double.isNaN(after.layers().eyeTarget()));
+        assertEquals(0.0, after.layers().eyeHeight());
+    }
+
+    @Test
+    void absoluteEyeHeightLatestWinsAndAdditiveCurvesStack() {
+        StandardCameraRig rig = new StandardCameraRig();
+        rig.start(absoluteEye("first", 0.9, 20));
+        rig.start(absoluteEye("second", 0.5, 20));
+        rig.start(CameraCue.builder(key("dip")).channel(CameraChannel.EYE_HEIGHT, CueCurve.constant(-0.1, 20)).build());
+        CameraState state = rig.sample(hostEye(1.62), 2.0);
+        assertEquals(0.5, state.layers().eyeTarget(), EPS);
+        assertEquals(0.5 - 1.62 - 0.1, state.layers().eyeHeight(), EPS);
+        assertTrue(state.layers().activeChannels().contains(CameraChannel.EYE_HEIGHT));
+    }
+
+    @Test
+    void releasedAbsoluteEyeHeightEndsAtOnce() {
+        StandardCameraRig rig = new StandardCameraRig();
+        CameraCueHandle held = rig.start(CameraCue.builder(key("held"))
+                .release(5, Easing.LINEAR)
+                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT, CueCurve.held(0.5, 2, Easing.LINEAR, 4,
+                        Easing.LINEAR)).absoluteEyeHeight())
+                .build());
+        for (int i = 0; i < 6; i++) {
+            rig.tick();
+        }
+        assertEquals(0.5, rig.sample(hostEye(1.62), 6.0).layers().eyeTarget(), EPS);
+        held.release();
+        assertTrue(Double.isNaN(rig.sample(hostEye(1.62), 6.5).layers().eyeTarget()));
+        assertEquals(0.0, rig.sample(hostEye(1.62), 6.5).layers().eyeHeight());
+    }
+
+    @Test
+    void onlyEyeHeightCurvesCanBeAbsolute() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ChannelCurve.of(CameraChannel.FOV, CueCurve.constant(1.0, 1)).absoluteEyeHeight());
+    }
 }

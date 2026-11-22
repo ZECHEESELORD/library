@@ -12,7 +12,8 @@ import java.util.Locale;
  *     <li>{@link #ROLL}: degrees of roll about the view axis, positive raises the view's left side. Dutch is a roll
  *     layer.</li>
  *     <li>{@link #FOV}: degrees added to the vertical field of view.</li>
- *     <li>{@link #EYE_HEIGHT}: blocks added to the eye height, render only.</li>
+ *     <li>{@link #EYE_HEIGHT}: blocks added to the eye height, render only. A curve marked absolute
+ *     ({@link sh.harold.library.camera.rig.cue.ChannelCurve#absoluteEyeHeight()}) is the drawn eye height itself.</li>
  *     <li>{@link #SHAKE}: rotational shake amplitude in degrees; the rig turns it into seeded noise on pitch and
  *     roll.</li>
  *     <li>{@link #LOOK_SCALE}: a look-input offset. Each cue's factor is {@code 1 + offset} and factors multiply, so

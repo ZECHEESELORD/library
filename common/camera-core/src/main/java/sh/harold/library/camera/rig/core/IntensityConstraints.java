@@ -20,6 +20,9 @@ import java.util.Objects;
  */
 public final class IntensityConstraints implements ConstraintStage {
 
+    /** An absolute eye target this close to the host's eye adds nothing: float rounding of the host's eye height. */
+    static final double TARGET_EPSILON = 1.0e-6;
+
     private final ReducedRules reduced;
     private final SafetyLimits limits;
     private final NoiseSpec shakeNoise;
@@ -58,7 +61,9 @@ public final class IntensityConstraints implements ConstraintStage {
         if (!sample.pitchUnwound()) {
             pitch = clampAdded(shot.angles().pitch(), pitch, -90.0, 90.0);
         }
-        double eyeHeight = clamp(sample.eyeHeight(), limits.eyeHeightMin(), limits.eyeHeightMax());
+        double eyeTarget = sample.eyeTarget();
+        double eyeHeight = sample.eyeHeight() + targetOffset(eyeTarget, frame.input().eyeHeight());
+        eyeHeight = clamp(eyeHeight, limits.eyeHeightMin(), limits.eyeHeightMax());
         double lookScale = clamp(sample.lookScale(), limits.lookScaleMin(), limits.lookScaleMax());
 
         double shakePitch = 0.0;
@@ -71,13 +76,26 @@ public final class IntensityConstraints implements ConstraintStage {
                 shakeRoll = shake * SmoothNoise.sampleTicks(shakeNoise, 1, ticks) / shakePeak;
             }
         }
-        return new LayerState(pitch, roll, fov, eyeHeight, shake, shakePitch, shakeRoll, lookScale,
+        return new LayerState(pitch, roll, fov, eyeHeight, eyeTarget, shake, shakePitch, shakeRoll, lookScale,
                 sample.pitchUnwound(), sample.activeChannels(), sample.activeCues());
     }
 
     @Override
     public CameraState constrainState(CameraState state, RigFrame frame) {
         return state;
+    }
+
+    /**
+     * The offset that puts the drawn eye on an absolute target from the host's own eased eye height: 0 with no target
+     * or no host eye, and 0 when the two already agree to within float precision (the host keeps its eye height as a
+     * float), so a settled host is left bit for bit as it is.
+     */
+    static double targetOffset(double target, double hostEye) {
+        if (Double.isNaN(target) || Double.isNaN(hostEye)) {
+            return 0.0;
+        }
+        double offset = target - hostEye;
+        return Math.abs(offset) < TARGET_EPSILON ? 0.0 : offset;
     }
 
     /**

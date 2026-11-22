@@ -15,8 +15,6 @@ import sh.harold.library.movement.core.tuning.WallJumpTuning;
 import sh.harold.library.tween.Easing;
 import sh.harold.library.tween.track.Track;
 
-import java.util.Arrays;
-
 /**
  * Each move's camera table from 02 as cues. Times are cue-local: {@code k + 1} is the end of move tick {@code Tk}, so a
  * table row "by T2" is local time 3. Pitch is positive looking down; roll is positive raising the left side.
@@ -31,6 +29,12 @@ public final class MoveCameras {
     public static final Key WALL_KICK = Key.key(MoveKeys.NAMESPACE, "camera/wall_kick");
 
     private static final double STAND = BodyState.PLAYER_EYE_HEIGHT;
+
+    /**
+     * An absolute eye curve holds its last value this many ticks past the pose's end, so the body is standing and the
+     * host camera's eye easing has been held there before the curve lets go.
+     */
+    public static final int EYE_HOLD_TICKS = 2;
 
     private MoveCameras() {
     }
@@ -91,24 +95,22 @@ public final class MoveCameras {
                 .build();
     }
 
-    /** The roll's designed eye height, absolute. */
+    /**
+     * The roll's eye height, absolute: 1.62 through T0, an ease-in to the tuck by the end of T2, held to the end of T6,
+     * back to standing by the end of T9, then held standing for {@link #EYE_HOLD_TICKS} more so the host camera is
+     * standing with the body before the curve lets go.
+     */
     public static Track<Double> rollDesignedEye(RollTuning tuning) {
         RollTuning.Camera camera = tuning.camera();
+        double standing = camera.eyeRiseTick() + 1.0;
         return Track.scalar()
                 .eased(0.0, STAND, Easing.LINEAR)
                 .eased(1.0, STAND, Easing.QUAD_IN)
                 .eased(camera.eyeLowTick() + 1.0, camera.eyeLow(), Easing.LINEAR)
                 .eased(camera.eyeRiseFromTick() + 1.0, camera.eyeLow(), Easing.QUAD_IN_OUT)
-                .eased(camera.eyeRiseTick() + 1.0, STAND, Easing.LINEAR)
+                .eased(standing, STAND, Easing.LINEAR)
+                .eased(Math.max(standing, tuning.ticks()) + EYE_HOLD_TICKS, STAND, Easing.LINEAR)
                 .build();
-    }
-
-    /** The roll's body eye height at the end of each tick: low for the roll's ticks, then standing. */
-    public static double[] rollBodyEye(RollTuning tuning) {
-        double[] schedule = new double[tuning.ticks() + 1];
-        Arrays.fill(schedule, tuning.eyeHeight());
-        schedule[tuning.ticks()] = STAND;
-        return schedule;
     }
 
     /**
@@ -134,15 +136,12 @@ public final class MoveCameras {
                 .eased(camera.fovPeakTick() + 1.0, camera.fov(), Easing.QUAD_IN_OUT)
                 .eased(camera.fovEndTick(), 0.0, Easing.LINEAR)
                 .build();
-        double[] body = rollBodyEye(tuning);
-        Track<Double> designed = rollDesignedEye(tuning);
-        int settle = EyeCompensation.settleTicks(STAND, body, designed.endTime());
-        double[] model = EyeCompensation.cameraModel(STAND, body, settle);
         return CameraCue.builder(ROLL).owner(MoveKeys.ROLL)
                 .curve(ChannelCurve.of(CameraChannel.PITCH, CueCurve.track(turn)).unwoundPitch()
                         .withReduced(CueCurve.track(dip)))
                 .channel(CameraChannel.FOV, CueCurve.track(fov))
-                .channel(CameraChannel.EYE_HEIGHT, CueCurve.sampled(EyeCompensation.cue(designed, model), settle))
+                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT, CueCurve.track(rollDesignedEye(tuning)))
+                        .absoluteEyeHeight())
                 .lookScale(tuning.lookScale(), tuning.ticks())
                 .build();
     }
@@ -156,42 +155,34 @@ public final class MoveCameras {
                 .build();
     }
 
-    /** The slide's held eye cue, from T0 until the slide ends. */
+    /** The slide's held eye cue, absolute, from T0 until the slide ends. */
     public static CameraCue slideEye(SlideTuning tuning) {
-        double[] body = {tuning.eyeHeight()};
-        Track<Double> designed = slideDesignedEye(tuning);
-        double[] model = EyeCompensation.cameraModel(STAND, body, 64);
         return CameraCue.builder(SLIDE_EYE).owner(MoveKeys.SLIDE)
-                .channel(CameraChannel.EYE_HEIGHT,
-                        CueCurve.sampled(EyeCompensation.cue(designed, model), Double.POSITIVE_INFINITY))
+                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT,
+                        CueCurve.sampled(slideDesignedEye(tuning)::sample, Double.POSITIVE_INFINITY))
+                        .absoluteEyeHeight())
                 .build();
     }
 
     /**
-     * The slide's exit: the eye returns to standing over {@code eyeReturnTicks}, compensated for vanilla's camera,
-     * which starts from wherever it had got to after {@code slideTicks} ticks low and now chases the standing body.
+     * The slide's exit: the eye, absolute, returns from {@code fromDesigned} to standing over {@code eyeReturnTicks},
+     * then holds standing for {@link #EYE_HOLD_TICKS} more so the host camera is standing with the body before the
+     * curve lets go.
      *
-     * @param slideTicks how many ticks the body was low before the end tick
-     * @param stayLow    the body stays low (no headroom, crawling): the eye goes to the body's own low height
+     * @param stayLow the body stays low (no headroom, crawling): the eye goes to the body's own low height and stays
      */
-    public static CameraCue slideExit(SlideTuning tuning, int slideTicks, double fromDesigned, boolean stayLow) {
+    public static CameraCue slideExit(SlideTuning tuning, double fromDesigned, boolean stayLow) {
         double target = stayLow ? tuning.eyeHeight() : STAND;
-        double low = tuning.eyeHeight();
-        double[] before = new double[Math.max(1, slideTicks)];
-        Arrays.fill(before, low);
-        double[] model = EyeCompensation.cameraModel(STAND, before, before.length + 1);
-        double camera = model[model.length - 1];
-        double[] after = {target};
-        double[] exitModel = EyeCompensation.cameraModel(camera, after, 64);
         int ticks = Math.max(1, tuning.camera().eyeReturnTicks());
         Track<Double> designed = Track.scalar()
                 .eased(0.0, fromDesigned, Easing.QUAD_IN_OUT)
                 .eased(ticks, target, Easing.LINEAR)
+                .eased(ticks + EYE_HOLD_TICKS, target, Easing.LINEAR)
                 .build();
-        int settle = EyeCompensation.settleTicks(camera, after, ticks);
         return CameraCue.builder(SLIDE_EYE).owner(MoveKeys.SLIDE)
-                .channel(CameraChannel.EYE_HEIGHT, CueCurve.sampled(EyeCompensation.cue(designed, exitModel),
-                        stayLow ? Double.POSITIVE_INFINITY : settle))
+                .curve(ChannelCurve.of(CameraChannel.EYE_HEIGHT,
+                        CueCurve.sampled(designed::sample, stayLow ? Double.POSITIVE_INFINITY : designed.endTime()))
+                        .absoluteEyeHeight())
                 .build();
     }
 

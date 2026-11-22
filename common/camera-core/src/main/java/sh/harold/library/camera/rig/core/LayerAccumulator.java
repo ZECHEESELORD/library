@@ -19,6 +19,7 @@ final class LayerAccumulator {
     private double fov;
     private double fovExempt;
     private double eyeHeight;
+    private double eyeTarget = Double.NaN;
     private double shake;
     private double lookScale = 1.0;
     private boolean pitchUnwound;
@@ -55,6 +56,12 @@ final class LayerAccumulator {
         }
     }
 
+    /** An absolute eye-height value; cues are sampled in start order, so the latest-started one wins. */
+    void setEyeTarget(double value) {
+        active.add(CameraChannel.EYE_HEIGHT);
+        eyeTarget = value;
+    }
+
     void markUnwound() {
         pitchUnwound = true;
     }
@@ -67,7 +74,7 @@ final class LayerAccumulator {
         if (active.isEmpty() && cues.isEmpty()) {
             return LayerSample.EMPTY;
         }
-        return new LayerSample(pitch, pitchExempt, roll, rollExempt, fov, fovExempt, eyeHeight, Math.max(0.0, shake),
+        return new LayerSample(pitch, pitchExempt, roll, rollExempt, fov, fovExempt, eyeHeight, eyeTarget, Math.max(0.0, shake),
                 lookScale, pitchUnwound, active, cues);
     }
 }

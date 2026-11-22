@@ -17,7 +17,8 @@ import java.util.Set;
  * @param rollExempt   roll offset from Reduced substitutes
  * @param fov          FOV offset, profile-scalable
  * @param fovExempt    FOV offset from Reduced substitutes
- * @param eyeHeight    eye height offset
+ * @param eyeHeight    eye height offset from additive curves
+ * @param eyeTarget    the absolute eye height the latest-started live absolute curve holds, {@code NaN} when none
  * @param shake        rotational shake amplitude in degrees (cues plus the trauma bus)
  * @param lookScale    the product of every live look-scale factor
  * @param pitchUnwound whether a live pitch curve may pass straight up or down
@@ -32,6 +33,7 @@ public record LayerSample(
         double fov,
         double fovExempt,
         double eyeHeight,
+        double eyeTarget,
         double shake,
         double lookScale,
         boolean pitchUnwound,
@@ -39,7 +41,7 @@ public record LayerSample(
         List<Key> activeCues
 ) {
 
-    public static final LayerSample EMPTY = new LayerSample(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, false,
+    public static final LayerSample EMPTY = new LayerSample(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.NaN, 0.0, 1.0, false,
             Set.of(), List.of());
 
     public LayerSample {

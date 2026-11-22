@@ -151,7 +151,7 @@ public final class SlideMove implements MoveDefinition {
             BodyOverride low = new BodyOverride(tuning.height(), tuning.eyeHeight(), BodyOverride.RenderPose.CRAWLING);
             if (crawling) {
                 if (Probe.fits(context.world(), body, BodyState.PLAYER_HEIGHT)) {
-                    out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, k, tuning.eyeHeight(), false)));
+                    out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, designedEye, false)));
                     context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
                     return Step.end(MoveEnd.EndReason.COMPLETED);
                 }
@@ -180,7 +180,7 @@ public final class SlideMove implements MoveDefinition {
                     double launch = speed + tuning.jumpBonus();
                     out.jump().horizontal(direction.x() * launch, direction.z() * launch);
                     context.markLaunch(MoveKeys.SLIDE, 0.42);
-                    out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, k, designedEye, false)));
+                    out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, designedEye, false)));
                     out.cameraSignals(MoveOutput.CameraSignals.REST);
                     context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
                     return Step.end(MoveEnd.EndReason.COMPLETED);
@@ -235,7 +235,7 @@ public final class SlideMove implements MoveDefinition {
                 out.body(low).cameraSignals(MoveOutput.CameraSignals.REST);
                 return Step.CONTINUE;
             }
-            out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, k, designedEye, false)));
+            out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, designedEye, false)));
             out.cameraSignals(MoveOutput.CameraSignals.REST);
             context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
             return end;

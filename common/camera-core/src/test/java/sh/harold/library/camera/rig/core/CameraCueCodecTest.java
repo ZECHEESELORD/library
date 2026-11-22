@@ -116,7 +116,23 @@ class CameraCueCodecTest {
                         """)));
         assertTrue(badEasing.reason().contains("wobble"));
 
+        DataDecodeException absoluteFov = assertThrows(DataDecodeException.class, () -> CameraCueCodec.CUE.decode(
+                JsonReader.parse("""
+                        { "key": "a:b", "curves": [ { "channel": "fov", "absolute": true,
+                          "constant": { "amount": 1, "ticks": 1 } } ] }
+                        """)));
+        assertEquals("$.curves[0].absolute", absoluteFov.path());
+
         assertThrows(DataDecodeException.class, () -> CameraCueCodec.CUE.decode(
                 JsonReader.parse("{ \"key\": \"Not A Key\", \"curves\": [] }")));
+    }
+
+    @Test
+    void absoluteEyeHeightDecodes() {
+        CameraCue cue = CameraCueCodec.CUE.decode(JsonReader.parse("""
+                { "key": "a:tuck", "curves": [ { "channel": "eye_height", "absolute": true,
+                  "constant": { "amount": 0.9, "ticks": 10 } } ] }
+                """));
+        assertTrue(cue.curves().get(0).absolute());
     }
 }

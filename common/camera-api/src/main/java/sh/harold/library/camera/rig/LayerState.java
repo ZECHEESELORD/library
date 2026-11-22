@@ -13,7 +13,10 @@ import java.util.Set;
  * @param pitchAdd       degrees of pitch added, unwound
  * @param roll           degrees of roll added (dutch included)
  * @param fovAdd         degrees of FOV added
- * @param eyeHeight      blocks of eye height added
+ * @param eyeHeight      blocks of eye height added: additive curves plus the offset that puts the drawn eye on
+ *                       {@code eyeTarget}
+ * @param eyeTarget      the absolute eye height above the feet a live absolute curve holds, {@code NaN} when none. A
+ *                       host adapter holds its own eye-height easing at the body's eye while it is set
  * @param shakeAmplitude rotational shake amplitude in degrees, after the caps
  * @param shakePitch     the shake's pitch offset this frame
  * @param shakeRoll      the shake's roll offset this frame
@@ -27,6 +30,7 @@ public record LayerState(
         double roll,
         double fovAdd,
         double eyeHeight,
+        double eyeTarget,
         double shakeAmplitude,
         double shakePitch,
         double shakeRoll,
@@ -36,10 +40,13 @@ public record LayerState(
         List<Key> activeCues
 ) {
 
-    public static final LayerState IDENTITY = new LayerState(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, false,
+    public static final LayerState IDENTITY = new LayerState(0.0, 0.0, 0.0, 0.0, Double.NaN, 0.0, 0.0, 0.0, 1.0, false,
             Set.of(), List.of());
 
     public LayerState {
+        if (Double.isInfinite(eyeTarget)) {
+            throw new IllegalArgumentException("eyeTarget must be finite or NaN");
+        }
         activeChannels = Set.copyOf(Objects.requireNonNull(activeChannels, "activeChannels"));
         activeCues = List.copyOf(Objects.requireNonNull(activeCues, "activeCues"));
     }
@@ -51,7 +58,7 @@ public record LayerState(
     }
 
     public LayerState withShake(double pitch, double rollOffset) {
-        return new LayerState(pitchAdd, roll, fovAdd, eyeHeight, shakeAmplitude, pitch, rollOffset, lookScale,
+        return new LayerState(pitchAdd, roll, fovAdd, eyeHeight, eyeTarget, shakeAmplitude, pitch, rollOffset, lookScale,
                 pitchUnwound, activeChannels, activeCues);
     }
 }

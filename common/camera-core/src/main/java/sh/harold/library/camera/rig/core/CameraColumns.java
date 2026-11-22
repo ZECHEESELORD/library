@@ -23,6 +23,7 @@ import java.util.function.ToDoubleFunction;
  *     <li>{@code camera.look_scale}: look-input scale</li>
  *     <li>{@code camera.shake}: rotational shake amplitude in degrees</li>
  *     <li>{@code camera.yaw}, {@code camera.pitch}: final view angles, pitch unwound and shake included</li>
+ *     <li>{@code camera.eye_target}: the absolute eye height a live absolute curve holds, {@code NaN} when none</li>
  * </ul>
  *
  * <p>A row with no state yet writes {@code NaN}.
@@ -30,7 +31,8 @@ import java.util.function.ToDoubleFunction;
 public final class CameraColumns {
 
     public static final List<String> NAMES = List.of("camera.pitch_add", "camera.roll", "camera.fov",
-            "camera.fov_add", "camera.eye_height", "camera.look_scale", "camera.shake", "camera.yaw", "camera.pitch");
+            "camera.fov_add", "camera.eye_height", "camera.look_scale", "camera.shake", "camera.yaw", "camera.pitch",
+            "camera.eye_target");
 
     private CameraColumns() {
     }
@@ -50,6 +52,7 @@ public final class CameraColumns {
         handles.add(column(registry, state, "camera.shake", s -> s.layers().shakeAmplitude()));
         handles.add(column(registry, state, "camera.yaw", s -> s.angles().yaw()));
         handles.add(column(registry, state, "camera.pitch", s -> s.angles().pitch()));
+        handles.add(column(registry, state, "camera.eye_target", s -> s.layers().eyeTarget()));
         return List.copyOf(handles);
     }
 

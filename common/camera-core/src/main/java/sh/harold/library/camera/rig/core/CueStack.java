@@ -132,11 +132,16 @@ final class CueStack {
             for (ChannelCurve channel : spec.curves()) {
                 CueCurve curve = channel.curveFor(reduced);
                 boolean substitute = reduced && channel.reduced().isPresent();
-                double end = curveEnd(curve);
+                double end = curveEnd(channel, curve);
                 if (tau > end) {
                     continue;
                 }
                 live = true;
+                if (channel.absolute()) {
+                    // A target, not an offset: nothing to fade on release, so it ends there (curveEnd).
+                    into.setEyeTarget(CueCurves.sample(curve, tau));
+                    continue;
+                }
                 double value = released()
                         ? CueCurves.sampleReleased(curve, tau, releaseTime - start, releaseTicks(curve),
                         releaseEasing(curve))
@@ -155,15 +160,18 @@ final class CueStack {
         private double end() {
             double end = 0.0;
             for (ChannelCurve channel : spec.curves()) {
-                end = Math.max(end, curveEnd(channel.curve()));
+                end = Math.max(end, curveEnd(channel, channel.curve()));
                 if (channel.reduced().isPresent()) {
-                    end = Math.max(end, curveEnd(channel.reduced().get()));
+                    end = Math.max(end, curveEnd(channel, channel.reduced().get()));
                 }
             }
             return end;
         }
 
-        private double curveEnd(CueCurve curve) {
+        private double curveEnd(ChannelCurve channel, CueCurve curve) {
+            if (channel.absolute() && released()) {
+                return Math.min(CueCurves.end(curve), Math.max(0.0, releaseTime - start));
+            }
             return released()
                     ? CueCurves.releasedEnd(curve, releaseTime - start, releaseTicks(curve))
                     : CueCurves.end(curve);

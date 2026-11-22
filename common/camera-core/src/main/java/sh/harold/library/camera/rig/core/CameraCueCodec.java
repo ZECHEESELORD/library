@@ -50,7 +50,8 @@ import java.util.Map;
  * {@code "held"}, {@code release}, {@code release_easing}), {@code constant} ({@code amount}, {@code ticks}) and
  * {@code spring} ({@code frequency_hz} and {@code damping}, or {@code overshoot_percent} and {@code settle_ticks}; plus
  * {@code displacement} and {@code velocity}). Easings are {@link Easing} names in lower case or a cubic Bezier
- * {@code [x1, y1, x2, y2]}.
+ * {@code [x1, y1, x2, y2]}. An {@code eye_height} curve with {@code "absolute": true} is the drawn eye height itself
+ * rather than an offset ({@link ChannelCurve#absoluteEyeHeight()}).
  */
 public final class CameraCueCodec {
 
@@ -106,6 +107,12 @@ public final class CameraCueCodec {
                 throw new DataDecodeException(object.get("unwound"), "only pitch curves can be unwound");
             }
             curve = curve.unwoundPitch();
+        }
+        if (object.getBoolean("absolute", false)) {
+            if (channel != CameraChannel.EYE_HEIGHT) {
+                throw new DataDecodeException(object.get("absolute"), "only eye_height curves can be absolute");
+            }
+            curve = curve.absoluteEyeHeight();
         }
         return curve;
     }

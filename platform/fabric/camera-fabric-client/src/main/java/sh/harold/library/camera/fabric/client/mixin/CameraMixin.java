@@ -3,6 +3,7 @@ package sh.harold.library.camera.fabric.client.mixin;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
@@ -24,7 +25,8 @@ import sh.harold.library.camera.rig.LayerState;
  * final, and the view matrix, cull frustum and projection are not built yet, so every channel lands in one place.
  * Additive pitch and roll rotate the camera's own quaternion locally; the entity's rotation and the camera's
  * {@code xRot}/{@code yRot} stay vanilla. Each channel is written only when its offset is non-zero, so an idle rig
- * leaves the camera bit for bit as vanilla built it.
+ * leaves the camera bit for bit as vanilla built it. The rig gets vanilla's eased eye height for the frame, so an
+ * absolute eye-height curve lands exactly on its value.
  */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
@@ -45,6 +47,8 @@ public abstract class CameraMixin {
     @Shadow private boolean detached;
     @Shadow private boolean isPanoramicMode;
     @Shadow private Entity entity;
+    @Shadow private float eyeHeight;
+    @Shadow private float eyeHeightOld;
 
     @Shadow
     protected abstract void setPosition(Vec3 position);
@@ -52,14 +56,28 @@ public abstract class CameraMixin {
     @Shadow
     public abstract float getCameraEntityPartialTicks(DeltaTracker deltaTracker);
 
+    /**
+     * While the rig holds an absolute eye height, vanilla's own eye-height easing is held at the body's eye instead of
+     * chasing it, so when the target ends the camera is already where the body is and nothing eases in after it. The
+     * drawn eye is the rig's target either way: the frame offset is measured from whatever this leaves.
+     */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void creativeLibrary$holdEyeHeight(CallbackInfo ci) {
+        if (entity instanceof LocalPlayer player && !detached && CameraFrameHook.holdsEyeHeight()) {
+            eyeHeight = player.getEyeHeight();
+            eyeHeightOld = eyeHeight;
+        }
+    }
+
     @Inject(method = "update", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Camera;fov:F",
             opcode = Opcodes.PUTFIELD, shift = At.Shift.AFTER))
     private void creativeLibrary$applyCameraRig(DeltaTracker deltaTracker, CallbackInfo ci) {
         boolean drivable = !detached && !isPanoramicMode && entity instanceof LocalPlayer && position != null;
         Vec3 eye = position;
+        float partial = getCameraEntityPartialTicks(deltaTracker);
         CameraState state = CameraFrameHook.frame(drivable,
                 eye == null ? 0.0 : eye.x, eye == null ? 0.0 : eye.y, eye == null ? 0.0 : eye.z,
-                yRot, xRot, fov, getCameraEntityPartialTicks(deltaTracker));
+                yRot, xRot, fov, Mth.lerp(partial, eyeHeightOld, eyeHeight), partial);
         if (state == null) {
             return;
         }

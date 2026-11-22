@@ -525,6 +525,14 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
             if (full) {
                 checks.near(move, "eye height 0.9 by T2 (drawn camera_eye_height)", 0.9,
                         t.d(t0 + 2, "camera_eye_height"), 0.02, t.ref(t0 + 2));
+                for (int k = 3; k <= 6; k++) {
+                    checks.near(move, "eye height stays 0.9 at T" + k + " (drawn camera_eye_height)", 0.9,
+                            t.d(t0 + k, "camera_eye_height"), 0.02, t.ref(t0 + k));
+                }
+                for (int k = 11; k <= 15 && t0 + k < t.size() - 1; k++) {
+                    checks.near(move, "eye cue offset 0 after T10, T" + k + " (camera.eye_height)", 0.0,
+                            t.d(t0 + k, "camera.eye_height"), 1.0e-4, t.ref(t0 + k));
+                }
                 checks.near(move, "180 deg of added pitch at T5", 180.0, t.d(t0 + 5, "camera.pitch_add"), 1.0,
                         t.ref(t0 + 5));
                 int peak = t0;

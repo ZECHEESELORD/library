@@ -38,7 +38,7 @@ final class FeelRecorder {
     /** Columns taken from the frame row: whatever the drawn camera shows. */
     static final Set<String> FRAME_COLUMNS = Set.of("roll", "fov", "camera_eye_height", "camera.pitch_add",
             "camera.roll", "camera.fov", "camera.fov_add", "camera.eye_height", "camera.look_scale", "camera.shake",
-            "camera.yaw", "camera.pitch");
+            "camera.yaw", "camera.pitch", "camera.eye_target");
 
     private static boolean columnsRegistered;
 

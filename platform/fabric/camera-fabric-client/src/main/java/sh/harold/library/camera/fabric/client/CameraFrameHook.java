@@ -18,7 +18,7 @@ public final class CameraFrameHook {
      * idle rig leaves the camera exactly as vanilla built it.
      */
     public static CameraState frame(boolean drivable, double x, double y, double z, float yRot, float xRot,
-                                    float fov, float partial) {
+                                    float fov, double eyeHeight, float partial) {
         FabricCameraService service = FabricClientCamera.current();
         if (service == null) {
             return null;
@@ -27,7 +27,20 @@ public final class CameraFrameHook {
             service.skipFrame();
             return null;
         }
-        return service.frame(new ViewInput(new Vec3(x, y, z), yRot, xRot, fov), partial);
+        return service.frame(new ViewInput(new Vec3(x, y, z), yRot, xRot, fov, eyeHeight), partial);
+    }
+
+    /**
+     * Whether the last driven frame held an absolute eye height, so the host's eye-height easing should be held at
+     * the body's eye. False when no service is open or the rig is not driving.
+     */
+    public static boolean holdsEyeHeight() {
+        FabricCameraService service = FabricClientCamera.current();
+        if (service == null) {
+            return false;
+        }
+        CameraState state = service.frameState();
+        return state != null && !Double.isNaN(state.layers().eyeTarget());
     }
 
     /** The look-input scale of the last driven frame: 1 when nothing scales look or the rig is not driving. */
