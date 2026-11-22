@@ -1,0 +1,27 @@
+{
+  "minFall": 3,
+  "windowBefore": 6,
+  "windowAfter": 2,
+  "damageReduction": 10,
+  "minSpeed": 0.2806,
+  "boost": 1.15,
+  "ticks": 10,
+  "decayTicks": 6,
+  "height": 0.9,
+  "eyeHeight": 0.765,
+  "jumpBufferFrom": 7,
+  "lookScale": 0.2,
+  "camera": {
+    "turnDegrees": 360,
+    "halfTurnTick": 5,
+    "fov": 6,
+    "fovPeakTick": 3,
+    "fovEndTick": 10,
+    "eyeLow": 0.9,
+    "eyeLowTick": 2,
+    "eyeRiseFromTick": 6,
+    "eyeRiseTick": 9,
+    "reducedDip": 25
+  },
+  "sound": { "start": "minecraft:item.armor.equip_leather", "startPitch": 0.8, "stepTicks": [3, 6] }
+}

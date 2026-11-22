@@ -1,0 +1,22 @@
+{
+  "reach": 0.45,
+  "minHeight": 0.9,
+  "maxHeight": 1.6,
+  "vaultMaxHeight": 1.1,
+  "headroom": 1.8,
+  "depth": 0.6,
+  "vault": { "ticks": 5, "keepHorizontal": 0.8, "swingEyeAboveLedge": 1.2, "swingTick": 2, "riseTick": 4, "forward": 0.5 },
+  "climb": {
+    "ticks": 9,
+    "settleTick": 2,
+    "riseTick": 6,
+    "forwardFromTick": 5,
+    "forwardToTick": 7,
+    "forward": 0.35,
+    "inputTick": 7,
+    "cancelWindowTicks": 2,
+    "exitSpeed": 0.2159,
+    "camera": { "bounce": 0.05, "hangPitch": -4, "hangRoll": 2, "pullPitch": -8, "pullPitchTick": 4, "pullPitchEndTick": 7 }
+  },
+  "hitPitch": 0.8
+}

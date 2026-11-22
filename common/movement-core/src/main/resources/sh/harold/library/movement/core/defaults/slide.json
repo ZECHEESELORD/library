@@ -1,0 +1,31 @@
+{
+  "variant": "S1",
+  "minSpeed": 0.25,
+  "sprintSpeed": 0.2806,
+  "boost": 1.25,
+  "decay": 0.96,
+  "downhillGain": 0.01,
+  "downhillMax": 0.5,
+  "steerDegrees": 1.5,
+  "steerFromTick": 4,
+  "endSpeed": 0.16,
+  "maxFlatTicks": 20,
+  "releaseAfterTick": 6,
+  "cooldownTicks": 8,
+  "jumpFromTick": 4,
+  "jumpBonus": 0.1,
+  "height": 0.6,
+  "eyeHeight": 0.51,
+  "camera": {
+    "eyeLow": 0.5,
+    "eyeLowTick": 3,
+    "fov": 8,
+    "fovTick": 4,
+    "fovReferenceSpeed": 0.35,
+    "strafeRoll": 2.5,
+    "shake": 0.15,
+    "shakeAboveSpeed": 0.3,
+    "eyeReturnTicks": 3
+  },
+  "sound": { "pitch": 0.6, "everyTicks": 3 }
+}

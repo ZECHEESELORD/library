@@ -1,0 +1,21 @@
+{
+  "preset": "A",
+  "boost": { "freeTicks": 2, "sustainToTick": 10, "gravity": 0.028 },
+  "charge": { "maxTicks": 8, "moveScale": 0.6, "launchSpeeds": [0.42, 0.42, 0.45, 0.47, 0.49, 0.51, 0.53, 0.55, 0.57] },
+  "cut": { "factor": 0.45 },
+  "camera": {
+    "boostFovMinHoldTicks": 6,
+    "boostFov": 2,
+    "boostFovInTicks": 4,
+    "boostFovOutTicks": 4,
+    "landingMinFall": 1.5,
+    "landingDipPerBlock": 0.04,
+    "landingDipMax": 0.25,
+    "landingDipTicks": 2,
+    "landingRecoverTicks": 4,
+    "hardLandingFall": 3,
+    "hardLandingShake": 0.5,
+    "hardLandingShakeTicks": 3
+  },
+  "sound": { "boostSound": "minecraft:entity.breeze.jump", "boostPitch": 1.6, "boostVolume": 0.3, "boostTick": 6 }
+}

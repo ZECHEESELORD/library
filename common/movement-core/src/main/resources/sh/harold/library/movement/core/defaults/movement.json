@@ -1,0 +1,10 @@
+{
+  "inputBufferTicks": 4,
+  "coyoteTicks": 3,
+  "chordTicks": 2,
+  "server": {
+    "positionTolerance": 1.5,
+    "pendingClaimTimeoutTicks": 10,
+    "latencyGraceTicks": 6
+  }
+}

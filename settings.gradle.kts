@@ -30,6 +30,8 @@ val projectPaths = listOf(
     ":common:camera-core",
     ":common:hot-reload-api",
     ":common:hot-reload-core",
+    ":common:movement-api",
+    ":common:movement-core",
     ":common:curve-api",
     ":common:curve-core",
     ":common:telegraph-api",

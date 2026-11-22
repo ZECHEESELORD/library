@@ -1,0 +1,20 @@
+{
+  "minAirTicks": 3,
+  "wallMinHeight": 1.5,
+  "reach": 0.1,
+  "pressBufferTicks": 3,
+  "afterContactTicks": 3,
+  "kickUp": 0.48,
+  "kickAway": 0.32,
+  "kickInput": 0.12,
+  "slide": {
+    "maxFall": 0.12,
+    "maxTicks": 24,
+    "pushThreshold": 0.5,
+    "effectEveryTicks": 4,
+    "sound": "minecraft:block.stone.step",
+    "pitch": 0.5
+  },
+  "camera": { "roll": 7, "inTick": 2, "holdTick": 4, "backTick": 10, "fov": 5 },
+  "hitPitch": 1.2
+}
