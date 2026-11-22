@@ -20,9 +20,9 @@ Each feature uses up to three layers. Artifact names match those layers:
 | --- | --- | --- |
 | `<feature>-api` | API | Interfaces, specs, and value types with no host code. Compile against this module. |
 | `<feature>-core` | Core | Shared implementation with no Paper, Fabric, Minestom, or Velocity dependencies. |
-| `<feature>-<platform>` | Adapter | Wiring that binds core to one host: `-paper`, `-minestom`, `-velocity`, or `-fabric`. |
+| `<feature>-<platform>` | Adapter | Wiring that binds core to one host: `-paper`, `-minestom`, `-velocity`, `-fabric`, or `-fabric-client`. |
 
-The `tween`, `cooldown`, `state-machine`, and `metrics` features need only API and core modules because all of their logic is shared. Features that access players, worlds, or packets need an adapter for each supported platform.
+The `tween`, `prediction`, `cooldown`, `state-machine`, and `metrics` features need only API and core modules because all of their logic is shared. `tween` and `spatial` are foundations: other core modules may depend on them. Features that access players, worlds, or packets need an adapter for each supported platform.
 
 > [!TIP]
 > Compile against `-api`. At runtime, ship `-core` and one `-<platform>` adapter. Most consumers need no other modules.
@@ -37,7 +37,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
-| `spatial` | Shared vectors, frames, anchors, bounds, and segments | common |
+| `spatial` | Shared vectors, quaternions, frames, anchors, bounds, and segments | common |
 | `block-grid` | Positions and bounds aligned to blocks | Paper, Minestom |
 | `block-boundary` | Region boundaries and rules that allow or deny crossings | Paper, Minestom |
 
@@ -45,7 +45,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 
 | Module | What it does | Adapters |
 | --- | --- | --- |
-| `tween` | Keyed interpolation with easing, envelopes, hold behavior, and repeat modes | common |
+| `tween` | Keyed interpolation with easing, envelopes, hold behavior, and repeat modes; keyframe tracks (Hermite, eased, stepped and cut keys, unwound angles, quaternions, markers, layers), springs with impulse kicks, signal-driven channels, seeded smooth noise, and overshoot, anticipation and squash generators | common |
 | `curve` | Catmull-Rom spline paths with sampling and splitting | common |
 | `camera-motion` | Camera moves controlled by the server, with blend modes and playback for each viewer | Paper, Minestom |
 | `trajectory-preview` | Projectile path previews with collision queries and recompute rules | Paper, Minestom |
@@ -61,6 +61,8 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | `tick-lifecycle` | Handles driven by ticks and the instance conflict policy shared by timed systems | common |
 | `state-machine` | Typed reducer state machines with timers | common |
 | `cooldown` | Reserve and query cooldown windows by scope and key | common |
+| `prediction` | Client prediction: a 64-tick input and state ring with rewind and replay, spring error smoothing, and seeded random streams keyed by seed, action and purpose | common |
+| `net` | Payload registry with `creative_library:<feature>/<name>` ids, a configuration-phase version handshake that names mismatched features, and `net/tick` server-tick sync | Fabric, Fabric client |
 
 ### Data
 
@@ -97,6 +99,7 @@ Modules marked **common** work on any host without an adapter. Other rows list t
 | Module | What it does | Adapters |
 | --- | --- | --- |
 | `metrics` | A `Telemetry` facade with a memory registry, JVM and process collectors, and Prometheus export through `-prometheus` | common |
+| `telemetry` | Per-tick and per-frame feel recordings: a column registry, CSV and memory sinks, and a headless frame sampler; Fabric adapters record position, velocity, view angles, roll, FOV, eye height and input | Fabric, Fabric client |
 
 ---
 

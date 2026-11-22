@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_net_fabric_client",
+  "version": "${version}",
+  "name": "Creative Library Net Fabric Client",
+  "description": "Fabric client networking for the shared creative library: handshake reply and server-tick clock.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "sh.harold.library.net.fabric.client.NetFabricClientInit"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "fabric-api": ">=0.166.2",
+    "creative_library_net_fabric": "*"
+  }
+}

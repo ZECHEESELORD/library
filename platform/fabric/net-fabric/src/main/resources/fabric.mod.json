@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_net_fabric",
+  "version": "${version}",
+  "name": "Creative Library Net Fabric",
+  "description": "Fabric networking for the shared creative library: payload registry, version handshake and tick sync.",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "sh.harold.library.net.fabric.NetFabricInit"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "fabric-api": ">=0.166.2"
+  }
+}

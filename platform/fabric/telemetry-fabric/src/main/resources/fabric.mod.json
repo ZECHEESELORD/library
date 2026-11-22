@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "creative_library_telemetry_fabric",
+  "version": "${version}",
+  "name": "Creative Library Telemetry Fabric",
+  "description": "Fabric server-side per-tick telemetry for the shared creative library.",
+  "environment": "*",
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "fabric-api": ">=0.166.2"
+  }
+}
