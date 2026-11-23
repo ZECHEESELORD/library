@@ -1,6 +1,6 @@
 # Migration Notes
 
-## v13.1 (unreleased)
+## v13.1
 
 - `camera` gains a first-person arm-pose channel: twelve `CameraChannel`s (`ARM_MAIN_X` to `ARM_MAIN_ROT_Z`, `ARM_OFF_X` to `ARM_OFF_ROT_Z`) that sum per hand into an `ArmPose`. `LayerSample` and `LayerState` gain `mainArm` and `offArm` components, `ReducedRules` gains `armScale` (1 in both stock profiles) and `SafetyLimits` gains `maxPitch` (85), `maxArmOffset` and `maxArmRotation`; the v13 constructors still compile and give identity arms. A pitch curve that is not unwound now clamps total pitch at 85 instead of 90. Telemetry adds twelve `camera.arm_*` columns.
 - `camera-fabric-client` adds a mixin into `FirstPersonHandsAndItemsRenderer.submitArmWithItem` (after its `PoseStack.pushPose`) that moves each hand and its item by the live pose about the hand's rest position, and draws the empty off arm while its pose is live. With no arm cue live it writes nothing, so the hands stay exactly vanilla.
