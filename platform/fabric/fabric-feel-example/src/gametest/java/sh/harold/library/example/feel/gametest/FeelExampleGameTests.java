@@ -90,6 +90,7 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 scenario("mantle", "ledge_2 standing tap", () -> ledgeTwoStanding(context, world));
                 scenario("mantle", "climb", () -> climb(context, world));
                 scenario("mantle", "climb hop", () -> climbHop(context, world));
+                scenario("mantle", "climb with sprint held", () -> climbSprint(context, world));
                 scenario("mantle", "no headroom", () -> noHeadroom(context, world));
                 scenario("roll", "roll", () -> roll(context, world, "roll_full", IntensityProfile.FULL));
                 scenario("roll", "sneak held", () -> rollHeldSneak(context, world));
@@ -430,6 +431,8 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 && !"movement:mantle".equals(t.s(t9, "move.id"));
         checks.check("mantle", "climb: full control at T9 (move completes)", "ended mantle:completed at T9",
                 "move.id='" + t.s(t9, "move.id") + "' ended='" + t.s(t9, "test.ended") + "'", ended, t.ref(t9));
+        checks.near("mantle", "climb: MA10 walk exit at T7 is exactly 0.2159, no input push on top (displacement "
+                + "over T7)", 0.2159, step(t, t7), 0.005, t.ref(t7));
         checks.check("mantle", "climb: screenshot at T3", "taken", shot[0] ? "taken" : "missed", shot[0],
                 t.ref(t0 + 3));
         climbCamera(t, t0);
@@ -957,6 +960,9 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 "ended='" + t.s(t5, "test.ended") + "'", t.s(t5, "test.ended").contains("mantle:completed"),
                 t.ref(t5));
         if (!hop) {
+            checks.near("mantle", "vault: exit tick T5 moves at exactly max(entry " + FeelChecks.fmt(entry)
+                    + ", 0.2806), no input push on top (displacement over T5)", Math.max(entry, 0.2806), step(t, t5),
+                    0.005, t.ref(t5));
             for (int k = 5; k <= 7; k++) {
                 double s = step(t, t0 + k);
                 checks.check("mantle", "vault: speed kept at T" + k + " (MA7: exit = max(entry "
@@ -991,9 +997,9 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
             double rise = t.d(t5, "pos_y") - t.d(t5 - 1, "pos_y");
             checks.near("mantle", "vault hop: MA10 the jump fires on T5 (pos_y rise over T5)", 0.42, rise, 0.01,
                     t.ref(t5));
-            double s = step(t, t5);
-            checks.check("mantle", "vault hop: MA10 speed kept on T5", "> 0.27", FeelChecks.fmt(s), s > 0.27,
-                    t.ref(t5));
+            checks.near("mantle", "vault hop: MA10 the hop tick T5 moves at exactly max(entry "
+                    + FeelChecks.fmt(entry) + ", 0.2806) (displacement over T5)", Math.max(entry, 0.2806),
+                    step(t, t5), 0.005, t.ref(t5));
             double apex = maxOf(t, t5, t.size() - 1, "pos_y") - floorY() - 1.0;
             checks.check("mantle", "vault hop: MA10 no extra height (apex above the step)", "<= 1.26",
                     FeelChecks.fmt(apex), apex <= 1.26, t.name() + ".csv after " + t.ref(t5));
@@ -1077,10 +1083,36 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
         checks.near("mantle", "climb hop: MA10 the jump fires at T7 (pos_y rise over T7)", 0.42,
                 t.d(t7, "pos_y") - t.d(t7 - 1, "pos_y"), 0.01, t.ref(t7));
         checks.near("mantle", "climb hop: MA10 walk exit 0.2159 + 0.1 forward (displacement over T7)", 0.3159,
-                step(t, t7), 0.02, t.ref(t7));
+                step(t, t7), 0.005, t.ref(t7));
         double fov = maxOf(t, t7, t7 + 8, "camera.fov_add");
         checks.near("mantle", "climb hop: MA10/MA18 FOV +2 pulse after T7 (max camera.fov_add)", 2.0, fov, 0.05,
                 t.ref(t7) + " to " + t.ref(t7 + 8));
+    }
+
+    /** MA10: a climb with sprint held exits at sprint speed on T7, with no input push on top. */
+    private void climbSprint(ClientGameTestContext context, TestSingleplayerContext world) {
+        tp(context, world, course.station("ledge_3"));
+        boolean[] switched = {false};
+        FeelRecorder.Table t = record(context, "mantle_climb_sprint", "F*15 FJ*14 F*20", 50, (i, live) -> {
+            if (!switched[0] && live.started().contains("mantle")) {
+                switched[0] = true;
+                script(context, "FS*30");
+            }
+            return false;
+        });
+        int t0 = t.started("mantle", 0);
+        String kind = t0 < 0 ? "none" : t.s(t0, "move.phase");
+        checks.check("mantle", "climb sprint: ledge_3 climb", "climb", kind, kind.startsWith("climb"),
+                t0 < 0 ? t.name() + ".csv" : t.ref(t0));
+        if (t0 < 0) {
+            return;
+        }
+        int t7 = t0 + 7;
+        checks.check("mantle", "climb sprint: precondition, sprint held and sprinting at T7", "FS, test.sprinting true",
+                t.s(t7, "move.input") + ", sprinting " + t.s(t7, "test.sprinting"),
+                t.s(t7, "move.input").contains("S") && t.b(t7, "test.sprinting"), t.ref(t7));
+        checks.near("mantle", "climb sprint: MA10 sprint exit at T7 is exactly 0.2806 (displacement over T7)", 0.2806,
+                step(t, t7), 0.005, t.ref(t7));
     }
 
     /** MA12: the refused tap shows one slap on both arms and moves exactly like a vanilla tap jump. */
@@ -1104,13 +1136,17 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
         int worstRow = press;
         double z = tap.d(press - 1, "pos_z");
         double worstZ = 0.0;
-        // Forward stays held into the wall, so the fall from the jump starts a wall slide; the refusal's own claim is
-        // only that it adds no motion, so the comparison stops where the wall slide takes over.
+        // Forward stays held into the wall all the way down; the refusal blocks the wall slide for the rest of the
+        // airtime, so the body follows the vanilla tap jump to the floor.
+        int landed = firstGrounded(tap, press + 1);
         int slide = tap.started("wall_slide", press);
-        int stop = slide < 0 ? Math.min(tap.size(), press + 16) : slide;
-        checks.note("mantle", "refusal: the fall after the refused jump, forward still held into the wall",
-                "a wall slide may follow (W rules)", slide < 0 ? "no wall slide" : "wall slide from " + tap.ref(slide),
-                slide < 0 ? tap.name() + ".csv" : tap.ref(slide));
+        boolean slidAirborne = slide >= 0 && (landed < 0 || slide <= landed);
+        checks.check("mantle", "refusal: no wall slide for the rest of the refused airtime (forward held into the "
+                        + "wall)", "no wall_slide start before landing", (slide < 0 ? "no wall slide"
+                        : "wall slide from " + tap.ref(slide)) + (landed < 0 ? ", no landing" : ", landed " + tap.ref(landed)),
+                !slidAirborne && landed >= 0, slide < 0 ? tap.ref(press) + " to " + (landed < 0 ? "end" : tap.ref(landed))
+                        : tap.ref(slide));
+        int stop = Math.min(tap.size(), landed < 0 ? press + 16 : landed + 2);
         for (int row = press; row < stop; row++) {
             double dy = Math.abs(tap.d(row, "pos_y") - floorY() - y);
             if (dy > worst) {
@@ -1125,8 +1161,8 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 vy = 0.0;
             }
         }
-        checks.near("mantle", "refusal: MA12 no motion change, pos_y follows the vanilla tap jump until any wall "
-                + "slide (max |dy|, " + (stop - press) + " rows)", 0.0, worst, 1.0e-3, tap.ref(worstRow));
+        checks.near("mantle", "refusal: MA12 no motion change, pos_y follows the vanilla tap jump through the landing "
+                + "(max |dy|, " + (stop - press) + " rows)", 0.0, worst, 1.0e-3, tap.ref(worstRow));
         checks.near("mantle", "refusal: MA12 no motion change, pos_z stays at the wall (max |dz|)", 0.0, worstZ,
                 1.0e-3, tap.ref(press) + " to " + tap.ref(Math.min(tap.size() - 1, press + 15)));
     }
@@ -1246,9 +1282,35 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 sprintingRows, t.ref(land + 1) + " to " + t.ref(land + 6));
         checks.near("jump", "stumble: J5 no landing shake (max camera.shake)", 0.0,
                 maxAbs(t, 0, t.size() - 1, "camera.shake"), 1.0e-6, t.name() + ".csv");
-        checks.note("jump", "stumble: speed and sprint after the stumble", "interpretation: sprint cancel only",
-                "displacement over L+6 " + FeelChecks.fmt(step(t, land + 6)) + ", sprinting at L+8 "
-                        + t.s(Math.min(t.size() - 1, land + 8), "test.sprinting"), t.ref(land + 6));
+        // Vanilla walking speed on stone from the reference integrator: 0.1 * 0.98 * 0.216 / 0.6^3 / (1 - 0.6 * 0.91).
+        double walk = 0.1 * 0.98 * (0.21600002 / (0.6 * 0.6 * 0.6)) / (1.0 - 0.6 * 0.91);
+        int first = -1;
+        double fastest = 0.0;
+        int fastestRow = -1;
+        for (int row = land; row <= land + 7 && row < t.size(); row++) {
+            if ("stumble".equals(t.s(row, "move.phase"))) {
+                if (first < 0) {
+                    first = row;
+                }
+                // A row's phase and its displacement come from the same tick (engine step, then travel).
+                double s = step(t, row);
+                if (s > fastest) {
+                    fastest = s;
+                    fastestRow = row;
+                }
+            }
+        }
+        if (first >= 0) {
+            checks.near("jump", "stumble: J5 the first stumble tick moves at exactly walking speed "
+                    + FeelChecks.fmt(walk) + " (displacement over the first stumble row)", walk,
+                    step(t, first), 0.005, t.ref(first));
+            checks.check("jump", "stumble: J5 never faster than walking speed on the six stumble ticks (max "
+                    + "displacement)", "<= " + FeelChecks.fmt(walk + 0.005), FeelChecks.fmt(fastest),
+                    fastest <= walk + 0.005, fastestRow < 0 ? t.name() + ".csv" : t.ref(fastestRow));
+        }
+        checks.note("jump", "stumble: speed and sprint after the stumble", "sprint key still held",
+                "displacement over L+9 " + FeelChecks.fmt(step(t, land + 9)) + ", sprinting at L+8 "
+                        + t.s(Math.min(t.size() - 1, land + 8), "test.sprinting"), t.ref(land + 9));
     }
 
     /** RO1: a sideways or backward roll; the camera never turns yaw. */
@@ -1334,6 +1396,7 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 return landedAt[0] >= 0 && i - landedAt[0] >= 10;
             });
             float lowest = health.stop(world, server, out.resolve(name + ".server.csv"));
+            double serverFall = health.maxFall;
             if (push) {
                 int slide = t.started("wall_slide", 0);
                 int land = firstGrounded(t, 0);
@@ -1341,11 +1404,23 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                         slide < 0 ? "no slide" : "slide", slide >= 0, slide < 0 ? t.name() + ".csv" : t.ref(slide));
                 checks.near("wall_slide", "W1: a 9-block drop down the wall takes no damage (server health, lowest)",
                         before, lowest, 1.0e-3, name + ".server.csv health");
-                checks.note("wall_slide", "W1: client fall distance on the tick before landing",
-                        "<= equivalent height of the fall speed", land < 1 ? "no landing"
-                                : FeelChecks.fmt(t.d(land - 1, "body.fall_distance")) + " at speed "
-                                + FeelChecks.fmt(t.d(land - 1, "pos_y") - t.d(land, "pos_y")),
-                        land < 1 ? t.name() + ".csv" : t.ref(land - 1));
+                if (land < 2) {
+                    checks.check("wall_slide", "W1: landed", "a landing", "none", false, t.name() + ".csv");
+                    continue;
+                }
+                double clientFall = maxOf(t, 0, land - 1, "body.fall_distance");
+                checks.near("wall_slide", "W1: client and server agree on the capped fall distance at landing (max "
+                        + "client body.fall_distance before landing " + FeelChecks.fmt(clientFall)
+                        + " vs max server fall_distance)", serverFall, clientFall, 0.05, t.ref(land - 1) + " / "
+                        + name + ".server.csv fall_distance");
+                // The landing dip reads the engine's landing fall: the fall distance at the start of the last air
+                // tick (the capped value recorded on the row before landing) plus that tick's drop.
+                double landingFall = t.d(land - 1, "body.fall_distance")
+                        + Math.max(0.0, t.d(land - 1, "pos_y") - t.d(land, "pos_y"));
+                double expected = landingFall <= 1.3 ? 0.0 : Math.min(0.25, 0.03 + 0.045 * (landingFall - 1.3));
+                checks.near("wall_slide", "W1/J4: landing dip reads the capped landing fall "
+                        + FeelChecks.fmt(landingFall) + " (min camera.eye_height after landing)", -expected,
+                        minOf(t, land, t.size() - 1, "camera.eye_height"), 0.003, t.ref(land) + " onward");
             } else {
                 checks.check("wall_slide", "W1 control: the same drop without pushing into the wall hurts",
                         "health drops", FeelChecks.fmt(before) + " -> lowest " + FeelChecks.fmt(lowest),
@@ -1359,6 +1434,8 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
 
         private boolean registered;
         private MemoryTelemetrySink sink;
+        /** The largest server fall distance the last stopped recording saw. */
+        double maxFall = Double.NaN;
 
         void register(TestSingleplayerContext world) {
             world.getServer().runOnServer(server -> {
@@ -1387,9 +1464,14 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
             world.getServer().runOnServer(server -> handle.close());
             float lowest = Float.NaN;
             int column = sink.columns().indexOf("health");
+            int fallColumn = sink.columns().indexOf("fall_distance");
+            maxFall = Double.NaN;
             for (MemoryTelemetrySink.Row row : sink.rows()) {
                 if (column >= 0 && row.values()[column] instanceof Number number) {
                     lowest = Float.isNaN(lowest) ? number.floatValue() : Math.min(lowest, number.floatValue());
+                }
+                if (fallColumn >= 0 && row.values()[fallColumn] instanceof Number number) {
+                    maxFall = Double.isNaN(maxFall) ? number.doubleValue() : Math.max(maxFall, number.doubleValue());
                 }
             }
             try {
