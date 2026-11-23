@@ -38,7 +38,10 @@ final class FeelRecorder {
     /** Columns taken from the frame row: whatever the drawn camera shows. */
     static final Set<String> FRAME_COLUMNS = Set.of("roll", "fov", "camera_eye_height", "camera.pitch_add",
             "camera.roll", "camera.fov", "camera.fov_add", "camera.eye_height", "camera.look_scale", "camera.shake",
-            "camera.yaw", "camera.pitch", "camera.eye_target");
+            "camera.yaw", "camera.pitch", "camera.eye_target", "camera.arm_main_x", "camera.arm_main_y",
+            "camera.arm_main_z", "camera.arm_main_rot_x", "camera.arm_main_rot_y", "camera.arm_main_rot_z",
+            "camera.arm_off_x", "camera.arm_off_y", "camera.arm_off_z", "camera.arm_off_rot_x", "camera.arm_off_rot_y",
+            "camera.arm_off_rot_z");
 
     private static boolean columnsRegistered;
 
@@ -74,6 +77,7 @@ final class FeelRecorder {
                                     + ((MoveEvent.Ended) event).reason().name().toLowerCase())
                             .collect(Collectors.joining(" ")))
                     .orElse(""));
+            registry.registerBoolean("test.sprinting", frame -> frame.player().isSprinting());
         });
     }
 

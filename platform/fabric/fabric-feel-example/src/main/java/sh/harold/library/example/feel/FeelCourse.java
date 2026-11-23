@@ -14,7 +14,7 @@ import java.util.NoSuchElementException;
 /**
  * Builds the movement test course on a stone floor at a known origin. Every station has a named start: stand there,
  * face {@link Station#yaw()} and run the scripted input. Coordinates are relative to the origin, which is the floor's
- * top surface (the player's feet) at the course's south-west corner; the course fills x 0..75, z 0..20, up to 16
+ * top surface (the player's feet) at the course's south-west corner; the course fills x 0..75, z 0..37, up to 16
  * blocks high, and is cleared to air first.
  *
  * <ul>
@@ -26,6 +26,10 @@ import java.util.NoSuchElementException;
  *   <li>{@code shaft_2}, {@code shaft_3}, {@code shaft_4}: two 12-high walls that far apart (along x), the start
  *       against the west wall facing east (+x).</li>
  *   <li>{@code single_wall}: one 12-high wall, the start against its east face, facing it (-x).</li>
+ *   <li>{@code step_1}: 10 blocks of run-up (+z), then a 1-high step 3 deep: the walking tap and the sprint
+ *       vault.</li>
+ *   <li>{@code drop_1}, {@code drop_2}: pillar tops that height above the floor; walk off forward (+z) for the
+ *       landing-dip threshold.</li>
  * </ul>
  */
 public final class FeelCourse {
@@ -47,7 +51,7 @@ public final class FeelCourse {
     }
 
     public static final List<String> STATIONS = List.of("ledge_2", "ledge_3", "ledge_4", "ledge_2_no_headroom",
-            "drop_4", "drop_8", "drop_13", "duct", "shaft_2", "shaft_3", "shaft_4", "single_wall");
+            "drop_4", "drop_8", "drop_13", "duct", "shaft_2", "shaft_3", "shaft_4", "single_wall", "step_1", "drop_1", "drop_2");
 
     private static final BlockState STONE = Blocks.STONE.defaultBlockState();
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
@@ -58,8 +62,8 @@ public final class FeelCourse {
 
     public static Course build(ServerLevel level, BlockPos origin) {
         Builder b = new Builder(level, origin);
-        b.fill(-2, 0, -2, 77, 16, 22, AIR);
-        b.fill(-2, -1, -2, 77, -1, 22, STONE);
+        b.fill(-2, 0, -2, 77, 16, 39, AIR);
+        b.fill(-2, -1, -2, 77, -1, 39, STONE);
         Map<String, Station> stations = new LinkedHashMap<>();
 
         int[] ledges = {2, 3, 4};
@@ -96,6 +100,15 @@ public final class FeelCourse {
         int wall = x + 2;
         b.fill(wall - 1, 0, 3, wall - 1, 11, 7, STONE);
         stations.put("single_wall", b.station("single_wall", wall, 0, 5, 90.0f));
+
+        b.fill(1, 0, 34, 3, 0, 36, STONE);
+        stations.put("step_1", b.station("step_1", 2, 0, 24, 0.0f));
+        int[] low = {1, 2};
+        for (int i = 0; i < low.length; i++) {
+            int lx = 8 + i * 5;
+            b.fill(lx - 1, 0, 24, lx + 1, low[i] - 1, 26, STONE);
+            stations.put("drop_" + low[i], b.station("drop_" + low[i], lx, low[i], 25, 0.0f));
+        }
         return new Course(origin.immutable(), Map.copyOf(stations));
     }
 

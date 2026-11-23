@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 
 /**
  * Drives the five stock moves on the feel course with simulated input ({@link ClientMovement#simulateInput}), records
@@ -50,8 +51,12 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
     private static final int SHOT_WIDTH = 854;
     private static final int SHOT_HEIGHT = 480;
     private static final double STAND_EYE = 1.62;
-    private static final List<String> LAYER_COLUMNS = List.of("camera.pitch_add", "camera.roll", "camera.fov_add",
-            "camera.eye_height", "camera.shake");
+    private static final List<String> ARM_COLUMNS = List.of("camera.arm_main_x", "camera.arm_main_y",
+            "camera.arm_main_z", "camera.arm_main_rot_x", "camera.arm_main_rot_y", "camera.arm_main_rot_z",
+            "camera.arm_off_x", "camera.arm_off_y", "camera.arm_off_z", "camera.arm_off_rot_x", "camera.arm_off_rot_y",
+            "camera.arm_off_rot_z");
+    private static final List<String> LAYER_COLUMNS = java.util.stream.Stream.concat(Stream.of("camera.pitch_add",
+            "camera.roll", "camera.fov_add", "camera.eye_height", "camera.shake"), ARM_COLUMNS.stream()).toList();
 
     private Path out;
     private Path shots;
@@ -76,17 +81,26 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 scenario("idle", "idle at start", () -> idle(context, world, "idle_start", true));
                 scenario("jump", "boost held", () -> boostHeld(context, world));
                 scenario("jump", "boost tap", () -> boostTap(context, world));
-                scenario("mantle", "vault", () -> vault(context, world));
+                scenario("jump", "fresh press boost", () -> freshPress(context, world));
+                scenario("jump", "landing dip threshold", () -> landingDip(context, world));
+                scenario("jump", "stumble", () -> stumble(context, world));
+                scenario("mantle", "walking tap at a step", () -> walkingTap(context, world));
+                scenario("mantle", "vault", () -> vault(context, world, false));
+                scenario("mantle", "vault hop", () -> vault(context, world, true));
                 scenario("mantle", "ledge_2 standing tap", () -> ledgeTwoStanding(context, world));
                 scenario("mantle", "climb", () -> climb(context, world));
+                scenario("mantle", "climb hop", () -> climbHop(context, world));
                 scenario("mantle", "no headroom", () -> noHeadroom(context, world));
                 scenario("roll", "roll", () -> roll(context, world, "roll_full", IntensityProfile.FULL));
                 scenario("roll", "sneak held", () -> rollHeldSneak(context, world));
                 scenario("roll", "reduced", () -> roll(context, world, "roll_reduced", IntensityProfile.REDUCED));
+                scenario("roll", "sideways", () -> rollAxis(context, world, "roll_side", "L", true));
+                scenario("roll", "backward", () -> rollAxis(context, world, "roll_back", "B", false));
                 scenario("slide", "slide", () -> slide(context, world));
                 scenario("wall_jump", "single wall", () -> singleWall(context, world));
                 scenario("wall_jump", "single wall from a drop", () -> singleWallDrop(context, world));
                 scenario("wall_jump", "shaft_3 chain", () -> shaftChain(context, world));
+                scenario("wall_slide", "fall damage", () -> wallSlideFall(context, world));
                 scenario("idle", "idle at end", () -> idle(context, world, "idle_end", false));
             } finally {
                 context.runOnClient(client -> {
@@ -175,14 +189,15 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                     .filter(MoveEvent.Started.class::isInstance)
                     .map(event -> ((MoveEvent.Started) event).move().value())
                     .toList();
-            return new Live(player.getY(), player.getDeltaMovement().y, player.onGround(),
+            return new Live(player.getX(), player.getY(), player.getZ(), player.getDeltaMovement().y,
+                    player.onGround(),
                     status.move().map(Key::value).orElse(""), status.moveTick(), started,
                     script == null ? 0 : script.remaining());
         });
     }
 
-    private record Live(double y, double vy, boolean onGround, String move, long moveTick, List<String> started,
-                        int remaining) {
+    private record Live(double x, double y, double z, double vy, boolean onGround, String move, long moveTick,
+                        List<String> started, int remaining) {
     }
 
     @FunctionalInterface
@@ -314,6 +329,7 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
         }
         checks.near("jump", "boost held: FOV kick peak (02 camera: +2)", 2.0, fov, 0.05,
                 peak < 0 ? t.name() + ".csv (no FOV change)" : t.ref(peak));
+        pressLength(t, "J held 12 ticks", 12);
     }
 
     private void boostTap(ClientGameTestContext context, TestSingleplayerContext world) {
@@ -333,7 +349,8 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 }
             }
         }
-        checks.check("jump", "boost tap: no camera change", "every camera layer 0",
+        pressLength(t, "J tapped 1 tick", 1);
+        checks.check("jump", "boost tap: no camera change (arm channels included)", "every camera layer 0",
                 worst == 0.0 ? "all 0" : worstColumn + " = " + FeelChecks.fmt(worst), worst == 0.0,
                 worst == 0.0 ? t.name() + ".csv all rows" : t.ref(worstRow));
     }
@@ -373,52 +390,6 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
 
     // ---- mantle ----
 
-    /**
-     * A vault needs the ledge top 0.9 to 1.1 above the feet when the ledge first comes within reach. Standing at the
-     * wall, a jump meets the 1.6 limit first (a climb), so the vault is approached with a sprint jump from a range of
-     * start gaps, keeping the first that vaults; every attempt's CSV is kept.
-     */
-    private void vault(ClientGameTestContext context, TestSingleplayerContext world) {
-        FeelCourse.Station station = course.station("ledge_2");
-        double wallZ = origin.getZ() + 3.0;
-        FeelRecorder.Table found = null;
-        int t0 = -1;
-        List<String> tried = new ArrayList<>();
-        for (int step = 0; step <= 8 && found == null; step++) {
-            double gap = 0.8 + step * 0.1;
-            tp(context, world, station.start().getX() + 0.5, station.start().getY(), wallZ - 0.3 - gap, 0.0f);
-            String name = String.format(Locale.ROOT, "mantle_vault_gap%.1f", gap);
-            FeelRecorder.Table t = record(context, name, "FSJ FS*25 -*10", 36, (i, live) -> false);
-            int start = t.started("mantle", 0);
-            String kind = start < 0 ? "none" : t.s(start, "move.phase");
-            tried.add(String.format(Locale.ROOT, "%.1f=%s", gap, kind));
-            if (start >= 0 && kind.startsWith("vault")) {
-                found = t;
-                t0 = start;
-            }
-        }
-        checks.check("mantle", "vault reachable at ledge_2 (sprint jump, start gap 0.8..1.6)", "a vault",
-                (found == null ? "no vault: " : "vault: ") + String.join(" ", tried), found != null,
-                found == null ? "mantle_vault_gap*.csv" : found.ref(t0));
-        if (found == null) {
-            return;
-        }
-        FeelRecorder.Table t = found;
-        int mantleRows = 0;
-        for (int row = t0; row < t.size() && "movement:mantle".equals(t.s(row, "move.id")); row++) {
-            mantleRows++;
-        }
-        checks.equal("mantle", "vault: move runs T0..T4 (rows with move.id mantle)", 5, mantleRows, t.ref(t0));
-        int t5 = t0 + 5;
-        boolean ended = t.s(t5, "test.ended").contains("mantle:completed")
-                && !"movement:mantle".equals(t.s(t5, "move.id"));
-        checks.check("mantle", "vault: full control at T5 (move completes)", "ended mantle:completed at T5",
-                "move.id='" + t.s(t5, "move.id") + "' ended='" + t.s(t5, "test.ended") + "'", ended, t.ref(t5));
-        double speed = Math.hypot(t.d(t5, "vel_x"), t.d(t5, "vel_z"));
-        checks.check("mantle", "vault: still moving at T5", "horizontal speed > 0", FeelChecks.fmt(speed),
-                speed > 1.0e-3, t.ref(t5));
-    }
-
     /** What a standing tap jump at the 2-block wall gives; 02's trigger rule predicts a climb (top 1.58 up). */
     private void ledgeTwoStanding(ClientGameTestContext context, TestSingleplayerContext world) {
         tp(context, world, course.station("ledge_2"));
@@ -433,9 +404,9 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
         tp(context, world, course.station("ledge_3"));
         boolean[] shot = {false};
         FeelRecorder.Table t = record(context, "mantle_climb", "F*15 FJ*14 F*20", 50, (i, live) -> {
-            if (!shot[0] && live.move().equals("mantle") && live.moveTick() == 4) {
+            if (!shot[0] && live.move().equals("mantle") && live.moveTick() == 3) {
                 shot[0] = true;
-                shot(context, "mantle_climb_T4");
+                shot(context, "mantle_climb_T3");
             }
             return false;
         });
@@ -459,8 +430,9 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 && !"movement:mantle".equals(t.s(t9, "move.id"));
         checks.check("mantle", "climb: full control at T9 (move completes)", "ended mantle:completed at T9",
                 "move.id='" + t.s(t9, "move.id") + "' ended='" + t.s(t9, "test.ended") + "'", ended, t.ref(t9));
-        checks.check("mantle", "climb: screenshot at T4", "taken", shot[0] ? "taken" : "missed", shot[0],
-                t.ref(t0 + 4));
+        checks.check("mantle", "climb: screenshot at T3", "taken", shot[0] ? "taken" : "missed", shot[0],
+                t.ref(t0 + 3));
+        climbCamera(t, t0);
     }
 
     private void noHeadroom(ClientGameTestContext context, TestSingleplayerContext world) {
@@ -473,11 +445,19 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 start < 0 ? "no mantle" : "mantle " + held.s(start, "move.phase"), start < 0,
                 start < 0 ? held.name() + ".csv all rows" : held.ref(start));
         tp(context, world, station);
-        FeelRecorder.Table tap = record(context, "mantle_no_headroom_tap", "F*15 FJ F*20", 36, (i, live) -> false);
+        boolean[] slapShot = {false};
+        FeelRecorder.Table tap = record(context, "mantle_no_headroom_tap", "F*15 FJ F*20", 36, (i, live) -> {
+            if (!slapShot[0] && context.computeOnClient(client -> sh.harold.library.camera.fabric.client.CameraFrameHook.armPose(true).y()) > 0.05) {
+                slapShot[0] = true;
+                shot(context, "mantle_refusal_slap");
+            }
+            return false;
+        });
         start = tap.started("mantle", 0);
         checks.check("mantle", "ledge_2_no_headroom refuses (tap jump)", "no mantle",
                 start < 0 ? "no mantle" : "mantle " + tap.s(start, "move.phase"), start < 0,
                 start < 0 ? tap.name() + ".csv all rows" : tap.ref(start));
+        refusalSlap(tap, held);
     }
 
     // ---- roll ----
@@ -636,25 +616,24 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
         int t15 = t0 + 15;
         double distance = Math.hypot(t.d(t15, "pos_x") - t.d(t0 - 1, "pos_x"),
                 t.d(t15, "pos_z") - t.d(t0 - 1, "pos_z"));
-        checks.near("slide", "4.2 blocks in 16 ticks (start of T0 to end of T15)", 4.2, distance, 0.05,
+        checks.near("slide", "S1: 4.21 blocks in 16 ticks (start of T0 to end of T15)", 4.21, distance, 0.05,
                 t.ref(t0 - 1) + " to tick=" + t.tick(t15));
         checks.near("slide", "eye height 0.5 at T3 (drawn camera_eye_height)", 0.5, t.d(t0 + 3, "camera_eye_height"),
                 0.02, t.ref(t0 + 3));
         for (int k = 0; k <= 3; k++) {
             checks.near("slide", "hitbox 0.6 at T" + k, 0.6, t.d(t0 + k, "body.height"), 1.0e-6, t.ref(t0 + k));
         }
-        // T0 moves at the start speed, so the speed after 16 decays is the displacement over T16.
-        double speed15 = step(t, t15);
-        double speed16 = step(t, t15 + 1);
-        checks.near("slide", "speed after 16 ticks of decay = displacement over T16 (02: ends at 0.18 b/t; over T15 "
-                + FeelChecks.fmt(speed15) + ")", 0.18, speed16, 0.01, t.ref(t15 + 1));
+        checks.near("slide", "S1: the last slide tick T15 still moves at the floor (displacement over T15)", 0.19014,
+                step(t, t15), 0.005, t.ref(t15));
         int end = t0;
         while (end < t.size() && "movement:slide".equals(t.s(end, "move.id"))
                 && List.of("drop", "slide").contains(t.s(end, "move.phase"))) {
             end++;
         }
+        checks.equal("slide", "S1: the sliding phases (drop + slide) end on the speed floor after 16 ticks", 16,
+                end - t0, t.ref(Math.min(end, t.size() - 1)));
         checks.note("slide", "length of the sliding phases (drop + slide) on flat ground",
-                "02 reads as a 16-tick slide", "T0..T" + (end - t0 - 1) + " (" + (end - t0) + " ticks), then phase '"
+                "S1: a 16-tick slide", "T0..T" + (end - t0 - 1) + " (" + (end - t0) + " ticks), then phase '"
                         + (end < t.size() ? t.s(end, "move.phase") : "?") + "' at speed "
                         + FeelChecks.fmt(end < t.size() ? step(t, end) : Double.NaN) + "; distance to then "
                         + FeelChecks.fmt(Math.hypot(t.d(end - 1, "pos_x") - t.d(t0 - 1, "pos_x"),
@@ -817,6 +796,564 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 t.ref(first) + " to " + (land < t.size() ? "tick=" + t.tick(land) : "end"));
     }
 
+    // ---- 2026-11-23 rulings ----
+
+    /** J3: the press-length column shows the length of the press once, on the tick it is released. */
+    private void pressLength(FeelRecorder.Table t, String label, long expected) {
+        long max = 0;
+        int at = -1;
+        for (int row = 0; row < t.size(); row++) {
+            double v = t.d(row, "move.jump_press_ticks");
+            if (!Double.isNaN(v) && v > max) {
+                max = (long) v;
+                at = row;
+            }
+        }
+        checks.equal("jump", "J3: move.jump_press_ticks reports the press length, " + label, expected, max,
+                at < 0 ? t.name() + ".csv (column never set)" : t.ref(at));
+    }
+
+    /** First row whose recorded input holds {@code key}, at or after {@code from}; -1 when none. */
+    private static int firstInput(FeelRecorder.Table t, String key, int from) {
+        for (int row = Math.max(0, from); row < t.size(); row++) {
+            if (t.s(row, "move.input").contains(key)) {
+                return row;
+            }
+        }
+        return -1;
+    }
+
+    private static int firstGrounded(FeelRecorder.Table t, int from) {
+        for (int row = Math.max(0, from); row < t.size(); row++) {
+            if (t.b(row, "on_ground")) {
+                return row;
+            }
+        }
+        return -1;
+    }
+
+    private static double maxOf(FeelRecorder.Table t, int from, int to, String column) {
+        double max = Double.NEGATIVE_INFINITY;
+        for (int row = Math.max(0, from); row <= to && row < t.size(); row++) {
+            double v = t.d(row, column);
+            if (!Double.isNaN(v)) {
+                max = Math.max(max, v);
+            }
+        }
+        return max;
+    }
+
+    private static double minOf(FeelRecorder.Table t, int from, int to, String column) {
+        return -maxOfNeg(t, from, to, column);
+    }
+
+    private static double maxOfNeg(FeelRecorder.Table t, int from, int to, String column) {
+        double max = Double.NEGATIVE_INFINITY;
+        for (int row = Math.max(0, from); row <= to && row < t.size(); row++) {
+            double v = t.d(row, column);
+            if (!Double.isNaN(v)) {
+                max = Math.max(max, -v);
+            }
+        }
+        return max;
+    }
+
+    /** Teleports into the air (no ground wait), with health, food and fall distance restored. */
+    private void airTp(ClientGameTestContext context, TestSingleplayerContext world, double x, double y, double z,
+                       float yaw) {
+        script(context, "");
+        world.getServer().runOnServer(server -> {
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                player.setHealth(player.getMaxHealth());
+                player.getFoodData().setFoodLevel(20);
+                player.resetFallDistance();
+            }
+        });
+        world.getServer().runCommand(String.format(Locale.ROOT, "tp @a %.4f %.4f %.4f %.2f 0", x, y, z, yaw));
+        context.waitFor(client -> client.player != null && Math.abs(client.player.getX() - x) < 1.0e-3
+                && client.player.getY() > y - 1.0, 100);
+        world.getServer().runOnServer(server -> server.getPlayerList().getPlayers()
+                .forEach(ServerPlayer::resetFallDistance));
+    }
+
+    /**
+     * Runs toward a wall at {@code wallZ} (+z) with {@code run}, switching to {@code then} on the first tick that ends
+     * with the feet within 0.45 (the mantle reach) of its face; stops when {@code then} has played out.
+     */
+    private FeelRecorder.Table approach(ClientGameTestContext context, String name, String run, String then,
+                                        double wallZ, int maxTicks, TickBody after) {
+        boolean[] switched = {false};
+        return record(context, name, run, maxTicks, (i, live) -> {
+            boolean done = switched[0] && live.remaining() == 0;
+            if (!switched[0] && wallZ - (live.z() + 0.3) <= 0.45) {
+                switched[0] = true;
+                script(context, then);
+            }
+            return after.tick(i, live) || done;
+        });
+    }
+
+    /** MA5: walking (sprint off) into a 1-block step and tapping jump at it is the vanilla jump, not a mantle. */
+    private void walkingTap(ClientGameTestContext context, TestSingleplayerContext world) {
+        tp(context, world, course.station("step_1"));
+        double wallZ = origin.getZ() + 34.0;
+        FeelRecorder.Table t = approach(context, "mantle_walking_tap", "F*90", "FJ F*3 -*25", wallZ, 100,
+                (i, live) -> false);
+        int tap = firstInput(t, "J", 0);
+        if (tap < 1) {
+            checks.check("mantle", "walking tap: the tap happened", "a J row", "none", false, t.name() + ".csv");
+            return;
+        }
+        double speed = step(t, tap - 1);
+        checks.check("mantle", "precondition: walking at the tap (sprint state off; walk speed 0.2159)",
+                "test.sprinting false", "sprinting " + t.s(tap, "test.sprinting") + ", speed "
+                        + FeelChecks.fmt(speed), !t.b(tap, "test.sprinting"), t.ref(tap));
+        int start = t.started("mantle", 0);
+        checks.check("mantle", "MA5: a walking tap at a 1-block step does not mantle", "no mantle",
+                start < 0 ? "no mantle" : "mantle " + t.s(start, "move.phase"), start < 0,
+                start < 0 ? t.name() + ".csv all rows" : t.ref(start));
+        int last = t.size() - 1;
+        checks.near("mantle", "MA5: the vanilla jump lands on the step (feet 1.0 up)", 1.0,
+                t.d(last, "pos_y") - floorY(), 1.0e-3, t.ref(last));
+        checks.near("mantle", "MA5: the jump is vanilla (first-tick rise 0.42)", 0.42,
+                t.d(tap, "pos_y") - t.d(tap - 1, "pos_y"), 1.0e-3, t.ref(tap));
+    }
+
+    /**
+     * MA6, MA7, MA2, MA3, MA18, MA10: sprinting into the 1-block step and tapping jump at it vaults, keeps the run's
+     * speed, nods the camera and plants the main arm. With {@code hop}, a jump pressed at T4 fires on T5.
+     */
+    private void vault(ClientGameTestContext context, TestSingleplayerContext world, boolean hop) {
+        tp(context, world, course.station("step_1"));
+        double wallZ = origin.getZ() + 34.0;
+        boolean[] hopped = {false};
+        String name = hop ? "mantle_vault_hop" : "mantle_vault";
+        FeelRecorder.Table t = approach(context, name, "FS*90", "FSJ FS*7 -*20", wallZ, 110, (i, live) -> {
+            if (hop && !hopped[0] && live.started().contains("mantle")) {
+                hopped[0] = true;
+                script(context, "FS*3 FSJ FS*3 -*20");
+            }
+            return false;
+        });
+        String label = hop ? "vault hop" : "vault";
+        int t0 = t.started("mantle", 0);
+        String kind = t0 < 0 ? "none" : t.s(t0, "move.phase");
+        checks.check("mantle", label + ": a sprint tap at the 1-block step vaults (MA6)", "vault_swing", kind,
+                kind.startsWith("vault"), t0 < 0 ? t.name() + ".csv" : t.ref(t0));
+        if (t0 < 2) {
+            return;
+        }
+        double entry = step(t, t0 - 1);
+        checks.check("mantle", label + ": precondition, entered at sprint speed", "> 0.27 and sprinting",
+                FeelChecks.fmt(entry) + ", sprinting " + t.s(t0 - 1, "test.sprinting"),
+                entry > 0.27 && t.b(t0 - 1, "test.sprinting"), t.ref(t0 - 1));
+        int mantleRows = 0;
+        for (int row = t0; row < t.size() && "movement:mantle".equals(t.s(row, "move.id")); row++) {
+            mantleRows++;
+        }
+        checks.equal("mantle", label + ": move runs T0..T4 (MA15)", 5, mantleRows, t.ref(t0));
+        int t5 = t0 + 5;
+        checks.check("mantle", label + ": move completes at T5", "ended mantle:completed",
+                "ended='" + t.s(t5, "test.ended") + "'", t.s(t5, "test.ended").contains("mantle:completed"),
+                t.ref(t5));
+        if (!hop) {
+            for (int k = 5; k <= 7; k++) {
+                double s = step(t, t0 + k);
+                checks.check("mantle", "vault: speed kept at T" + k + " (MA7: exit = max(entry "
+                        + FeelChecks.fmt(entry) + ", 0.2806))", "> 0.27", FeelChecks.fmt(s), s > 0.27, t.ref(t0 + k));
+            }
+            int last = t.size() - 1;
+            checks.near("mantle", "vault: ends standing on the step (feet 1.0 up)", 1.0, t.d(last, "pos_y") - floorY(),
+                    1.0e-3, t.ref(last));
+            checks.near("mantle", "vault: MA2 nod +6 at T2 (camera.pitch_add)", 6.0, t.d(t0 + 2, "camera.pitch_add"),
+                    0.1, t.ref(t0 + 2));
+            checks.near("mantle", "vault: MA2 nod back to 0 by T5", 0.0, t.d(t5, "camera.pitch_add"), 0.05,
+                    t.ref(t5));
+            checks.near("mantle", "vault: MA2 no roll (max |camera.roll| T0..T6)", 0.0, maxAbs(t, t0, t0 + 6,
+                    "camera.roll"), 1.0e-6, t.ref(t0) + " to " + t.ref(t0 + 6));
+            checks.near("mantle", "vault: MA3 main arm planted at T0 (camera.arm_main_rot_x)", -46.0,
+                    t.d(t0, "camera.arm_main_rot_x"), 0.5, t.ref(t0));
+            checks.near("mantle", "vault: MA3 main arm up 0.24 at T0 (camera.arm_main_y)", 0.24,
+                    t.d(t0, "camera.arm_main_y"), 0.005, t.ref(t0));
+            double off = 0.0;
+            for (String column : ARM_COLUMNS.subList(6, 12)) {
+                off = Math.max(off, maxAbs(t, t0, t0 + 6, column));
+            }
+            checks.near("mantle", "vault: MA3 only the planting arm moves (max |off arm| T0..T6)", 0.0, off, 1.0e-6,
+                    t.ref(t0) + " to " + t.ref(t0 + 6));
+            checks.near("mantle", "vault: arms back to rest by T5 (max |arm| at T5)", 0.0, armMax(t, t5), 1.0e-6,
+                    t.ref(t5));
+            checks.near("mantle", "vault: MA18 no FOV (max |camera.fov_add| T0..T8)", 0.0,
+                    maxAbs(t, t0, t0 + 8, "camera.fov_add"), 1.0e-6, t.ref(t0) + " to " + t.ref(t0 + 8));
+        } else {
+            checks.check("mantle", "vault hop: precondition, jump pressed at T4", "J at T4",
+                    t.s(t0 + 4, "move.input"), t.s(t0 + 4, "move.input").contains("J"), t.ref(t0 + 4));
+            double rise = t.d(t5, "pos_y") - t.d(t5 - 1, "pos_y");
+            checks.near("mantle", "vault hop: MA10 the jump fires on T5 (pos_y rise over T5)", 0.42, rise, 0.01,
+                    t.ref(t5));
+            double s = step(t, t5);
+            checks.check("mantle", "vault hop: MA10 speed kept on T5", "> 0.27", FeelChecks.fmt(s), s > 0.27,
+                    t.ref(t5));
+            double apex = maxOf(t, t5, t.size() - 1, "pos_y") - floorY() - 1.0;
+            checks.check("mantle", "vault hop: MA10 no extra height (apex above the step)", "<= 1.26",
+                    FeelChecks.fmt(apex), apex <= 1.26, t.name() + ".csv after " + t.ref(t5));
+        }
+    }
+
+    private static double armMax(FeelRecorder.Table t, int row) {
+        double max = 0.0;
+        for (String column : ARM_COLUMNS) {
+            double v = t.d(row, column);
+            if (!Double.isNaN(v)) {
+                max = Math.max(max, Math.abs(v));
+            }
+        }
+        return max;
+    }
+
+    /** MA1, MA3, MA13, MA14, MA18 on the recorded climb. */
+    private void climbCamera(FeelRecorder.Table t, int t0) {
+        double[][] pitch = {{0, 4}, {1, 8}, {3, 15}, {5, 10}, {8, 0}};
+        for (double[] key : pitch) {
+            int row = t0 + (int) key[0];
+            checks.near("mantle", "climb: MA1 pitch +" + FeelChecks.fmt(key[1]) + " at T" + (int) key[0]
+                    + " (camera.pitch_add, looking down at the hands)", key[1], t.d(row, "camera.pitch_add"), 0.1,
+                    t.ref(row));
+        }
+        double t7 = t.d(t0 + 7, "camera.pitch_add");
+        checks.check("mantle", "climb: MA1 pitch at most +3 at T7", "0 <= pitch_add <= 3", FeelChecks.fmt(t7),
+                t7 >= -1.0e-6 && t7 <= 3.0 + 1.0e-6, t.ref(t0 + 7));
+        checks.near("mantle", "climb: MA13 eye drops 0.08 at T0 (camera.eye_height)", -0.08,
+                t.d(t0, "camera.eye_height"), 0.002, t.ref(t0));
+        checks.near("mantle", "climb: MA13 eye recovered by T2", 0.0, t.d(t0 + 2, "camera.eye_height"), 0.002,
+                t.ref(t0 + 2));
+        double r1 = t.d(t0 + 1, "camera.roll");
+        double r4 = t.d(t0 + 4, "camera.roll");
+        checks.near("mantle", "climb: MA14 roll 2 toward the lead hand at T1 (|camera.roll|)", 2.0, Math.abs(r1),
+                0.05, t.ref(t0 + 1));
+        checks.check("mantle", "climb: MA14 roll rocks back 1.5 the other way at T4", "-1.5 x sign(T1)",
+                FeelChecks.fmt(r4), Math.abs(r4 + 1.5 * Math.signum(r1)) <= 0.05, t.ref(t0 + 4));
+        checks.near("mantle", "climb: MA14 roll back to 0 by T8", 0.0, t.d(t0 + 8, "camera.roll"), 0.05,
+                t.ref(t0 + 8));
+        for (int k = 1; k <= 3; k++) {
+            checks.near("mantle", "climb: MA3 main arm grip at T" + k + " (camera.arm_main_rot_x)", -46.0,
+                    t.d(t0 + k, "camera.arm_main_rot_x"), 0.5, t.ref(t0 + k));
+        }
+        checks.near("mantle", "climb: MA3 off arm grip at T3 (camera.arm_off_rot_x)", -46.0,
+                t.d(t0 + 3, "camera.arm_off_rot_x"), 0.5, t.ref(t0 + 3));
+        checks.near("mantle", "climb: MA3 both arms up 0.24 at T3 (camera.arm_main_y)", 0.24,
+                t.d(t0 + 3, "camera.arm_main_y"), 0.005, t.ref(t0 + 3));
+        checks.near("mantle", "climb: MA3 arms back to rest at T8 (max |arm|)", 0.0, armMax(t, t0 + 8), 1.0e-6,
+                t.ref(t0 + 8));
+        checks.near("mantle", "climb: MA18 no FOV (max |camera.fov_add| T0..T9)", 0.0,
+                maxAbs(t, t0, t0 + 9, "camera.fov_add"), 1.0e-6, t.ref(t0) + " to " + t.ref(t0 + 9));
+    }
+
+    /** MA10: a jump pressed at T5 of a climb fires at T7 with +0.1 forward and an FOV +2 pulse. */
+    private void climbHop(ClientGameTestContext context, TestSingleplayerContext world) {
+        tp(context, world, course.station("ledge_3"));
+        boolean[] switched = {false};
+        FeelRecorder.Table t = record(context, "mantle_climb_hop", "F*15 FJ*14 F*20", 50, (i, live) -> {
+            if (!switched[0] && live.started().contains("mantle")) {
+                switched[0] = true;
+                script(context, "F*4 FJ F*25");
+            }
+            return false;
+        });
+        int t0 = t.started("mantle", 0);
+        String kind = t0 < 0 ? "none" : t.s(t0, "move.phase");
+        checks.check("mantle", "climb hop: ledge_3 climb", "climb", kind, kind.startsWith("climb"),
+                t0 < 0 ? t.name() + ".csv" : t.ref(t0));
+        if (t0 < 0) {
+            return;
+        }
+        int t7 = t0 + 7;
+        checks.check("mantle", "climb hop: precondition, a fresh jump press at T5", "J at T5, none at T4",
+                t.s(t0 + 4, "move.input") + " / " + t.s(t0 + 5, "move.input"),
+                t.s(t0 + 5, "move.input").contains("J") && !t.s(t0 + 4, "move.input").contains("J"), t.ref(t0 + 5));
+        double early = t.d(t0 + 6, "vel_y");
+        checks.check("mantle", "climb hop: nothing fires before T7", "no upward launch at T6",
+                "vel_y " + FeelChecks.fmt(early), early < 0.3, t.ref(t0 + 6));
+        checks.near("mantle", "climb hop: MA10 the jump fires at T7 (pos_y rise over T7)", 0.42,
+                t.d(t7, "pos_y") - t.d(t7 - 1, "pos_y"), 0.01, t.ref(t7));
+        checks.near("mantle", "climb hop: MA10 walk exit 0.2159 + 0.1 forward (displacement over T7)", 0.3159,
+                step(t, t7), 0.02, t.ref(t7));
+        double fov = maxOf(t, t7, t7 + 8, "camera.fov_add");
+        checks.near("mantle", "climb hop: MA10/MA18 FOV +2 pulse after T7 (max camera.fov_add)", 2.0, fov, 0.05,
+                t.ref(t7) + " to " + t.ref(t7 + 8));
+    }
+
+    /** MA12: the refused tap shows one slap on both arms and moves exactly like a vanilla tap jump. */
+    private void refusalSlap(FeelRecorder.Table tap, FeelRecorder.Table held) {
+        double main = maxOf(tap, 0, tap.size() - 1, "camera.arm_main_y");
+        double off = maxOf(tap, 0, tap.size() - 1, "camera.arm_off_y");
+        checks.check("mantle", "refusal: MA12 slap shows (arm channels non-zero)", "arm_main_y > 0, arm_off_y > 0",
+                "main " + FeelChecks.fmt(main) + ", off " + FeelChecks.fmt(off), main > 0.0 && off > 0.0,
+                tap.name() + ".csv camera.arm_*");
+        checks.equal("mantle", "refusal: MA12 one slap per press (tap)", 1, onsets(tap), tap.name() + ".csv");
+        checks.equal("mantle", "refusal: MA12 one slap per press (jump held 14 ticks)", 1, onsets(held),
+                held.name() + ".csv");
+        int press = firstInput(tap, "J", 0);
+        if (press < 1) {
+            return;
+        }
+        // Vanilla tap jump: 0.42 up, then (vy - 0.08) * 0.98, landing on the floor; the wall blocks +z throughout.
+        double y = 0.42;
+        double vy = (0.42 - 0.08) * 0.98;
+        double worst = 0.0;
+        int worstRow = press;
+        double z = tap.d(press - 1, "pos_z");
+        double worstZ = 0.0;
+        // Forward stays held into the wall, so the fall from the jump starts a wall slide; the refusal's own claim is
+        // only that it adds no motion, so the comparison stops where the wall slide takes over.
+        int slide = tap.started("wall_slide", press);
+        int stop = slide < 0 ? Math.min(tap.size(), press + 16) : slide;
+        checks.note("mantle", "refusal: the fall after the refused jump, forward still held into the wall",
+                "a wall slide may follow (W rules)", slide < 0 ? "no wall slide" : "wall slide from " + tap.ref(slide),
+                slide < 0 ? tap.name() + ".csv" : tap.ref(slide));
+        for (int row = press; row < stop; row++) {
+            double dy = Math.abs(tap.d(row, "pos_y") - floorY() - y);
+            if (dy > worst) {
+                worst = dy;
+                worstRow = row;
+            }
+            worstZ = Math.max(worstZ, Math.abs(tap.d(row, "pos_z") - z));
+            y += vy;
+            vy = (vy - 0.08) * 0.98;
+            if (y <= 0.0) {
+                y = 0.0;
+                vy = 0.0;
+            }
+        }
+        checks.near("mantle", "refusal: MA12 no motion change, pos_y follows the vanilla tap jump until any wall "
+                + "slide (max |dy|, " + (stop - press) + " rows)", 0.0, worst, 1.0e-3, tap.ref(worstRow));
+        checks.near("mantle", "refusal: MA12 no motion change, pos_z stays at the wall (max |dz|)", 0.0, worstZ,
+                1.0e-3, tap.ref(press) + " to " + tap.ref(Math.min(tap.size() - 1, press + 15)));
+    }
+
+    private static int onsets(FeelRecorder.Table t) {
+        int count = 0;
+        double previous = 0.0;
+        for (int row = 0; row < t.size(); row++) {
+            double v = t.d(row, "camera.arm_main_y");
+            if (Double.isNaN(v)) {
+                continue;
+            }
+            if (v > 1.0e-6 && previous <= 1.0e-6) {
+                count++;
+            }
+            previous = v;
+        }
+        return count;
+    }
+
+    /** J2: holding jump through a landing auto-repeats a vanilla jump; only the fresh press is boosted. */
+    private void freshPress(ClientGameTestContext context, TestSingleplayerContext world) {
+        tp(context, world, origin.getX() + 10.5, origin.getY(), origin.getZ() + 18.5, 0.0f);
+        FeelRecorder.Table t = record(context, "jump_fresh_press", "J*40 -*25", 65, (i, live) -> false);
+        List<Integer> takeoffs = new ArrayList<>();
+        for (int row = 0; row < t.size(); row++) {
+            boolean up = t.d(row, "pos_y") - floorY() > 1.0e-3;
+            boolean before = row > 0 && t.d(row - 1, "pos_y") - floorY() > 1.0e-3;
+            if (up && !before) {
+                takeoffs.add(row);
+            }
+        }
+        checks.check("jump", "fresh press: holding J auto-repeats the jump", ">= 2 takeoffs",
+                takeoffs.size() + " takeoffs", takeoffs.size() >= 2, t.name() + ".csv");
+        if (takeoffs.size() < 2) {
+            return;
+        }
+        int first = takeoffs.get(0);
+        int second = takeoffs.get(1);
+        double apex1 = maxOf(t, first, second - 1, "pos_y") - floorY();
+        int land2 = firstGrounded(t, second + 1);
+        double apex2 = maxOf(t, second, land2 < 0 ? t.size() - 1 : land2, "pos_y") - floorY();
+        checks.near("jump", "fresh press: J2 the fresh press is boosted (apex)", 1.87, apex1, 0.01, t.ref(first));
+        checks.near("jump", "fresh press: J2 the held auto-repeat is vanilla (apex)", 1.2522, apex2, 0.01,
+                t.ref(second));
+        checks.near("jump", "fresh press: J2 no boost FOV on the auto-repeat (max |camera.fov_add|)", 0.0,
+                maxAbs(t, second, second + 12, "camera.fov_add"), 1.0e-6, t.ref(second) + " to "
+                        + t.ref(second + 12));
+    }
+
+    /** J4: no dip for a 1-block drop; 0.03 + 0.045 x (fall - 1.3) for a 2-block one. */
+    private void landingDip(ClientGameTestContext context, TestSingleplayerContext world) {
+        for (int height : new int[]{1, 2}) {
+            tp(context, world, course.station("drop_" + height));
+            int[] phase = {0};
+            int[] landedAt = {-1};
+            FeelRecorder.Table t = record(context, "landing_drop_" + height, "F*40", 70, (i, live) -> {
+                if (phase[0] == 0 && !live.onGround()) {
+                    phase[0] = 1;
+                    script(context, "-*60");
+                } else if (phase[0] == 1 && live.onGround() && landedAt[0] < 0) {
+                    landedAt[0] = i;
+                }
+                return landedAt[0] >= 0 && i - landedAt[0] >= 15;
+            });
+            // The fall is the drop height: body.fall_distance is sampled at tick ends, so its largest recorded value
+            // misses the last air tick before vanilla clears it on landing.
+            double expected = height <= 1.3 ? 0.0 : Math.min(0.25, 0.03 + 0.045 * (height - 1.3));
+            double dip = minOf(t, 0, t.size() - 1, "camera.eye_height");
+            checks.near("jump", "J4: landing dip after a " + height + "-block drop (min camera.eye_height)",
+                    -expected, dip, 0.003, t.name() + ".csv");
+        }
+    }
+
+    /** J5: a hard landing (8 blocks, no roll) cuts sprint for 6 ticks, with no camera shake. */
+    private void stumble(ClientGameTestContext context, TestSingleplayerContext world) {
+        tp(context, world, course.station("drop_8"));
+        int[] phase = {0};
+        int[] landedAt = {-1};
+        FeelRecorder.Table t = record(context, "jump_stumble", "FS*80", 70, (i, live) -> {
+            if (phase[0] == 0 && !live.onGround()) {
+                phase[0] = 1;
+            } else if (phase[0] == 1 && live.onGround() && landedAt[0] < 0) {
+                landedAt[0] = i;
+            }
+            return landedAt[0] >= 0 && i - landedAt[0] >= 12;
+        });
+        int air = -1;
+        for (int row = 0; row < t.size(); row++) {
+            if (!t.b(row, "on_ground")) {
+                air = row;
+                break;
+            }
+        }
+        int land = air < 0 ? -1 : firstGrounded(t, air);
+        if (land < 0) {
+            checks.check("jump", "stumble: landed", "a landing", "none", false, t.name() + ".csv");
+            return;
+        }
+        checks.check("jump", "stumble: precondition, sprinting before the landing", "test.sprinting true",
+                t.s(land - 1, "test.sprinting"), t.b(land - 1, "test.sprinting"), t.ref(land - 1));
+        int stumbling = 0;
+        int sprintingRows = 0;
+        for (int row = land; row <= land + 7 && row < t.size(); row++) {
+            if ("stumble".equals(t.s(row, "move.phase"))) {
+                stumbling++;
+            }
+        }
+        for (int row = land + 1; row <= land + 6 && row < t.size(); row++) {
+            if (t.b(row, "test.sprinting")) {
+                sprintingRows++;
+            }
+        }
+        checks.equal("jump", "stumble: J5 six stumble ticks (move.phase)", 6, stumbling, t.ref(land) + " to "
+                + t.ref(land + 7));
+        checks.equal("jump", "stumble: J5 sprint off on the six ticks after landing (rows with test.sprinting)", 0,
+                sprintingRows, t.ref(land + 1) + " to " + t.ref(land + 6));
+        checks.near("jump", "stumble: J5 no landing shake (max camera.shake)", 0.0,
+                maxAbs(t, 0, t.size() - 1, "camera.shake"), 1.0e-6, t.name() + ".csv");
+        checks.note("jump", "stumble: speed and sprint after the stumble", "interpretation: sprint cancel only",
+                "displacement over L+6 " + FeelChecks.fmt(step(t, land + 6)) + ", sprinting at L+8 "
+                        + t.s(Math.min(t.size() - 1, land + 8), "test.sprinting"), t.ref(land + 6));
+    }
+
+    /** RO1: a sideways or backward roll; the camera never turns yaw. */
+    private void rollAxis(ClientGameTestContext context, TestSingleplayerContext world, String name, String key,
+                          boolean side) {
+        tp(context, world, course.station("drop_13"));
+        int[] phase = {0};
+        int[] landedAt = {-1};
+        boolean[] shot = {false};
+        float before = health.now(world);
+        TelemetryHandle server = health.start(world);
+        FeelRecorder.Table t = record(context, name, key + "*60", 120, (i, live) -> {
+            if (phase[0] == 0 && !live.onGround()) {
+                phase[0] = 1;
+                script(context, "-*100");
+            } else if (phase[0] == 1 && live.vy() < 0.0 && live.y() - floorY() < 3.5) {
+                phase[0] = 2;
+                script(context, "N*3 -*60");
+            } else if (phase[0] == 2 && live.onGround() && landedAt[0] < 0) {
+                landedAt[0] = i;
+            }
+            if (side && !shot[0] && live.move().equals("roll") && live.moveTick() == 3) {
+                shot[0] = true;
+                shot(context, "roll_side_T3");
+            }
+            return landedAt[0] >= 0 && i - landedAt[0] >= 30;
+        });
+        float lowest = health.stop(world, server, out.resolve(name + ".server.csv"));
+        String label = side ? "sideways roll" : "backward roll";
+        int t0 = t.started("roll", 0);
+        checks.check("roll", label + ": the roll starts", "roll", t0 < 0 ? "no roll" : "roll", t0 >= 0,
+                t0 < 0 ? t.name() + ".csv" : t.ref(t0));
+        checks.near("roll", label + ": no damage (server health, lowest)", before, lowest, 1.0e-3,
+                name + ".server.csv health");
+        if (t0 < 1) {
+            return;
+        }
+        double yaw0 = t.d(t0 - 1, "camera.yaw");
+        double yawDrift = 0.0;
+        for (int row = t0; row <= t0 + 12 && row < t.size(); row++) {
+            yawDrift = Math.max(yawDrift, Math.abs(t.d(row, "camera.yaw") - yaw0));
+        }
+        checks.near("roll", label + ": RO1 no yaw (max |camera.yaw - yaw before| T0..T12)", 0.0, yawDrift, 1.0e-4,
+                t.ref(t0) + " to " + t.ref(t0 + 12));
+        if (side) {
+            double roll = maxAbs(t, t0, t0 + 12, "camera.roll");
+            double pitch = maxOf(t, t0, t0 + 12, "camera.pitch_add");
+            checks.near("roll", "sideways roll: RO1 8 deg roll toward the travel side (max |camera.roll|)", 8.0, roll,
+                    0.1, t.ref(t0) + " to " + t.ref(t0 + 12));
+            checks.near("roll", "sideways roll: RO1 the 25 deg dip, no flip (max camera.pitch_add)", 25.0, pitch, 0.5,
+                    t.ref(t0) + " to " + t.ref(t0 + 12));
+            checks.check("roll", "sideways roll: screenshot at T3", "taken", shot[0] ? "taken" : "missed", shot[0],
+                    t.ref(t0 + 3));
+        } else {
+            checks.near("roll", "backward roll: RO1 -180 deg of added pitch at T5", -180.0,
+                    t.d(t0 + 5, "camera.pitch_add"), 1.0, t.ref(t0 + 5));
+            double pitch = t.d(t0 + 10, "camera.pitch_add");
+            checks.near("roll", "backward roll: pitch back by T10 (mod 360; raw " + FeelChecks.fmt(pitch) + ")", 0.0,
+                    Math.IEEEremainder(pitch, 360.0), 0.5, t.ref(t0 + 10));
+            checks.near("roll", "backward roll: no roll channel (max |camera.roll|)", 0.0,
+                    maxAbs(t, t0, t0 + 12, "camera.roll"), 1.0e-6, t.ref(t0) + " to " + t.ref(t0 + 12));
+        }
+    }
+
+    /**
+     * W1: a 9-block drop that slides down the single wall lands at a fall distance no larger than the equivalent height
+     * of its speed, so it takes no damage; the same drop without pushing into the wall hurts.
+     */
+    private void wallSlideFall(ClientGameTestContext context, TestSingleplayerContext world) {
+        FeelCourse.Station station = course.station("single_wall");
+        double face = station.start().getX();
+        for (boolean push : new boolean[]{true, false}) {
+            airTp(context, world, face + 0.31, station.start().getY() + 9.0, station.start().getZ() + 0.5,
+                    station.yaw());
+            float before = health.now(world);
+            TelemetryHandle server = health.start(world);
+            String name = push ? "wall_slide_fall" : "wall_slide_fall_control";
+            int[] landedAt = {-1};
+            FeelRecorder.Table t = record(context, name, push ? "-*4 F*80" : "-*80", 90, (i, live) -> {
+                if (live.onGround() && landedAt[0] < 0) {
+                    landedAt[0] = i;
+                }
+                return landedAt[0] >= 0 && i - landedAt[0] >= 10;
+            });
+            float lowest = health.stop(world, server, out.resolve(name + ".server.csv"));
+            if (push) {
+                int slide = t.started("wall_slide", 0);
+                int land = firstGrounded(t, 0);
+                checks.check("wall_slide", "W1: the drop slides down the wall", "wall_slide starts",
+                        slide < 0 ? "no slide" : "slide", slide >= 0, slide < 0 ? t.name() + ".csv" : t.ref(slide));
+                checks.near("wall_slide", "W1: a 9-block drop down the wall takes no damage (server health, lowest)",
+                        before, lowest, 1.0e-3, name + ".server.csv health");
+                checks.note("wall_slide", "W1: client fall distance on the tick before landing",
+                        "<= equivalent height of the fall speed", land < 1 ? "no landing"
+                                : FeelChecks.fmt(t.d(land - 1, "body.fall_distance")) + " at speed "
+                                + FeelChecks.fmt(t.d(land - 1, "pos_y") - t.d(land, "pos_y")),
+                        land < 1 ? t.name() + ".csv" : t.ref(land - 1));
+            } else {
+                checks.check("wall_slide", "W1 control: the same drop without pushing into the wall hurts",
+                        "health drops", FeelChecks.fmt(before) + " -> lowest " + FeelChecks.fmt(lowest),
+                        lowest < before, name + ".server.csv health");
+            }
+        }
+    }
+
     /** The server player's health: a column on a server telemetry recording, and a direct read. */
     private static final class ServerHealth {
 
@@ -828,6 +1365,7 @@ public final class FeelExampleGameTests implements FabricClientGameTest {
                 if (!registered) {
                     registered = true;
                     FabricServerTelemetry.registry().registerDouble("health", ServerPlayer::getHealth);
+                    FabricServerTelemetry.registry().registerDouble("fall_distance", player -> player.fallDistance);
                 }
             });
         }
