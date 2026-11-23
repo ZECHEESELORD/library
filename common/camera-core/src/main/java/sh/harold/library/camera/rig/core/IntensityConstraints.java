@@ -1,5 +1,6 @@
 package sh.harold.library.camera.rig.core;
 
+import sh.harold.library.camera.rig.ArmPose;
 import sh.harold.library.camera.rig.CameraRigSettings;
 import sh.harold.library.camera.rig.CameraState;
 import sh.harold.library.camera.rig.LayerState;
@@ -59,8 +60,11 @@ public final class IntensityConstraints implements ConstraintStage {
         }
         roll = clamp(roll, -limits.maxRoll(), limits.maxRoll());
         if (!sample.pitchUnwound()) {
-            pitch = clampAdded(shot.angles().pitch(), pitch, -90.0, 90.0);
+            pitch = clampAdded(shot.angles().pitch(), pitch, -limits.maxPitch(), limits.maxPitch());
         }
+        double armScale = isReduced ? reduced.armScale() : 1.0;
+        ArmPose mainArm = arm(sample.mainArm(), sample.mainArmExempt(), armScale);
+        ArmPose offArm = arm(sample.offArm(), sample.offArmExempt(), armScale);
         double eyeTarget = sample.eyeTarget();
         double eyeHeight = sample.eyeHeight() + targetOffset(eyeTarget, frame.input().eyeHeight());
         eyeHeight = clamp(eyeHeight, limits.eyeHeightMin(), limits.eyeHeightMax());
@@ -77,7 +81,20 @@ public final class IntensityConstraints implements ConstraintStage {
             }
         }
         return new LayerState(pitch, roll, fov, eyeHeight, eyeTarget, shake, shakePitch, shakeRoll, lookScale,
-                sample.pitchUnwound(), sample.activeChannels(), sample.activeCues());
+                sample.pitchUnwound(), sample.activeChannels(), sample.activeCues(), mainArm, offArm);
+    }
+
+    /** The profile-scaled pose plus its exempt part, each axis within the safety limits; identity stays identity. */
+    private ArmPose arm(ArmPose scalable, ArmPose exempt, double scale) {
+        if (scalable.isIdentity() && exempt.isIdentity()) {
+            return ArmPose.IDENTITY;
+        }
+        double[] values = new double[6];
+        for (int i = 0; i < 6; i++) {
+            double limit = i < 3 ? limits.maxArmOffset() : limits.maxArmRotation();
+            values[i] = clamp(scalable.get(i) * scale + exempt.get(i), -limit, limit);
+        }
+        return ArmPose.of(values, 0);
     }
 
     @Override

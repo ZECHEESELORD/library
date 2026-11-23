@@ -13,13 +13,22 @@ package sh.harold.library.camera.rig;
  * @param shakeCapDegrees the largest rotational shake amplitude
  * @param fovMin          the smallest final FOV a cue may push to (the anchor's own FOV is never clamped)
  * @param fovMax          the largest final FOV a cue may push to
+ * @param armScale        factor on first-person arm-pose offsets. The arms move in screen space, not the view, so
+ *                        both stock profiles keep them at full size ({@code 1})
  */
-public record ReducedRules(double fovScale, double rollScale, double shakeCapDegrees, double fovMin, double fovMax) {
+public record ReducedRules(double fovScale, double rollScale, double shakeCapDegrees, double fovMin, double fovMax,
+                           double armScale) {
 
-    public static final ReducedRules OVERWORLD = new ReducedRules(0.5, 0.0, 0.0, 1.0, 179.0);
-    public static final ReducedRules FIGHT = new ReducedRules(0.5, 0.0, 0.0, 50.0, 80.0);
+    public static final ReducedRules OVERWORLD = new ReducedRules(0.5, 0.0, 0.0, 1.0, 179.0, 1.0);
+    public static final ReducedRules FIGHT = new ReducedRules(0.5, 0.0, 0.0, 50.0, 80.0, 1.0);
+
+    /** Rules that keep the arm pose at full size (the v13 shape). */
+    public ReducedRules(double fovScale, double rollScale, double shakeCapDegrees, double fovMin, double fovMax) {
+        this(fovScale, rollScale, shakeCapDegrees, fovMin, fovMax, 1.0);
+    }
 
     public ReducedRules {
+        requireNonNegative(armScale, "armScale");
         requireNonNegative(fovScale, "fovScale");
         requireNonNegative(rollScale, "rollScale");
         requireNonNegative(shakeCapDegrees, "shakeCapDegrees");

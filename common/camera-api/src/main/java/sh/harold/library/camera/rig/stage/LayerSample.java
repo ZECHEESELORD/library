@@ -1,6 +1,7 @@
 package sh.harold.library.camera.rig.stage;
 
 import net.kyori.adventure.key.Key;
+import sh.harold.library.camera.rig.ArmPose;
 import sh.harold.library.camera.rig.CameraChannel;
 
 import java.util.List;
@@ -24,6 +25,10 @@ import java.util.Set;
  * @param pitchUnwound whether a live pitch curve may pass straight up or down
  * @param activeChannels channels with a live contribution
  * @param activeCues   keys of the live cues, in start order
+ * @param mainArm      main-hand arm pose, profile-scalable
+ * @param mainArmExempt main-hand arm pose from Reduced substitutes
+ * @param offArm       off-hand arm pose, profile-scalable
+ * @param offArmExempt off-hand arm pose from Reduced substitutes
  */
 public record LayerSample(
         double pitch,
@@ -38,7 +43,11 @@ public record LayerSample(
         double lookScale,
         boolean pitchUnwound,
         Set<CameraChannel> activeChannels,
-        List<Key> activeCues
+        List<Key> activeCues,
+        ArmPose mainArm,
+        ArmPose mainArmExempt,
+        ArmPose offArm,
+        ArmPose offArmExempt
 ) {
 
     public static final LayerSample EMPTY = new LayerSample(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.NaN, 0.0, 1.0, false,
@@ -47,5 +56,17 @@ public record LayerSample(
     public LayerSample {
         activeChannels = Set.copyOf(Objects.requireNonNull(activeChannels, "activeChannels"));
         activeCues = List.copyOf(Objects.requireNonNull(activeCues, "activeCues"));
+        Objects.requireNonNull(mainArm, "mainArm");
+        Objects.requireNonNull(mainArmExempt, "mainArmExempt");
+        Objects.requireNonNull(offArm, "offArm");
+        Objects.requireNonNull(offArmExempt, "offArmExempt");
+    }
+
+    /** A sample with no arm pose (the v13 shape). */
+    public LayerSample(double pitch, double pitchExempt, double roll, double rollExempt, double fov, double fovExempt,
+                       double eyeHeight, double eyeTarget, double shake, double lookScale, boolean pitchUnwound,
+                       Set<CameraChannel> activeChannels, List<Key> activeCues) {
+        this(pitch, pitchExempt, roll, rollExempt, fov, fovExempt, eyeHeight, eyeTarget, shake, lookScale, pitchUnwound,
+                activeChannels, activeCues, ArmPose.IDENTITY, ArmPose.IDENTITY, ArmPose.IDENTITY, ArmPose.IDENTITY);
     }
 }

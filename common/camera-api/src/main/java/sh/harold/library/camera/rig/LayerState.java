@@ -24,6 +24,8 @@ import java.util.Set;
  * @param pitchUnwound   whether a live pitch curve is unwound (allowed past straight up or down)
  * @param activeChannels channels with a live contribution
  * @param activeCues     keys of the live cues, in start order
+ * @param mainArm        the main-hand first-person arm pose, after the profile and limits
+ * @param offArm         the off-hand first-person arm pose, after the profile and limits
  */
 public record LayerState(
         double pitchAdd,
@@ -37,11 +39,21 @@ public record LayerState(
         double lookScale,
         boolean pitchUnwound,
         Set<CameraChannel> activeChannels,
-        List<Key> activeCues
+        List<Key> activeCues,
+        ArmPose mainArm,
+        ArmPose offArm
 ) {
 
     public static final LayerState IDENTITY = new LayerState(0.0, 0.0, 0.0, 0.0, Double.NaN, 0.0, 0.0, 0.0, 1.0, false,
             Set.of(), List.of());
+
+    /** A state with no arm pose (the v13 shape). */
+    public LayerState(double pitchAdd, double roll, double fovAdd, double eyeHeight, double eyeTarget,
+                      double shakeAmplitude, double shakePitch, double shakeRoll, double lookScale, boolean pitchUnwound,
+                      Set<CameraChannel> activeChannels, List<Key> activeCues) {
+        this(pitchAdd, roll, fovAdd, eyeHeight, eyeTarget, shakeAmplitude, shakePitch, shakeRoll, lookScale,
+                pitchUnwound, activeChannels, activeCues, ArmPose.IDENTITY, ArmPose.IDENTITY);
+    }
 
     public LayerState {
         if (Double.isInfinite(eyeTarget)) {
@@ -49,16 +61,19 @@ public record LayerState(
         }
         activeChannels = Set.copyOf(Objects.requireNonNull(activeChannels, "activeChannels"));
         activeCues = List.copyOf(Objects.requireNonNull(activeCues, "activeCues"));
+        Objects.requireNonNull(mainArm, "mainArm");
+        Objects.requireNonNull(offArm, "offArm");
     }
 
     /** Whether every offset is at its identity, so the camera is exactly the anchor's. */
     public boolean isIdentity() {
         return pitchAdd == 0.0 && roll == 0.0 && fovAdd == 0.0 && eyeHeight == 0.0
-                && shakePitch == 0.0 && shakeRoll == 0.0 && lookScale == 1.0;
+                && shakePitch == 0.0 && shakeRoll == 0.0 && lookScale == 1.0 && mainArm.isIdentity()
+                && offArm.isIdentity();
     }
 
     public LayerState withShake(double pitch, double rollOffset) {
         return new LayerState(pitchAdd, roll, fovAdd, eyeHeight, eyeTarget, shakeAmplitude, pitch, rollOffset, lookScale,
-                pitchUnwound, activeChannels, activeCues);
+                pitchUnwound, activeChannels, activeCues, mainArm, offArm);
     }
 }

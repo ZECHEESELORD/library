@@ -1,6 +1,7 @@
 package sh.harold.library.camera.rig.core;
 
 import net.kyori.adventure.key.Key;
+import sh.harold.library.camera.rig.ArmPose;
 import sh.harold.library.camera.rig.CameraChannel;
 import sh.harold.library.camera.rig.stage.LayerSample;
 
@@ -23,11 +24,17 @@ final class LayerAccumulator {
     private double shake;
     private double lookScale = 1.0;
     private boolean pitchUnwound;
+    private final double[] arms = new double[12];
+    private final double[] armsExempt = new double[12];
     private final Set<CameraChannel> active = EnumSet.noneOf(CameraChannel.class);
     private final List<Key> cues = new ArrayList<>();
 
     void add(CameraChannel channel, double value, boolean exempt) {
         active.add(channel);
+        if (channel.isArm()) {
+            (exempt ? armsExempt : arms)[channel.armIndex()] += value;
+            return;
+        }
         switch (channel) {
             case PITCH -> {
                 if (exempt) {
@@ -53,6 +60,7 @@ final class LayerAccumulator {
             case EYE_HEIGHT -> eyeHeight += value;
             case SHAKE -> shake += value;
             case LOOK_SCALE -> lookScale *= Math.max(0.0, 1.0 + value);
+            default -> throw new IllegalStateException("unhandled channel " + channel);
         }
     }
 
@@ -75,6 +83,7 @@ final class LayerAccumulator {
             return LayerSample.EMPTY;
         }
         return new LayerSample(pitch, pitchExempt, roll, rollExempt, fov, fovExempt, eyeHeight, eyeTarget, Math.max(0.0, shake),
-                lookScale, pitchUnwound, active, cues);
+                lookScale, pitchUnwound, active, cues, ArmPose.of(arms, 0), ArmPose.of(armsExempt, 0),
+                ArmPose.of(arms, 6), ArmPose.of(armsExempt, 6));
     }
 }

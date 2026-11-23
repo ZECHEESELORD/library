@@ -24,6 +24,9 @@ import java.util.function.ToDoubleFunction;
  *     <li>{@code camera.shake}: rotational shake amplitude in degrees</li>
  *     <li>{@code camera.yaw}, {@code camera.pitch}: final view angles, pitch unwound and shake included</li>
  *     <li>{@code camera.eye_target}: the absolute eye height a live absolute curve holds, {@code NaN} when none</li>
+ *     <li>{@code camera.arm_main_x} to {@code camera.arm_main_rot_z} and {@code camera.arm_off_x} to
+ *     {@code camera.arm_off_rot_z}: the first-person arm pose of each hand (blocks, then degrees; see
+ *     {@link sh.harold.library.camera.rig.ArmPose})</li>
  * </ul>
  *
  * <p>A row with no state yet writes {@code NaN}.
@@ -32,7 +35,10 @@ public final class CameraColumns {
 
     public static final List<String> NAMES = List.of("camera.pitch_add", "camera.roll", "camera.fov",
             "camera.fov_add", "camera.eye_height", "camera.look_scale", "camera.shake", "camera.yaw", "camera.pitch",
-            "camera.eye_target");
+            "camera.eye_target", "camera.arm_main_x", "camera.arm_main_y", "camera.arm_main_z",
+            "camera.arm_main_rot_x", "camera.arm_main_rot_y", "camera.arm_main_rot_z", "camera.arm_off_x",
+            "camera.arm_off_y", "camera.arm_off_z", "camera.arm_off_rot_x", "camera.arm_off_rot_y",
+            "camera.arm_off_rot_z");
 
     private CameraColumns() {
     }
@@ -53,6 +59,12 @@ public final class CameraColumns {
         handles.add(column(registry, state, "camera.yaw", s -> s.angles().yaw()));
         handles.add(column(registry, state, "camera.pitch", s -> s.angles().pitch()));
         handles.add(column(registry, state, "camera.eye_target", s -> s.layers().eyeTarget()));
+        for (int i = 0; i < 12; i++) {
+            int axis = i % 6;
+            boolean main = i < 6;
+            handles.add(column(registry, state, NAMES.get(10 + i),
+                    s -> (main ? s.layers().mainArm() : s.layers().offArm()).get(axis)));
+        }
         return List.copyOf(handles);
     }
 

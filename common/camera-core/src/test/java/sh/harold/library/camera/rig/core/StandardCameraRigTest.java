@@ -234,8 +234,11 @@ class StandardCameraRigTest {
         CameraCueHandle dip = rig.start(CameraCue.builder(key("dip"))
                 .channel(CameraChannel.PITCH, CueCurve.constant(30.0, 20)).build());
         CameraState clamped = rig.sample(lookingDown, 1.0);
-        assertEquals(10.0, clamped.layers().pitchAdd(), EPS);
-        assertEquals(90.0, clamped.angles().pitch(), EPS);
+        assertEquals(5.0, clamped.layers().pitchAdd(), EPS, "total pitch stops at 85");
+        assertEquals(85.0, clamped.angles().pitch(), EPS);
+        CameraState beyond = rig.sample(new ViewInput(VIEW.eyePosition(), 0.0, 88.0, 70.0), 1.0);
+        assertEquals(0.0, beyond.layers().pitchAdd(), EPS, "the player's own 88 is never moved, only nothing added");
+        assertEquals(88.0, beyond.angles().pitch(), EPS);
         dip.cancel();
 
         rig.start(CameraCue.builder(key("flip"))
@@ -243,6 +246,71 @@ class StandardCameraRigTest {
         CameraState unwound = rig.sample(lookingDown, 1.0);
         assertEquals(30.0, unwound.layers().pitchAdd(), EPS);
         assertEquals(110.0, unwound.angles().pitch(), EPS);
+    }
+
+    private static CameraCue grip() {
+        return CameraCue.builder(key("grip"))
+                .channel(CameraChannel.ARM_MAIN_Y, CueCurve.constant(0.24, 10))
+                .channel(CameraChannel.ARM_MAIN_ROT_X, CueCurve.constant(-46.0, 10))
+                .curve(ChannelCurve.of(CameraChannel.ARM_OFF_Y, CueCurve.constant(0.24, 10))
+                        .withReduced(CueCurve.constant(0.1, 10)))
+                .build();
+    }
+
+    @Test
+    void armChannelsAreIdentityWithNoCueLive() {
+        StandardCameraRig rig = new StandardCameraRig();
+        rig.start(fov("a", 5.0, 20));
+        LayerState layers = rig.sample(VIEW, 1.0).layers();
+        assertTrue(layers.mainArm().isIdentity());
+        assertTrue(layers.offArm().isIdentity());
+        assertSame(sh.harold.library.camera.rig.ArmPose.IDENTITY, layers.mainArm(), "identity stays the constant");
+    }
+
+    @Test
+    void armCuesSumIntoOnePosePerHand() {
+        StandardCameraRig rig = new StandardCameraRig();
+        rig.start(grip());
+        rig.start(CameraCue.builder(key("nudge")).channel(CameraChannel.ARM_MAIN_Y, CueCurve.constant(0.06, 10))
+                .channel(CameraChannel.ARM_OFF_X, CueCurve.constant(0.1, 10)).build());
+        LayerState layers = rig.sample(VIEW, 2.0).layers();
+        assertEquals(0.30, layers.mainArm().y(), EPS);
+        assertEquals(-46.0, layers.mainArm().rotX(), EPS);
+        assertEquals(0.24, layers.offArm().y(), EPS);
+        assertEquals(0.1, layers.offArm().x(), EPS);
+        assertFalse(layers.isIdentity());
+        assertTrue(layers.activeChannels().contains(CameraChannel.ARM_MAIN_ROT_X));
+        assertEquals(0.0, layers.pitchAdd(), EPS, "an arm pose moves no view channel");
+        assertEquals(VIEW.eyePosition(), rig.sample(VIEW, 2.0).position());
+        assertTrue(rig.sample(VIEW, 30.0).layers().mainArm().isIdentity(), "back to vanilla when the cues end");
+    }
+
+    @Test
+    void reducedKeepsArmsAndUsesArmSubstitutes() {
+        StandardCameraRig rig = new StandardCameraRig();
+        rig.start(grip());
+        rig.setIntensity(IntensityProfile.REDUCED);
+        LayerState layers = rig.sample(VIEW, 2.0).layers();
+        assertEquals(0.24, layers.mainArm().y(), EPS, "stock Reduced keeps the arm pose (arm scale 1)");
+        assertEquals(0.1, layers.offArm().y(), EPS, "a Reduced substitute is used as authored");
+    }
+
+    @Test
+    void armPoseIsClampedPerAxis() {
+        StandardCameraRig rig = new StandardCameraRig();
+        rig.start(CameraCue.builder(key("wild")).channel(CameraChannel.ARM_OFF_Z, CueCurve.constant(-3.0, 10))
+                .channel(CameraChannel.ARM_OFF_ROT_Y, CueCurve.constant(400.0, 10)).build());
+        LayerState layers = rig.sample(VIEW, 2.0).layers();
+        assertEquals(-1.0, layers.offArm().z(), EPS);
+        assertEquals(180.0, layers.offArm().rotY(), EPS);
+    }
+
+    @Test
+    void armChannelIdsRoundTrip() {
+        assertEquals("arm_main_rot_x", CameraChannel.ARM_MAIN_ROT_X.id());
+        assertSame(CameraChannel.ARM_OFF_Z, CameraChannel.fromId("arm_off_z"));
+        assertEquals(8, CameraChannel.ARM_OFF_Z.armIndex());
+        assertFalse(CameraChannel.LOOK_SCALE.isArm());
     }
 
     @Test
