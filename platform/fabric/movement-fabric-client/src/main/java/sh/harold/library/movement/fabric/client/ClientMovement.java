@@ -105,6 +105,8 @@ public final class ClientMovement implements MovementService {
     /** Ticks the jump key has been down in the current press. */
     private int jumpHeldTicks;
     /** J3: the length in ticks of the press released this tick, 0 on every other tick. */
+    /** The fall-distance cap this tick's output asked for, applied after travel; NaN when none. */
+    private double fallCap = Double.NaN;
     private int jumpPressTicks;
     private MoveVerdict lastVerdict;
     private CameraService boundCamera;
@@ -311,6 +313,12 @@ public final class ClientMovement implements MovementService {
         ClientMovement service = managing(entity);
         if (service != null) {
             entity.setDiscardFriction(service.savedDiscardFriction);
+            // W1: the cap applies after the move, as the reference simulation and the server apply it, so the fall
+            // this tick added is capped too and both sides read the same fall distance.
+            if (!Double.isNaN(service.fallCap)) {
+                entity.fallDistance = Math.min(entity.fallDistance, service.fallCap);
+                service.fallCap = Double.NaN;
+            }
             service.record((LocalPlayer) entity);
         }
     }
@@ -349,6 +357,7 @@ public final class ClientMovement implements MovementService {
             jumpPressTicks = previous.jump() ? jumpHeldTicks : 0;
             jumpHeldTicks = 0;
         }
+        fallCap = Double.NaN;
         BodyState body = MinecraftBodies.body(player);
         MovementWorld world = MinecraftBodies.world(player.level());
         output = engine.step(state, body, input, world, tick);
@@ -358,7 +367,8 @@ public final class ClientMovement implements MovementService {
                 case MoveEvent.Started started -> claim(started.claim());
                 case MoveEvent.Ended ended -> end(ended);
                 case MoveEvent.FallDistanceReset ignored -> player.resetFallDistance();
-                case MoveEvent.FallDistanceCap cap -> player.fallDistance = Math.min(player.fallDistance, cap.blocks());
+                case MoveEvent.FallDistanceCap cap -> fallCap = Double.isNaN(fallCap) ? cap.blocks()
+                        : Math.min(fallCap, cap.blocks());
                 case MoveEvent.Particles particles -> particles(player, particles);
                 default -> {
                 }
