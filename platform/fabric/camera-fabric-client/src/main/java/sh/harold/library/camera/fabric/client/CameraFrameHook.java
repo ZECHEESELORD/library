@@ -1,5 +1,6 @@
 package sh.harold.library.camera.fabric.client;
 
+import sh.harold.library.camera.rig.ArmPose;
 import sh.harold.library.camera.rig.CameraState;
 import sh.harold.library.camera.rig.ViewInput;
 import sh.harold.library.spatial.Vec3;
@@ -51,5 +52,22 @@ public final class CameraFrameHook {
         }
         CameraState state = service.frameState();
         return state == null ? 1.0 : state.lookInputScale();
+    }
+
+    /**
+     * The first-person arm pose of the last driven frame for the main ({@code true}) or off arm: identity when no
+     * service is open, the rig is not driving or no arm cue is live, so the hands are drawn exactly as vanilla draws
+     * them.
+     */
+    public static ArmPose armPose(boolean main) {
+        FabricCameraService service = FabricClientCamera.current();
+        if (service == null) {
+            return ArmPose.IDENTITY;
+        }
+        CameraState state = service.frameState();
+        if (state == null) {
+            return ArmPose.IDENTITY;
+        }
+        return main ? state.layers().mainArm() : state.layers().offArm();
     }
 }

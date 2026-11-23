@@ -23,6 +23,7 @@ import sh.harold.library.movement.SlideVariant;
 import sh.harold.library.movement.core.ClaimValidator;
 import sh.harold.library.movement.core.MovementEngine;
 import sh.harold.library.movement.core.tuning.JsonText;
+import sh.harold.library.movement.core.ReferenceIntegrator;
 import sh.harold.library.movement.core.tuning.Moveset;
 import sh.harold.library.movement.core.tuning.MovesetSpec;
 import sh.harold.library.movement.fabric.net.MovementPayloads;
@@ -333,7 +334,7 @@ public final class ServerMovement implements MovementService {
         } else if (move.equals(MoveKeys.WALL_JUMP)) {
             player.resetFallDistance();
             mover.lastKick = claim.normal();
-        } else if (move.equals(MoveKeys.WALL_SLIDE) || move.equals(MoveKeys.MANTLE)) {
+        } else if (move.equals(MoveKeys.MANTLE)) {
             player.resetFallDistance();
         }
     }
@@ -347,9 +348,6 @@ public final class ServerMovement implements MovementService {
             setBody(player, mover, -1, null);
         }
         if (mover.liveSeq == end.seq()) {
-            if (MoveKeys.WALL_SLIDE.equals(mover.liveMove)) {
-                player.resetFallDistance();
-            }
             mover.liveMove = null;
             mover.liveSeq = -1;
         }
@@ -397,6 +395,7 @@ public final class ServerMovement implements MovementService {
                 continue;
             }
             mover.observe(player, tick);
+            capSlideFall(player, mover);
             for (Iterator<Pending> it = mover.pending.iterator(); it.hasNext(); ) {
                 Pending pending = it.next();
                 pending.waited++;
@@ -411,6 +410,25 @@ public final class ServerMovement implements MovementService {
                 applyFall(player, mover.pendingFall, 0.0);
             }
         }
+    }
+
+    /**
+     * W1: while a wall slide is live, fall distance is at most the height a fall from rest needs to reach the observed
+     * fall speed, so a slide that slowed the body forgives the fall before it and a brief brush does not. The speed is
+     * the larger of the last two ticks' observed drops, so a tick with no movement packet does not read as stopped.
+     */
+    private void capSlideFall(ServerPlayer player, Mover mover) {
+        double y = player.getY();
+        double drop = Double.isNaN(mover.lastY) ? 0.0 : Math.max(0.0, mover.lastY - y);
+        if (MoveKeys.WALL_SLIDE.equals(mover.liveMove)) {
+            double speed = Math.max(drop, mover.lastDrop);
+            double cap = ReferenceIntegrator.equivalentFallHeight(speed);
+            if (player.fallDistance > cap) {
+                player.fallDistance = cap;
+            }
+        }
+        mover.lastDrop = drop;
+        mover.lastY = y;
     }
 
     private void push(ServerPlayer player) {
@@ -527,6 +545,8 @@ public final class ServerMovement implements MovementService {
         PendingFall pendingFall;
         MoveVerdict lastVerdict;
         long observedTick = Long.MIN_VALUE;
+        double lastY = Double.NaN;
+        double lastDrop;
 
         void observe(ServerPlayer player, long tick) {
             boolean sneak = player.getLastClientInput().shift();

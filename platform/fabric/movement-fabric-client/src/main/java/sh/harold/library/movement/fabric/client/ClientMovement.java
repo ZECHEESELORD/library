@@ -102,6 +102,10 @@ public final class ClientMovement implements MovementService {
     private MovementState state = new MovementState();
     private MoveOutput output = MoveOutput.NONE;
     private InputFrame input = InputFrame.EMPTY;
+    /** Ticks the jump key has been down in the current press. */
+    private int jumpHeldTicks;
+    /** J3: the length in ticks of the press released this tick, 0 on every other tick. */
+    private int jumpPressTicks;
     private MoveVerdict lastVerdict;
     private CameraService boundCamera;
     private CameraService ownedCamera;
@@ -269,6 +273,9 @@ public final class ClientMovement implements MovementService {
             return;
         }
         MoveOutput out = service.output;
+        if (out.cancelSprint()) {
+            entity.setSprinting(false);
+        }
         if (out.jump()) {
             ((LocalPlayer) entity).jumpFromGround();
         }
@@ -333,7 +340,15 @@ public final class ClientMovement implements MovementService {
     private void step(LocalPlayer player) {
         tick++;
         smoother.tick();
+        InputFrame previous = input;
         input = MinecraftBodies.input(player.input.keyPresses);
+        if (input.jump()) {
+            jumpHeldTicks++;
+            jumpPressTicks = 0;
+        } else {
+            jumpPressTicks = previous.jump() ? jumpHeldTicks : 0;
+            jumpHeldTicks = 0;
+        }
         BodyState body = MinecraftBodies.body(player);
         MovementWorld world = MinecraftBodies.world(player.level());
         output = engine.step(state, body, input, world, tick);
@@ -343,6 +358,7 @@ public final class ClientMovement implements MovementService {
                 case MoveEvent.Started started -> claim(started.claim());
                 case MoveEvent.Ended ended -> end(ended);
                 case MoveEvent.FallDistanceReset ignored -> player.resetFallDistance();
+                case MoveEvent.FallDistanceCap cap -> player.fallDistance = Math.min(player.fallDistance, cap.blocks());
                 case MoveEvent.Particles particles -> particles(player, particles);
                 default -> {
                 }
@@ -554,6 +570,7 @@ public final class ClientMovement implements MovementService {
         columns.add(registry.registerLong("move.pending", frame -> pending.size()));
         columns.add(registry.registerDouble("body.height", frame -> frame.player().getBbHeight()));
         columns.add(registry.registerDouble("body.fall_distance", frame -> frame.player().fallDistance));
+        columns.add(registry.registerLong("move.jump_press_ticks", frame -> jumpPressTicks));
     }
 
     @Override
