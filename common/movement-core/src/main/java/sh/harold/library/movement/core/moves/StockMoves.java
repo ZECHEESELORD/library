@@ -17,10 +17,11 @@ public final class StockMoves {
         List<MoveDefinition> definitions = new ArrayList<>();
         int buffer = moveset.core().inputBufferTicks();
         if (moveset.enables(MoveKeys.JUMP)) {
-            definitions.add(new JumpMove(moveset.jump(), moveset.core().coyoteTicks()));
+            definitions.add(new JumpMove(moveset.jump(), moveset.core().coyoteTicks(), buffer));
         }
         if (moveset.enables(MoveKeys.MANTLE)) {
-            definitions.add(new MantleMove(moveset.mantle(), buffer));
+            definitions.add(new MantleMove(moveset.mantle(), buffer, moveset.enables(MoveKeys.SLIDE)));
+            definitions.add(new MantleRefusal(moveset.mantle(), buffer));
         }
         if (moveset.enables(MoveKeys.ROLL)) {
             definitions.add(new RollMove(moveset.roll(), moveset.core().latencyGraceTicks()));

@@ -40,33 +40,21 @@ class SlideTest {
                 .toList();
     }
 
+    /** S1: a flat slide from a sprint ends on the 0.19 speed floor after 16 ticks and 4.21 blocks. */
     @Test
-    void flatSlideMatchesTheFirstSixteenTicks() {
+    void flatSlideEndsOnTheSpeedFloor() {
         Driver driver = sprinting(slideOnly(SlideVariant.S1), TestWorld.flat());
         driver.run(Driver.keys("FSN"), 40);
         List<Double> steps = slideSteps(driver);
-        assertEquals(0.35, steps.getFirst(), 0.002, "T0 speed from a plain sprint");
-        double sixteen = steps.subList(0, 16).stream().mapToDouble(Double::doubleValue).sum();
-        assertEquals(4.2, sixteen, 0.01, "02: a flat slide covers 4.2 blocks in 16 ticks");
-        assertEquals(0.18, steps.get(16), 0.005, "02: ends at 0.18 b/t");
-    }
-
-    /**
-     * Mismatch with 02: "covers 4.2 blocks in 16 ticks and ends at 0.18 b/t" holds for the first 16 ticks, but the
-     * end rules in the same table (speed below 0.16, or 20 ticks on the flat) let a flat slide run 20 ticks, cover
-     * about 4.88 blocks and stop from about 0.16 b/t. Reported, not tuned away.
-     */
-    @Test
-    void reportsFlatSlideEndRuleMismatch() {
-        Driver driver = sprinting(slideOnly(SlideVariant.S1), TestWorld.flat());
-        driver.run(Driver.keys("FSN"), 40);
-        List<Double> steps = slideSteps(driver);
+        assertEquals(0.35075, steps.getFirst(), 0.002, "T0 speed from a plain sprint");
+        assertEquals(16, steps.size(), "16 ticks");
         double total = steps.stream().mapToDouble(Double::doubleValue).sum();
-        System.out.printf("MISMATCH 02 slide length: 02 says 16 ticks / 4.2 blocks / 0.18 at the end; end rules give "
-                + "%d ticks / %.3f blocks / last speed %.3f%n", steps.size(), total, steps.getLast());
-        assertEquals(20, steps.size());
-        assertEquals(4.88, total, 0.02);
-        assertTrue(Math.abs(total - 4.2) > 0.5);
+        assertEquals(4.21, total, 0.01, "4.21 blocks");
+        assertEquals(0.19014, steps.getLast(), 0.001, "the last slide tick still moves at the floor");
+        assertEquals(0.1825, steps.getLast() * 0.96, 0.001, "the speed that ends it");
+        var end = driver.firstEnd(MoveKeys.SLIDE).orElseThrow();
+        assertTrue(end.output().events().stream().anyMatch(e -> e instanceof MoveEvent.Ended ended
+                && ended.reason() == MoveEnd.EndReason.CONDITION));
     }
 
     @Test
@@ -121,22 +109,36 @@ class SlideTest {
         driver.run(Driver.keys("FSN"), 5);
         var output = driver.tick(Driver.keys("FSNJ"));
         assertTrue(output.jump());
+        assertTrue(output.discardFriction(), "S4: the launch tick skips ground friction");
+        assertEquals(0.0, output.inputScale(), 1.0e-12);
         double speed = Math.hypot(output.velocityX().value(), output.velocityZ().value());
         assertTrue(speed > 0.35 * Math.pow(0.96, 5) + 0.09, "slide speed plus 0.1: " + speed);
         assertTrue(driver.firstEnd(MoveKeys.SLIDE).isPresent());
     }
 
+    /** S3: an immediate second slide is never refused; its boost has only refilled for the ticks since the first. */
     @Test
-    void cooldownBlocksAnImmediateSecondSlide() {
+    void secondSlideStartsAtOnceWithAPartlyRefilledBoost() {
         Driver driver = sprinting(slideOnly(SlideVariant.S1), TestWorld.flat());
         driver.run(Driver.keys("FSN"), 8);
         driver.run(Driver.keys("FS"), 1);
         long ended = driver.firstEnd(MoveKeys.SLIDE).orElseThrow().tick();
         driver.run(Driver.keys("FS"), 2);
-        driver.run(Driver.keys("FSN"), 1);
-        long starts = driver.trace.stream().filter(frame -> frame.output().events().stream()
-                .anyMatch(e -> e instanceof MoveEvent.Started s && s.move().equals(MoveKeys.SLIDE))).count();
-        assertEquals(1, starts, "cooldown after the slide ended at " + ended);
+        driver.run(Driver.keys("FSN"), 2);
+        var starts = driver.trace.stream().filter(frame -> frame.output().events().stream()
+                .anyMatch(e -> e instanceof MoveEvent.Started s && s.move().equals(MoveKeys.SLIDE))).toList();
+        assertEquals(2, starts.size(), "no lockout");
+        var second = starts.get(1);
+        long since = second.tick() - ended;
+        var before = driver.trace.stream().filter(f -> f.tick() == second.tick() - 1).findFirst().orElseThrow();
+        double entry = Math.hypot(before.after().position().x() - before.before().position().x(),
+                before.after().position().z() - before.before().position().z());
+        double refill = Math.min(1.0, since / 20.0);
+        double expected = Math.max(entry, 0.2806) * (1.0 + 0.25 * refill);
+        double t0 = Math.hypot(second.output().velocityX().value(), second.output().velocityZ().value());
+        assertEquals(expected, t0, 1.0e-9, "boost x" + (1.0 + 0.25 * refill) + " after " + since + " ticks");
+        assertEquals((4.0 + 4.0 * refill) / 5.0, second.output().cameraSignals().fov(), 1.0e-9,
+                "T0 FOV is a fifth of the kick 4 + 4r");
     }
 
     @Test

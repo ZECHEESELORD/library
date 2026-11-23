@@ -21,7 +21,10 @@
     "eyeLowTick": 2,
     "eyeRiseFromTick": 6,
     "eyeRiseTick": 9,
-    "reducedDip": 25
+    "reducedDip": 25,
+    "sideMinDegrees": 60,
+    "sideMaxDegrees": 120,
+    "sideRoll": 8
   },
   "sound": { "start": "minecraft:item.armor.equip_leather", "startPitch": 0.8, "stepTicks": [3, 6] }
 }

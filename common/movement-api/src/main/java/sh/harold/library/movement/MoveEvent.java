@@ -33,8 +33,20 @@ public sealed interface MoveEvent {
     record FallDamageModifier(double blocks) implements MoveEvent {
     }
 
-    /** The fall measured for damage restarts from here (the end of a wall slide, a wall kick). */
+    /** The fall measured for damage restarts from here (a wall kick). */
     record FallDistanceReset() implements MoveEvent {
+    }
+
+    /**
+     * The fall measured for damage is at most {@code blocks} from here: a wall slide keeps it at the height a fall
+     * from rest needs to reach the current fall speed, so a slow slide never erases a long fall it did not brake.
+     */
+    record FallDistanceCap(double blocks) implements MoveEvent {
+        public FallDistanceCap {
+            if (!(blocks >= 0.0)) {
+                throw new IllegalArgumentException("blocks must be non-negative");
+            }
+        }
     }
 
     /** A cosmetic particle burst the host draws (wall-slide dust at the feet). */

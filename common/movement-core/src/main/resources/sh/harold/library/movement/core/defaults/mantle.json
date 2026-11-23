@@ -2,10 +2,30 @@
   "reach": 0.45,
   "minHeight": 0.9,
   "maxHeight": 1.6,
-  "vaultMaxHeight": 1.1,
+  "vaultMinHeight": 0.8,
+  "vaultMaxHeight": 1.3,
+  "groundMaxHeight": 1.25,
+  "sprintSpeed": 0.2,
+  "approachDegrees": 45,
+  "maxFall": 6,
   "headroom": 1.8,
   "depth": 0.6,
-  "vault": { "ticks": 5, "keepHorizontal": 0.8, "swingEyeAboveLedge": 1.2, "swingTick": 2, "riseTick": 4, "forward": 0.5 },
+  "vault": {
+    "ticks": 5,
+    "sprintExitSpeed": 0.2806,
+    "swingEyeAboveLedge": 1.2,
+    "swingTick": 2,
+    "riseTick": 4,
+    "forward": 0.5,
+    "hopFromTick": 3,
+    "hopToTick": 5,
+    "slideMinSpeed": 0.25,
+    "camera": {
+      "pitch": [[2, 6], [5, 0]],
+      "reducedPitchScale": 0.5,
+      "mainArm": [[0, 0, 0.24, 0, -46, 0, 0], [1, 0, 0.24, 0, -46, 0, 0], [3, 0.1, -0.12, 0, 0, 0, 0], [4, 0, 0, 0, 0, 0, 0]]
+    }
+  },
   "climb": {
     "ticks": 9,
     "settleTick": 2,
@@ -15,8 +35,30 @@
     "forward": 0.35,
     "inputTick": 7,
     "cancelWindowTicks": 2,
-    "exitSpeed": 0.2159,
-    "camera": { "bounce": 0.05, "hangPitch": -4, "hangRoll": 2, "pullPitch": -8, "pullPitchTick": 4, "pullPitchEndTick": 7 }
+    "walkExitSpeed": 0.2159,
+    "sprintExitSpeed": 0.2806,
+    "bufferFromTick": 4,
+    "hopFromTick": 5,
+    "hopToTick": 8,
+    "hopSpeed": 0.1,
+    "strafeFromTick": 5,
+    "strafeSpeed": 0.05,
+    "slideMinSpeed": 0.25,
+    "camera": {
+      "eye": [[0, -0.08], [2, 0]],
+      "pitch": [[0, 4], [1, 8], [3, 15], [5, 10], [7, 3], [8, 0]],
+      "reducedPitchScale": 0.5,
+      "roll": [[1, 2], [3, 2], [4, -1.5], [6, -1.5], [8, 0]],
+      "arms": [[1, 0, 0.24, 0, -46, 0, 0], [3, 0, 0.24, 0, -46, 0, 0], [7, 0.1, -0.12, 0, 0, 0, 0], [8, 0, 0, 0, 0, 0, 0]],
+      "hopFov": 2,
+      "hopFovInTicks": 1,
+      "hopFovOutTicks": 4
+    }
+  },
+  "refusal": {
+    "ticks": 4,
+    "hitPitch": 1.0,
+    "arms": [[0, 0, 0.12, -0.2, -30, 0, 0], [1, 0, 0.12, -0.2, -30, 0, 0], [3, 0, 0, 0, 0, 0, 0]]
   },
   "hitPitch": 0.8
 }

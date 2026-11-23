@@ -34,16 +34,14 @@ class MantleTest {
                 - driver.firstStart(MoveKeys.MANTLE).orElseThrow().tick();
     }
 
+    /** MA5: a standing tap at a 1-block step is the vanilla jump, not a mantle. */
     @Test
-    void oneBlockLedgeVaultsInFiveTicks() {
+    void standingTapAtAOneBlockStepIsTheVanillaJump() {
         Driver driver = atWall(1, false);
         driver.tick(Driver.keys("FJ"));
         driver.run(Driver.keys("F"), 12);
-        var start = driver.firstStart(MoveKeys.MANTLE).orElseThrow();
-        assertEquals("vault_swing", start.output().status().phase());
-        assertEquals(5, duration(driver));
-        assertEquals(1.0, driver.body().position().y(), 0.01, "standing on the ledge");
-        assertTrue(driver.body().position().z() > 2.0);
+        assertTrue(driver.firstStart(MoveKeys.MANTLE).isEmpty());
+        assertEquals(1.0, driver.body().position().y(), 0.01, "the jump still lands on the step");
         assertTrue(driver.body().onGround());
     }
 

@@ -14,15 +14,18 @@ import sh.harold.library.movement.MoveKeys;
 import sh.harold.library.movement.MoveOutput;
 import sh.harold.library.movement.MoveSound;
 import sh.harold.library.movement.VelocityRule;
+import sh.harold.library.movement.core.ReferenceIntegrator;
 import sh.harold.library.movement.core.tuning.WallJumpTuning;
 import sh.harold.library.spatial.Vec3;
 
 import java.util.Optional;
 
 /**
- * 02 section 5, the wall slide: while falling and pushing into a wall, fall speed is capped for up to 24 ticks, with
- * dust and a step sound every 4. A passive move with its own claim. Fall distance restarts when the slide starts and
- * again when it ends, so a slide down to the ground does not land with the fall from before it.
+ * 02 section 5 with rulings W1 and W2, the wall slide: while falling and pushing into a wall, fall speed is braked (at
+ * most {@code maxBrake} per tick) toward a cap that ramps from 0.12 to 0.40 over 24 ticks, with dust and a step sound
+ * every 4 and a small roll away from the wall. A passive move with its own claim. Fall distance is never reset: each
+ * slide tick caps it at the height a fall from rest needs to reach the current fall speed, so a slide that really
+ * slowed the body forgives the fall before it and a brush that did not keeps it.
  */
 public final class WallSlideMove implements MoveDefinition {
 
@@ -112,12 +115,25 @@ public final class WallSlideMove implements MoveDefinition {
                 k = 0;
                 context.claim(MoveClaim.of(MoveKeys.WALL_SLIDE, context.tick(), body.position(), body.velocity())
                         .withNormal(wall.get().normal()));
-                out.event(new MoveEvent.FallDistanceReset());
             } else {
                 k++;
             }
+            double cap = slide.cap(used);
             used++;
-            out.velocityY(VelocityRule.capFall(slide.maxFall()));
+            double fall = body.velocity().y();
+            double speed;
+            if (fall < -cap) {
+                double braked = Math.min(-cap, fall + slide.maxBrake());
+                out.velocityY(VelocityRule.set(braked));
+                speed = -braked;
+            } else {
+                out.velocityY(VelocityRule.capFall(cap));
+                speed = -fall;
+            }
+            out.event(new MoveEvent.FallDistanceCap(ReferenceIntegrator.equivalentFallHeight(speed)));
+            double side = wall.get().normal().dot(body.right());
+            double away = side == 0.0 ? 1.0 : Math.signum(side);
+            out.cameraSignals(new MoveOutput.CameraSignals(0.0, slide.roll() * away, 0.0));
             if (k % slide.effectEveryTicks() == 0) {
                 out.event(new MoveEvent.Particles("wall_dust", body.position()));
                 out.sound(MoveSound.event(slide.sound(), body.position(), 0.6, slide.pitch()));
@@ -129,7 +145,6 @@ public final class WallSlideMove implements MoveDefinition {
             if (sliding) {
                 sliding = false;
                 context.endClaim(MoveKeys.WALL_SLIDE, reason);
-                out.event(new MoveEvent.FallDistanceReset());
             }
         }
 

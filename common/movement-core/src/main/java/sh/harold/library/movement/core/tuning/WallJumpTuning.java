@@ -45,7 +45,8 @@ public record WallJumpTuning(
                 Json.number(object, "kickUp"),
                 Json.number(object, "kickAway"),
                 Json.number(object, "kickInput"),
-                new Slide(Json.positive(slide, "maxFall"), Json.ticks(slide, "maxTicks"),
+                new Slide(Json.positive(slide, "maxFall"), Json.positive(slide, "endFall"), Json.ticks(slide, "maxTicks"),
+                        Json.positive(slide, "maxBrake"), Json.number(slide, "roll"),
                         Json.nonNegative(slide, "pushThreshold"), Math.max(1, Json.ticks(slide, "effectEveryTicks")),
                         Json.string(slide, "sound"), Json.positive(slide, "pitch")),
                 new Camera(Json.number(camera, "roll"), Json.ticks(camera, "inTick"), Json.ticks(camera, "holdTick"),
@@ -56,13 +57,25 @@ public record WallJumpTuning(
     /**
      * The wall slide.
      *
-     * @param maxFall          fall speed cap (0.12)
+     * @param maxFall          fall speed cap on the first slide tick (0.12)
+     * @param endFall          rising linearly to this on the last (0.40, W2)
      * @param maxTicks         for up to (24)
+     * @param maxBrake         fall speed approaches the cap by at most this per tick (0.15, W1)
+     * @param roll             camera roll away from the wall while sliding (3); Reduced drops it
      * @param pushThreshold    how squarely the movement keys must push into the wall (dot product)
      * @param effectEveryTicks dust and sound every (4)
      */
-    public record Slide(double maxFall, int maxTicks, double pushThreshold, int effectEveryTicks, String sound,
-                        double pitch) {
+    public record Slide(double maxFall, double endFall, int maxTicks, double maxBrake, double roll,
+                        double pushThreshold, int effectEveryTicks, String sound, double pitch) {
+
+        /** The fall-speed cap on slide tick {@code index} (0-based). */
+        public double cap(int index) {
+            if (maxTicks <= 1) {
+                return maxFall;
+            }
+            double u = Math.clamp((double) index / (maxTicks - 1), 0.0, 1.0);
+            return maxFall + (endFall - maxFall) * u;
+        }
     }
 
     /** Kick camera in 02's ticks: roll and FOV reach full by the end of {@code inTick}, hold to {@code holdTick}. */

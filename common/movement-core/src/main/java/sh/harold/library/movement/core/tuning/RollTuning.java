@@ -61,7 +61,8 @@ public record RollTuning(
                         Json.number(camera, "fov"), Json.ticks(camera, "fovPeakTick"), Json.ticks(camera, "fovEndTick"),
                         Json.positive(camera, "eyeLow"), Json.ticks(camera, "eyeLowTick"),
                         Json.ticks(camera, "eyeRiseFromTick"), Json.ticks(camera, "eyeRiseTick"),
-                        Json.number(camera, "reducedDip")),
+                        Json.number(camera, "reducedDip"), Json.nonNegative(camera, "sideMinDegrees"),
+                        Json.nonNegative(camera, "sideMaxDegrees"), Json.number(camera, "sideRoll")),
                 new Sound(Json.string(sound, "start"), Json.positive(sound, "startPitch"),
                         Json.integers(sound, "stepTicks")));
     }
@@ -78,10 +79,14 @@ public record RollTuning(
      * @param eyeLowTick      reached at the end of this tick (T2)
      * @param eyeRiseFromTick held until the end of this tick (T6)
      * @param eyeRiseTick     back to standing at the end of this tick (T9)
-     * @param reducedDip      Reduced intensity's pitch dip in place of the turn (25)
+     * @param reducedDip      the pitch dip in place of a turn: Reduced always, Full for a sideways roll (25)
+     * @param sideMinDegrees  travel more than this from the look is sideways: no flip (60, RO1)
+     * @param sideMaxDegrees  and more than this is backward: a backward turn (120)
+     * @param sideRoll        a sideways roll leans this far toward the travel side (8); Reduced drops it
      */
     public record Camera(double turnDegrees, int halfTurnTick, double fov, int fovPeakTick, int fovEndTick,
-                         double eyeLow, int eyeLowTick, int eyeRiseFromTick, int eyeRiseTick, double reducedDip) {
+                         double eyeLow, int eyeLowTick, int eyeRiseFromTick, int eyeRiseTick, double reducedDip,
+                         double sideMinDegrees, double sideMaxDegrees, double sideRoll) {
     }
 
     public record Sound(String start, double startPitch, List<Integer> stepTicks) {

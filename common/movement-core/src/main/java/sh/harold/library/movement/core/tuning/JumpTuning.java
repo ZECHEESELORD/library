@@ -8,12 +8,13 @@ import sh.harold.library.reload.JsonValue.JsonObject;
 import java.util.List;
 
 /** {@code jump.json}: 02 section 1. Presets A and C share one code path; B adds the squat. */
-public record JumpTuning(JumpPreset preset, Boost boost, Charge charge, Cut cut, Camera camera, Sound sound) {
+public record JumpTuning(JumpPreset preset, Boost boost, Charge charge, Cut cut, Camera camera, Stumble stumble,
+                         Sound sound) {
 
     public static final String FILE = "jump.json";
 
     public JumpTuning withPreset(JumpPreset next) {
-        return new JumpTuning(next, boost, charge, cut, camera, sound);
+        return new JumpTuning(next, boost, charge, cut, camera, stumble, sound);
     }
 
     public static JumpTuning decode(JsonValue root) {
@@ -46,13 +47,13 @@ public record JumpTuning(JumpPreset preset, Boost boost, Charge charge, Cut cut,
                         Json.ticks(camera, "boostFovInTicks"),
                         Json.ticks(camera, "boostFovOutTicks"),
                         Json.nonNegative(camera, "landingMinFall"),
+                        Json.nonNegative(camera, "landingDipBase"),
                         Json.nonNegative(camera, "landingDipPerBlock"),
                         Json.nonNegative(camera, "landingDipMax"),
                         Json.ticks(camera, "landingDipTicks"),
-                        Json.ticks(camera, "landingRecoverTicks"),
-                        Json.nonNegative(camera, "hardLandingFall"),
-                        Json.nonNegative(camera, "hardLandingShake"),
-                        Json.ticks(camera, "hardLandingShakeTicks")),
+                        Json.ticks(camera, "landingRecoverTicks")),
+                new Stumble(Json.nonNegative(Json.object(object, "stumble"), "fall"),
+                        Json.ticks(Json.object(object, "stumble"), "ticks")),
                 new Sound(Json.string(sound, "boostSound"), Json.positive(sound, "boostPitch"),
                         Json.nonNegative(sound, "boostVolume"), Json.ticks(sound, "boostTick")));
     }
@@ -71,7 +72,7 @@ public record JumpTuning(JumpPreset preset, Boost boost, Charge charge, Cut cut,
      * Preset B.
      *
      * @param maxTicks     the longest squat (8)
-     * @param moveScale    movement input while squatting (0.6)
+     * @param moveScale    movement input while squatting (1.0, J1: full run-up speed)
      * @param launchSpeeds launch speed by squat ticks held, index 0 to {@code maxTicks}
      */
     public record Charge(int maxTicks, double moveScale, List<Double> launchSpeeds) {
@@ -92,7 +93,12 @@ public record JumpTuning(JumpPreset preset, Boost boost, Charge charge, Cut cut,
     /**
      * 02's jump camera.
      *
-     * @param landingMinFall the shortest fall that dips the eye; above a tapped jump's 1.25 so a tap stays vanilla
+     * @param landingMinFall     falls this long or shorter do not dip the eye (1.3, J4); a tapped jump is 1.25
+     * @param landingDipBase     the dip just above {@code landingMinFall} (0.03)
+     * @param landingDipPerBlock and per block of fall above it (0.045)
+     * @param landingDipMax      the deepest dip (0.25)
+     * @param landingDipTicks    down over this many ticks (2)
+     * @param landingRecoverTicks back over this many, easing out (5)
      */
     public record Camera(
             int boostFovMinHoldTicks,
@@ -100,14 +106,29 @@ public record JumpTuning(JumpPreset preset, Boost boost, Charge charge, Cut cut,
             int boostFovInTicks,
             int boostFovOutTicks,
             double landingMinFall,
+            double landingDipBase,
             double landingDipPerBlock,
             double landingDipMax,
             int landingDipTicks,
-            int landingRecoverTicks,
-            double hardLandingFall,
-            double hardLandingShake,
-            int hardLandingShakeTicks
+            int landingRecoverTicks
     ) {
+
+        /** The landing dip for a fall of {@code fall} blocks; 0 at or below {@code landingMinFall}. */
+        public double landingDip(double fall) {
+            if (fall <= landingMinFall + 1.0e-9) {
+                return 0.0;
+            }
+            return Math.min(landingDipMax, landingDipBase + landingDipPerBlock * (fall - landingMinFall));
+        }
+    }
+
+    /**
+     * A hard landing (J5): a fall this long or longer that no roll took cuts sprint for {@code ticks} ticks.
+     *
+     * @param fall  (4)
+     * @param ticks (6)
+     */
+    public record Stumble(double fall, int ticks) {
     }
 
     public record Sound(String boostSound, double boostPitch, double boostVolume, int boostTick) {

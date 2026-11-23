@@ -51,10 +51,16 @@ public final class MovementSimulation {
         BodyState body = integrator.step(from.body(), input, output, world, engine.has(MoveKeys.JUMP));
         for (var event : output.events()) {
             if (event instanceof sh.harold.library.movement.MoveEvent.FallDistanceReset) {
-                body = new BodyState(body.position(), body.velocity(), body.onGround(), body.horizontalCollision(),
-                        0.0, body.yaw(), body.pitch(), body.sprinting(), body.width(), body.height(), body.exempt());
+                body = withFall(body, 0.0);
+            } else if (event instanceof sh.harold.library.movement.MoveEvent.FallDistanceCap cap) {
+                body = withFall(body, Math.min(body.fallDistance(), cap.blocks()));
             }
         }
         return new Snapshot(body, state, integrator.noJumpDelay(), output);
+    }
+
+    private static BodyState withFall(BodyState body, double fall) {
+        return new BodyState(body.position(), body.velocity(), body.onGround(), body.horizontalCollision(), fall,
+                body.yaw(), body.pitch(), body.sprinting(), body.width(), body.height(), body.exempt());
     }
 }

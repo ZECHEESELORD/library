@@ -69,6 +69,60 @@ final class Json {
         return List.copyOf(values);
     }
 
+    /** A list of {@code [tick, value]} pairs with ticks rising. */
+    static List<TickKey> keys(JsonObject object, String name) {
+        List<TickKey> keys = new ArrayList<>();
+        int last = -1;
+        for (JsonValue element : object.get(name).asArray().elements()) {
+            List<JsonValue> pair = element.asArray().elements();
+            if (pair.size() != 2) {
+                throw new DataDecodeException(element, name + " entries must be [tick, value] pairs");
+            }
+            int tick = pair.get(0).asInt();
+            double value = pair.get(1).asDouble();
+            if (tick <= last || !Double.isFinite(value)) {
+                throw new DataDecodeException(element, name + " ticks must rise and values be finite");
+            }
+            last = tick;
+            keys.add(new TickKey(tick, value));
+        }
+        if (keys.isEmpty()) {
+            throw new DataDecodeException(object.get(name), name + " must not be empty");
+        }
+        return List.copyOf(keys);
+    }
+
+    /** An arm pose written as {@code [x, y, z, rotX, rotY, rotZ]}. */
+    static ArmPoseTuning arm(JsonObject object, String name) {
+        List<Double> values = numbers(object, name);
+        if (values.size() != 6) {
+            throw new DataDecodeException(object.get(name), name + " must be [x, y, z, rotX, rotY, rotZ]");
+        }
+        return new ArmPoseTuning(values.get(0), values.get(1), values.get(2), values.get(3), values.get(4),
+                values.get(5));
+    }
+
+    /** A list of {@code [tick, x, y, z, rotX, rotY, rotZ]} arm keys with ticks rising. */
+    static List<ArmKey> armKeys(JsonObject object, String name) {
+        List<ArmKey> keys = new ArrayList<>();
+        int last = -1;
+        for (JsonValue element : object.get(name).asArray().elements()) {
+            List<JsonValue> values = element.asArray().elements();
+            if (values.size() != 7) {
+                throw new DataDecodeException(element, name + " entries must be [tick, x, y, z, rotX, rotY, rotZ]");
+            }
+            int tick = values.get(0).asInt();
+            if (tick <= last) {
+                throw new DataDecodeException(element, name + " ticks must rise");
+            }
+            last = tick;
+            keys.add(new ArmKey(tick, new ArmPoseTuning(values.get(1).asDouble(), values.get(2).asDouble(),
+                    values.get(3).asDouble(), values.get(4).asDouble(), values.get(5).asDouble(),
+                    values.get(6).asDouble())));
+        }
+        return List.copyOf(keys);
+    }
+
     static List<Integer> integers(JsonObject object, String name) {
         List<Integer> values = new ArrayList<>();
         for (JsonValue element : object.get(name).asArray().elements()) {

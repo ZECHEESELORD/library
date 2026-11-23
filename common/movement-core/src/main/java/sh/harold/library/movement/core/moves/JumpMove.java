@@ -31,10 +31,20 @@ public final class JumpMove implements MoveDefinition {
 
     private final JumpTuning tuning;
     private final int coyoteTicks;
+    private final int bufferTicks;
 
     public JumpMove(JumpTuning tuning, int coyoteTicks) {
+        this(tuning, coyoteTicks, 4);
+    }
+
+    /**
+     * @param bufferTicks the input buffer: a jump launched by a press this recent is fresh and may boost (J2); one
+     *                    auto-repeated by holding the key through a landing is vanilla
+     */
+    public JumpMove(JumpTuning tuning, int coyoteTicks, int bufferTicks) {
         this.tuning = tuning;
         this.coyoteTicks = coyoteTicks;
+        this.bufferTicks = Math.max(1, bufferTicks);
     }
 
     @Override
@@ -54,13 +64,17 @@ public final class JumpMove implements MoveDefinition {
 
     @Override
     public Optional<MoveInstance> tryStart(MoveContext context) {
-        return Optional.of(new Instance(tuning, context.tick()));
+        return Optional.of(new Instance(tuning, context.tick(), bufferTicks));
     }
 
     static final class Instance implements MoveInstance {
 
         private final JumpTuning tuning;
+        private final int bufferTicks;
         private long startTick;
+        private boolean fresh;
+        private int stumbleLeft;
+        private long lastTick = Long.MIN_VALUE;
         private int noJumpDelay;
         private boolean flying;
         private int airTick;
@@ -71,9 +85,10 @@ public final class JumpMove implements MoveDefinition {
         private int squatTicks;
         private String phase = "idle";
 
-        Instance(JumpTuning tuning, long startTick) {
+        Instance(JumpTuning tuning, long startTick, int bufferTicks) {
             this.tuning = tuning;
             this.startTick = startTick;
+            this.bufferTicks = bufferTicks;
         }
 
         @Override
@@ -95,6 +110,10 @@ public final class JumpMove implements MoveDefinition {
         public Step tick(MoveContext context, MoveOutput.Builder out) {
             BodyState body = context.body();
             long tick = context.tick();
+            if (lastTick != Long.MIN_VALUE && tick != lastTick + 1) {
+                stumbleLeft = 0;
+            }
+            lastTick = tick;
             if (noJumpDelay > 0) {
                 noJumpDelay--;
             }
@@ -113,7 +132,8 @@ public final class JumpMove implements MoveDefinition {
             if (!flying) {
                 if (preset == JumpPreset.B) {
                     charge(context, out, grounded);
-                } else if (grounded && (context.input().jump() && noJumpDelay == 0 || context.jumpBuffered())) {
+                } else if (grounded && !out.jumping()
+                        && (context.input().jump() && noJumpDelay == 0 || context.jumpBuffered())) {
                     launch(context, out, VANILLA_JUMP_POWER);
                 }
             }
@@ -121,6 +141,13 @@ public final class JumpMove implements MoveDefinition {
                 air(context, out);
             } else if (!charging) {
                 phase = "idle";
+            }
+            if (stumbleLeft > 0) {
+                stumbleLeft--;
+                out.cancelSprint();
+                if (!flying && !charging) {
+                    phase = "stumble";
+                }
             }
             return Step.CONTINUE;
         }
@@ -144,7 +171,7 @@ public final class JumpMove implements MoveDefinition {
                 return;
             }
             boolean wants = context.input().jump() && noJumpDelay == 0 || context.jumpBuffered();
-            if (!wants) {
+            if (!wants || out.jumping()) {
                 return;
             }
             if (context.body().onGround()) {
@@ -167,6 +194,7 @@ public final class JumpMove implements MoveDefinition {
             if (speed != VANILLA_JUMP_POWER) {
                 out.velocityY(VelocityRule.add(speed - VANILLA_JUMP_POWER));
             }
+            fresh = context.jumpPressedWithin(bufferTicks - 1);
             context.consumeJump();
             context.markLaunch(MoveKeys.JUMP, speed);
             noJumpDelay = VANILLA_JUMP_DELAY;
@@ -184,26 +212,27 @@ public final class JumpMove implements MoveDefinition {
             if (!keyDown) {
                 held = false;
             }
+            boolean boosting = held && fresh;
             double rising = airTick == 1 ? VANILLA_JUMP_POWER : context.body().velocity().y();
             phase = rising > 0.0 ? "rise" : "fall";
             switch (tuning.preset()) {
                 case A -> {
                     JumpTuning.Boost boost = tuning.boost();
-                    if (held && rising > 0.0 && airTick > boost.freeTicks() && airTick <= boost.sustainToTick()) {
+                    if (boosting && rising > 0.0 && airTick > boost.freeTicks() && airTick <= boost.sustainToTick()) {
                         out.gravity(boost.gravity());
                         phase = "boost";
                     }
-                    if (held && airTick == tuning.camera().boostFovMinHoldTicks() && rising > 0.0) {
+                    if (boosting && airTick == tuning.camera().boostFovMinHoldTicks() && rising > 0.0) {
                         out.camera(new CameraCommand.Start(MoveCameras.jumpBoost(tuning.camera())));
                         boostCue = true;
                     }
-                    if (held && airTick == tuning.sound().boostTick()) {
+                    if (boosting && airTick == tuning.sound().boostTick()) {
                         out.sound(MoveSound.event(tuning.sound().boostSound(), context.body().position(),
                                 tuning.sound().boostVolume(), tuning.sound().boostPitch()));
                     }
                 }
                 case C -> {
-                    if (!held && !cutDone && rising > 0.0) {
+                    if (fresh && !held && !cutDone && rising > 0.0) {
                         cutDone = true;
                         out.gravity(context.gravity() + (1.0 - tuning.cut().factor()) * rising);
                         phase = "cut";
@@ -231,9 +260,11 @@ public final class JumpMove implements MoveDefinition {
         private void landing(MoveContext context, MoveOutput.Builder out) {
             JumpTuning.Camera camera = tuning.camera();
             double fall = context.landingFall();
-            if (fall + 1.0e-9 >= camera.landingMinFall()) {
-                boolean hard = fall + 1.0e-9 >= camera.hardLandingFall();
-                out.camera(new CameraCommand.Start(MoveCameras.landing(camera, fall, hard)));
+            if (camera.landingDip(fall) > 0.0) {
+                out.camera(new CameraCommand.Start(MoveCameras.landing(camera, fall)));
+            }
+            if (fall + 1.0e-9 >= tuning.stumble().fall() && tuning.stumble().ticks() > 0) {
+                stumbleLeft = tuning.stumble().ticks();
             }
         }
 
@@ -244,7 +275,10 @@ public final class JumpMove implements MoveDefinition {
 
         @Override
         public MoveInstance copy() {
-            Instance copy = new Instance(tuning, startTick);
+            Instance copy = new Instance(tuning, startTick, bufferTicks);
+            copy.fresh = fresh;
+            copy.stumbleLeft = stumbleLeft;
+            copy.lastTick = lastTick;
             copy.noJumpDelay = noJumpDelay;
             copy.flying = flying;
             copy.airTick = airTick;

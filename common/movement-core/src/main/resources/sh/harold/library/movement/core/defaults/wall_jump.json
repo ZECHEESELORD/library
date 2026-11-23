@@ -9,7 +9,10 @@
   "kickInput": 0.12,
   "slide": {
     "maxFall": 0.12,
+    "endFall": 0.4,
     "maxTicks": 24,
+    "maxBrake": 0.15,
+    "roll": 3,
     "pushThreshold": 0.5,
     "effectEveryTicks": 4,
     "sound": "minecraft:block.stone.step",

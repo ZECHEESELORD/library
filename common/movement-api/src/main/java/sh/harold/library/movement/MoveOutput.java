@@ -23,7 +23,8 @@ import java.util.OptionalDouble;
  *     <li>{@link #inputScale()} on the travel input vector;</li>
  *     <li>{@link #gravity()} replaces gravity for this tick's travel, and {@link #discardFriction()} keeps horizontal
  *     speed through it (vanilla's {@code setDiscardFriction});</li>
- *     <li>{@link #body()}: the hitbox and pose (empty means vanilla's own).</li>
+ *     <li>{@link #body()}: the hitbox and pose (empty means vanilla's own);</li>
+ *     <li>{@link #cancelSprint()}: drop the sprint flag before travel (a hard landing's stumble).</li>
  * </ol>
  *
  * <p>An output with no move live is {@link #NONE}, which changes nothing: the host behaves exactly like vanilla.
@@ -43,7 +44,8 @@ public record MoveOutput(
         List<CameraCommand> camera,
         List<MoveSound> sounds,
         List<MoveEvent> events,
-        Status status
+        Status status,
+        boolean cancelSprint
 ) {
 
     public static final MoveOutput NONE = builder().build();
@@ -65,6 +67,15 @@ public record MoveOutput(
         }
     }
 
+    /** An output that leaves sprint alone (the v13 shape). */
+    public MoveOutput(boolean jump, VelocityRule velocityX, VelocityRule velocityY, VelocityRule velocityZ,
+                      OptionalDouble gravity, Optional<Vec3> kinematicTarget, boolean discardFriction, double inputScale,
+                      Optional<BodyOverride> body, double lookScale, CameraSignals cameraSignals,
+                      List<CameraCommand> camera, List<MoveSound> sounds, List<MoveEvent> events, Status status) {
+        this(jump, velocityX, velocityY, velocityZ, gravity, kinematicTarget, discardFriction, inputScale, body,
+                lookScale, cameraSignals, camera, sounds, events, status, false);
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -73,7 +84,7 @@ public record MoveOutput(
     public boolean passive() {
         return !jump && velocityX.mode() == VelocityRule.Mode.KEEP && velocityY.mode() == VelocityRule.Mode.KEEP
                 && velocityZ.mode() == VelocityRule.Mode.KEEP && gravity.isEmpty() && kinematicTarget.isEmpty()
-                && !discardFriction && inputScale == 1.0 && body.isEmpty();
+                && !discardFriction && inputScale == 1.0 && body.isEmpty() && !cancelSprint;
     }
 
     /** Applies the velocity rules (not the jump impulse or the kinematic target) to {@code velocity}. */
@@ -126,6 +137,7 @@ public record MoveOutput(
         private final List<MoveSound> sounds = new ArrayList<>();
         private final List<MoveEvent> events = new ArrayList<>();
         private Status status = Status.IDLE;
+        private boolean cancelSprint;
 
         private Builder() {
         }
@@ -191,6 +203,12 @@ public record MoveOutput(
             return this;
         }
 
+        /** Drops the sprint flag before this tick's travel. */
+        public Builder cancelSprint() {
+            this.cancelSprint = true;
+            return this;
+        }
+
         public Builder body(BodyOverride value) {
             this.body = Optional.of(value);
             return this;
@@ -232,7 +250,7 @@ public record MoveOutput(
 
         public MoveOutput build() {
             return new MoveOutput(jump, velocityX, velocityY, velocityZ, gravity, kinematicTarget, discardFriction,
-                    inputScale, body, lookScale, cameraSignals, camera, sounds, events, status);
+                    inputScale, body, lookScale, cameraSignals, camera, sounds, events, status, cancelSprint);
         }
     }
 }

@@ -53,9 +53,28 @@ public final class SlideMove implements MoveDefinition {
         return 60;
     }
 
+    /** The tick the last slide ended, for the boost refill (S3). */
+    public static final Key ENDED = Key.key(MoveKeys.NAMESPACE, "slide/ended");
+
+    /** The boost refill now: 1 with no earlier slide, else ramping over {@code refillTicks} from its end. */
+    static double refill(MoveContext context, SlideTuning tuning) {
+        return context.recall(ENDED, Long.class).map(ended -> tuning.refill(context.tick() - ended)).orElse(1.0);
+    }
+
     @Override
     public Optional<MoveInstance> tryStart(MoveContext context) {
         BodyState body = context.body();
+        if (context.handoffFrom().map(MoveKeys.MANTLE::equals).orElse(false)) {
+            Optional<Vec3> exit = context.recall(MantleMove.SLIDE_ENTRY, Vec3.class);
+            context.forget(MantleMove.SLIDE_ENTRY);
+            if (exit.isEmpty() || exit.get().lengthSquared() < 1.0e-8) {
+                return Optional.empty();
+            }
+            double refill = refill(context, tuning);
+            double start = Math.max(exit.get().length(), tuning.sprintSpeed()) * tuning.boostAt(refill);
+            return Optional.of(new Instance(tuning, context.tick(), exit.get().normalize(), start, false,
+                    body.position().y(), refill));
+        }
         if (!context.sprintingRecently()) {
             return Optional.empty();
         }
@@ -81,12 +100,13 @@ public final class SlideMove implements MoveDefinition {
             return Optional.empty();
         }
         Vec3 direction = motion.lengthSquared() > 1.0e-8 ? motion.normalize() : body.facing();
-        double start = Math.max(speed, tuning.sprintSpeed()) * tuning.boost();
+        double refill = refill(context, tuning);
+        double start = Math.max(speed, tuning.sprintSpeed()) * tuning.boostAt(refill);
         double groundY = fromJump ? context.lastLaunchPosition().y() : body.position().y();
         if (context.jumpPressed() || context.jumpBuffered()) {
             context.consumeJump();
         }
-        return Optional.of(new Instance(tuning, context.tick(), direction, start, fromJump, groundY));
+        return Optional.of(new Instance(tuning, context.tick(), direction, start, fromJump, groundY, refill));
     }
 
     @Override
@@ -95,7 +115,7 @@ public final class SlideMove implements MoveDefinition {
         if (context.ticksSinceGround() > chordTicks + 2 + context.waitedTicks()) {
             return ClaimCheck.reject("not on the ground");
         }
-        return speed > tuning.downhillMax() * 2.0 ? ClaimCheck.reject("too fast") : ClaimCheck.ACCEPT;
+        return speed > tuning.maxSpeed() * 2.0 ? ClaimCheck.reject("too fast") : ClaimCheck.ACCEPT;
     }
 
     static final class Instance implements MoveInstance {
@@ -106,12 +126,14 @@ public final class SlideMove implements MoveDefinition {
         private double speed;
         private final boolean fromJump;
         private final double groundY;
+        private final double refill;
         private int k = -1;
-        private int flatTicks;
         private int airTicks;
         private boolean crawling;
 
-        Instance(SlideTuning tuning, long startTick, Vec3 direction, double speed, boolean fromJump, double groundY) {
+        Instance(SlideTuning tuning, long startTick, Vec3 direction, double speed, boolean fromJump, double groundY,
+                 double refill) {
+            this.refill = refill;
             this.tuning = tuning;
             this.startTick = startTick;
             this.direction = direction;
@@ -151,7 +173,7 @@ public final class SlideMove implements MoveDefinition {
             if (crawling) {
                 if (Probe.fits(context.world(), body, BodyState.PLAYER_HEIGHT)) {
                     out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, false)));
-                    context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
+                    context.remember(ENDED, context.tick());
                     return Step.end(MoveEnd.EndReason.COMPLETED);
                 }
                 out.body(low);
@@ -163,13 +185,9 @@ public final class SlideMove implements MoveDefinition {
                     out.velocityY(VelocityRule.set(Math.min(0.0, groundY - body.position().y())));
                 }
             } else {
-                boolean downhill = context.lastMotion().y() < -1.0e-3;
-                if (downhill) {
-                    speed = Math.min(tuning.downhillMax(), Math.max(speed, speed + tuning.downhillGain()));
-                } else {
-                    speed *= tuning.decay();
-                    flatTicks++;
-                }
+                double descended = Math.max(0.0, -context.lastMotion().y());
+                speed = Math.min(tuning.maxSpeed(), Math.sqrt(speed * speed + tuning.slopeGain() * descended))
+                        * tuning.decay();
                 if (k >= tuning.steerFromTick()) {
                     steer(body.facing());
                 }
@@ -177,11 +195,13 @@ public final class SlideMove implements MoveDefinition {
                         && body.onGround() && Probe.fits(context.world(), body, BodyState.PLAYER_HEIGHT)) {
                     context.consumeJump();
                     double launch = speed + tuning.jumpBonus();
-                    out.jump().horizontal(direction.x() * launch, direction.z() * launch);
+                    out.jump().horizontal(direction.x() * launch, direction.z() * launch)
+                            .discardFriction()
+                            .inputScale(0.0);
                     context.markLaunch(MoveKeys.SLIDE, 0.42);
                     out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, false)));
                     out.cameraSignals(MoveOutput.CameraSignals.REST);
-                    context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
+                    context.remember(ENDED, context.tick());
                     return Step.end(MoveEnd.EndReason.COMPLETED);
                 }
                 Step end = endCheck(context, body);
@@ -195,9 +215,10 @@ public final class SlideMove implements MoveDefinition {
                     .inputScale(0.0)
                     .body(low);
             SlideTuning.Camera camera = tuning.camera();
+            double kick = camera.kick(refill);
             double fov = k < camera.fovTick()
-                    ? camera.fov() * (k + 1.0) / (camera.fovTick() + 1.0)
-                    : camera.fov() * speed / camera.fovReferenceSpeed();
+                    ? kick * (k + 1.0) / (camera.fovTick() + 1.0)
+                    : kick * speed / camera.fovReferenceSpeed();
             double roll = k >= tuning.steerFromTick() ? -camera.strafeRoll() * context.input().strafeImpulse() : 0.0;
             double shake = k >= tuning.steerFromTick() && speed > camera.shakeAboveSpeed() ? camera.shake() : 0.0;
             out.cameraSignals(new MoveOutput.CameraSignals(fov, roll, shake));
@@ -212,16 +233,13 @@ public final class SlideMove implements MoveDefinition {
             if (speed < tuning.endSpeed()) {
                 return Step.end(MoveEnd.EndReason.CONDITION);
             }
-            if (flatTicks >= tuning.maxFlatTicks()) {
-                return Step.end(MoveEnd.EndReason.COMPLETED);
-            }
             if (!context.input().sneak() && k > tuning.releaseAfterTick()) {
                 return Step.end(MoveEnd.EndReason.CANCELLED);
             }
             if (body.horizontalCollision()) {
                 return Step.end(MoveEnd.EndReason.BLOCKED);
             }
-            if (airTicks > 6) {
+            if (airTicks > tuning.maxAirTicks()) {
                 return Step.end(MoveEnd.EndReason.CONDITION);
             }
             return null;
@@ -235,7 +253,7 @@ public final class SlideMove implements MoveDefinition {
             }
             out.camera(new CameraCommand.Start(MoveCameras.slideExit(tuning, false)));
             out.cameraSignals(MoveOutput.CameraSignals.REST);
-            context.cooldown(MoveKeys.SLIDE, tuning.cooldownTicks());
+            context.remember(ENDED, context.tick());
             return end;
         }
 
@@ -250,9 +268,8 @@ public final class SlideMove implements MoveDefinition {
 
         @Override
         public MoveInstance copy() {
-            Instance copy = new Instance(tuning, startTick, direction, speed, fromJump, groundY);
+            Instance copy = new Instance(tuning, startTick, direction, speed, fromJump, groundY, refill);
             copy.k = k;
-            copy.flatTicks = flatTicks;
             copy.airTicks = airTicks;
             copy.crawling = crawling;
             return copy;

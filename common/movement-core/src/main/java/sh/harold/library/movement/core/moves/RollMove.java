@@ -72,7 +72,10 @@ public final class RollMove implements MoveDefinition {
         Vec3 motion = context.lastMotion().withY(0.0);
         Vec3 direction = motion.lengthSquared() > 1.0e-6 ? motion.normalize() : body.facing();
         double speed = Math.max(motion.length(), tuning.minSpeed()) * tuning.boost();
-        return Optional.of(new Instance(tuning, context.tick(), direction, speed, context.landingFall(), offset));
+        Instance instance = new Instance(tuning, context.tick(), direction, speed, context.landingFall(), offset);
+        instance.axis = MoveCameras.rollAxis(tuning.camera(), motion, body.facing());
+        instance.sideSign = Math.signum(direction.dot(body.right()));
+        return Optional.of(instance);
     }
 
     @Override
@@ -103,6 +106,8 @@ public final class RollMove implements MoveDefinition {
         private final double speed;
         private final double fall;
         private final int pressOffset;
+        private MoveCameras.RollAxis axis = MoveCameras.RollAxis.FORWARD;
+        private double sideSign;
         private int k = -1;
         private boolean jumpQueued;
 
@@ -156,7 +161,7 @@ public final class RollMove implements MoveDefinition {
             int ticks = tuning.ticks();
             if (k == 0) {
                 out.event(new MoveEvent.FallDamageModifier(tuning.damageReduction()));
-                out.camera(new CameraCommand.Start(MoveCameras.roll(tuning)));
+                out.camera(new CameraCommand.Start(MoveCameras.roll(tuning, axis, sideSign)));
                 out.sound(MoveSound.event(tuning.sound().start(), body.position(), 1.0, tuning.sound().startPitch()));
             }
             if (tuning.sound().stepTicks().contains(k)) {
@@ -203,6 +208,8 @@ public final class RollMove implements MoveDefinition {
         @Override
         public MoveInstance copy() {
             Instance copy = new Instance(tuning, startTick, direction, speed, fall, pressOffset);
+            copy.axis = axis;
+            copy.sideSign = sideSign;
             copy.k = k;
             copy.jumpQueued = jumpQueued;
             return copy;

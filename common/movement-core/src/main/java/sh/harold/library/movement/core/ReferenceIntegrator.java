@@ -56,6 +56,22 @@ public final class ReferenceIntegrator {
     }
 
     /**
+     * The height a fall from rest needs before its fall speed reaches {@code speed} under vanilla's vertical
+     * integration ({@code y += vy; vy = (vy - 0.08) * 0.98}): about 0.08 at 0.12 b/t, 0.23 at 0.2 and 0.46 at 0.3.
+     */
+    public static double equivalentFallHeight(double speed) {
+        double target = Math.abs(speed);
+        double y = 0.0;
+        double vy = 0.0;
+        int guard = 0;
+        while (-vy < target && guard++ < 10_000) {
+            y += vy;
+            vy = (vy - GRAVITY) * 0.98;
+        }
+        return -y;
+    }
+
+    /**
      * One tick.
      *
      * @param ownsJump whether the core owns ground jumps (the jump move is enabled), so vanilla's is suppressed
@@ -86,7 +102,8 @@ public final class ReferenceIntegrator {
             forward *= SNEAK_FACTOR;
             strafe *= SNEAK_FACTOR;
         }
-        boolean sprinting = (body.sprinting() || input.sprint()) && input.forwardImpulse() > 0.0 && !slow;
+        boolean sprinting = (body.sprinting() || input.sprint()) && input.forwardImpulse() > 0.0 && !slow
+                && !out.cancelSprint();
         boolean jumped = false;
         if (!ownsJump) {
             if (input.jump()) {

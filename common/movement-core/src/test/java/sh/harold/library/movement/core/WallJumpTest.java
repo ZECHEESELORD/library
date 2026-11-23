@@ -103,19 +103,25 @@ class WallJumpTest {
         assertEquals(1, kicks(driver), "same face again before landing");
     }
 
+    /** W2: the cap ramps linearly from 0.12 to 0.40 over 24 ticks, then the slide ends. */
     @Test
-    void wallSlideCapsFallSpeedForTwentyFourTicks() {
+    void wallSlideCapRampsOverTwentyFourTicks() {
         TestWorld world = TestWorld.flat().fill(-1, 0, -3, -1, 60, 3);
         BodyState body = new BodyState(new Vec3(0.31, 40.0, 0.5), Vec3.ZERO, false, false, 0.0, 90.0f, 0.0f, false,
                 0.6, 1.8, false);
         Driver driver = new Driver(WALLS, world, body);
         driver.run(Driver.keys("F"), 40);
-        var start = driver.firstStart(MoveKeys.WALL_SLIDE).orElseThrow();
-        long capped = driver.trace.stream().filter(frame -> frame.tick() >= start.tick())
-                .filter(frame -> frame.after().position().y() - frame.before().position().y() >= -0.12 - 1.0e-9)
-                .filter(frame -> frame.output().velocityY().mode() == sh.harold.library.movement.VelocityRule.Mode.MIN)
-                .count();
-        assertEquals(24, capped);
+        var sliding = driver.trace.stream().filter(frame -> "slide".equals(frame.output().status().phase())
+                || frame.output().events().stream().anyMatch(e -> e instanceof MoveEvent.FallDistanceCap)).toList();
+        assertEquals(24, sliding.size(), "24 slide ticks");
+        for (int i = 1; i < sliding.size(); i++) {
+            var frame = sliding.get(i);
+            double cap = 0.12 + 0.28 * i / 23.0;
+            double dy = frame.after().position().y() - frame.before().position().y();
+            assertEquals(-cap, dy, 1.0e-9, "slide tick " + i + " falls at the cap");
+        }
         assertTrue(driver.firstEnd(MoveKeys.WALL_SLIDE).isPresent());
+        assertTrue(driver.trace.stream().noneMatch(f -> f.output().events().stream()
+                .anyMatch(e -> e instanceof MoveEvent.FallDistanceReset)), "W1: no resets");
     }
 }

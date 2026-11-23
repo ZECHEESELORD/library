@@ -122,20 +122,15 @@ class JumpTableTest {
     }
 
     /**
-     * Mismatch with 02: preset B's sprint-jump distances. 02 says the squat moves at x0.6, but its numbers come from a
-     * sim that takes off at full sprint speed after the squat. Under the integrator the squat slows the run-up, so B
-     * jumps land short of 02's 3.91 and 4.48. This test pins the integrator's values so a change is noticed; the
-     * design owner decides whether the squat keeps sprint speed or the table changes.
+     * J1: the squat keeps full run-up speed (move scale 1.0), so preset B's sprint jumps return to 02's 3.91 and 4.48.
      */
     @Test
-    void reportsPresetBSprintDistanceMismatch() {
+    void presetBKeepsFullRunUpSpeed() {
         Result four = measure(JumpPreset.B, 4, true);
         Result eight = measure(JumpPreset.B, 8, true);
-        System.out.printf("MISMATCH 02 B 4-tick squat sprint distance: 02 3.91, integrator %.3f%n", four.distance());
-        System.out.printf("MISMATCH 02 B 8-tick squat sprint distance: 02 4.48, integrator %.3f%n", eight.distance());
-        assertEquals(3.63, four.distance(), 0.02);
-        assertEquals(4.15, eight.distance(), 0.02);
-        assertTrue(Math.abs(four.distance() - 3.91) > DISTANCE_TOLERANCE);
-        assertTrue(Math.abs(eight.distance() - 4.48) > DISTANCE_TOLERANCE);
+        System.out.printf("J1 B sprint distances: 4-tick squat %.3f (02 3.91), 8-tick %.3f (02 4.48)%n",
+                four.distance(), eight.distance());
+        assertEquals(3.91, four.distance(), DISTANCE_TOLERANCE);
+        assertEquals(4.48, eight.distance(), DISTANCE_TOLERANCE);
     }
 }

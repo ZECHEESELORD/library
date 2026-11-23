@@ -41,18 +41,37 @@ public final class Probe {
     }
 
     /**
+     * What a probe along a direction found: a usable {@link Ledge}, a ledge top in the height window whose space checks
+     * failed ({@link #blocked()}: no headroom, no depth, no room to rise), or nothing.
+     */
+    public record LedgeCheck(Optional<Ledge> ledge, boolean blocked, double height, double top, double gap) {
+
+        static final LedgeCheck NONE = new LedgeCheck(Optional.empty(), false, Double.NaN, Double.NaN, Double.NaN);
+
+        public boolean found() {
+            return ledge.isPresent();
+        }
+    }
+
+    /**
      * Finds a ledge along {@code direction} (cardinal) within {@code reach} of the hitbox's front, with its top between
      * {@code minHeight} and {@code maxHeight} above the feet, clear space of {@code headroom} above it and
      * {@code depth} deep, and room for the body to rise in place to the top.
      */
     public static Optional<Ledge> ledge(MovementWorld world, BodyState body, Vec3 direction, double reach,
                                         double minHeight, double maxHeight, double headroom, double depth) {
+        return ledgeCheck(world, body, direction, reach, minHeight, maxHeight, headroom, depth).ledge();
+    }
+
+    /** {@link #ledge}, saying also whether a ledge top in the window was there but blocked. */
+    public static LedgeCheck ledgeCheck(MovementWorld world, BodyState body, Vec3 direction, double reach,
+                                        double minHeight, double maxHeight, double headroom, double depth) {
         Aabb box = body.box();
         double feet = box.minY();
         Aabb strip = front(box, direction, reach, feet + EPSILON, feet + maxHeight + 0.5);
         List<Aabb> hits = world.collisions(strip);
         if (hits.isEmpty()) {
-            return Optional.empty();
+            return LedgeCheck.NONE;
         }
         double top = Double.NEGATIVE_INFINITY;
         double gap = Double.POSITIVE_INFINITY;
@@ -64,22 +83,24 @@ public final class Probe {
             gap = Math.min(gap, faceGap(box, hit, direction));
         }
         if (top == Double.NEGATIVE_INFINITY) {
-            return Optional.empty();
+            return LedgeCheck.NONE;
         }
         double height = top - feet;
         if (height < minHeight - EPSILON || height > maxHeight + EPSILON) {
-            return Optional.empty();
+            return LedgeCheck.NONE;
         }
+        double clearGap = Math.max(gap, 0.0);
+        LedgeCheck blocked = new LedgeCheck(Optional.empty(), true, height, top, clearGap);
         Aabb above = front(box, direction, depth, top + EPSILON, top + headroom);
-        Aabb onTop = shift(above, direction, Math.max(gap, 0.0));
+        Aabb onTop = shift(above, direction, clearGap);
         if (!world.free(onTop)) {
-            return Optional.empty();
+            return blocked;
         }
         Aabb raised = new Aabb(box.minX(), top + EPSILON, box.minZ(), box.maxX(), top + body.height(), box.maxZ());
         if (!world.free(raised)) {
-            return Optional.empty();
+            return blocked;
         }
-        return Optional.of(new Ledge(direction, top, Math.max(gap, 0.0), height));
+        return new LedgeCheck(Optional.of(new Ledge(direction, top, clearGap, height)), false, height, top, clearGap);
     }
 
     /** A wall touching the body's side. */

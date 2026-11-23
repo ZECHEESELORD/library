@@ -17,6 +17,11 @@ public final class MoveKeys {
     public static final Key WALL_JUMP = Key.key(NAMESPACE, "wall_jump");
     /** The wall slide, part of the wall-jump move: enabled with it, claimed separately. */
     public static final Key WALL_SLIDE = Key.key(NAMESPACE, "wall_slide");
+    /**
+     * The refused mantle's slap, part of the mantle move: enabled with it. A passive with no motion, so it is never
+     * claimed.
+     */
+    public static final Key MANTLE_REFUSAL = Key.key(NAMESPACE, "mantle_refusal");
 
     /** The five moves a moveset enables, in 02's order. */
     public static final List<Key> STOCK = List.of(JUMP, MANTLE, ROLL, SLIDE, WALL_JUMP);
