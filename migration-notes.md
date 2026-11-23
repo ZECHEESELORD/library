@@ -1,8 +1,8 @@
 # Migration Notes
 
-## v13 (unreleased)
+## v13
 
-- New client-first feel modules for the Fabric lane: `telemetry` (`-api`, `-core`, `-fabric`, `-fabric-client`), `prediction` (`-api`, `-core`) and `net` (`net-fabric`, `net-fabric-client`). Later phases add `movement` and more.
+- New client-first feel modules for the Fabric lane: `telemetry` (`-api`, `-core`, `-fabric`, `-fabric-client`), `prediction` (`-api`, `-core`) and `net` (`net-fabric`, `net-fabric-client`).
 - Fabric mods that declare a `net` feature need the same library version on client and server. The server checks it, and each declared feature's protocol version, in the configuration phase; a mismatch disconnects and names the feature. With no feature declared, the handshake is skipped and vanilla clients join as before. Library payload ids are `creative_library:<feature>/<name>`.
 - `tween-api` adds keyframe tracks (`Track`, `LayeredTrack`, markers), springs (`SpringSpec`), seeded smooth noise, signal channel specs and generators (overshoot, anticipation, squash and stretch); `tween-core` adds the stateful `Spring`, `Vec3Spring`, `SignalChannel` and `SeekableSampler`. `Easing` gains `BACK_OUT`, `BACK_IN_OUT`, `ELASTIC_OUT` and `BOUNCE_OUT` (an alias of the existing `BOUNCE`, which already eased out) and now implements the new `EasingFunction`. Existing `Tween` and `Envelope` callers need no change.
 - `spatial-api` adds a `Quaternion` value type.
