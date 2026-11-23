@@ -1,6 +1,7 @@
 package sh.harold.library.movement.core.moves;
 
 import net.kyori.adventure.key.Key;
+import sh.harold.library.movement.Aabb;
 import sh.harold.library.movement.BodyState;
 import sh.harold.library.movement.CameraCommand;
 import sh.harold.library.movement.JumpPreset;
@@ -11,8 +12,10 @@ import sh.harold.library.movement.MoveKeys;
 import sh.harold.library.movement.MoveOutput;
 import sh.harold.library.movement.MoveSound;
 import sh.harold.library.movement.VelocityRule;
+import sh.harold.library.movement.core.ReferenceIntegrator;
 import sh.harold.library.movement.core.camera.MoveCameras;
 import sh.harold.library.movement.core.tuning.JumpTuning;
+import sh.harold.library.spatial.Vec3;
 
 import java.util.Optional;
 
@@ -147,9 +150,33 @@ public final class JumpMove implements MoveDefinition {
                 out.cancelSprint();
                 if (!flying && !charging) {
                     phase = "stumble";
+                    clampToWalk(context, out);
                 }
             }
             return Step.CONTINUE;
+        }
+
+        /**
+         * J5: while stumbling on the ground, the tick's horizontal speed is at most vanilla's steady walking speed on
+         * that ground. When the body's velocity plus this tick's walking input push would exceed it, the velocity is
+         * set to that sum scaled down to walking speed and the input push is dropped, so the tick moves exactly at
+         * walking speed in the direction it would have moved.
+         */
+        private void clampToWalk(MoveContext context, MoveOutput.Builder out) {
+            BodyState body = context.body();
+            if (!body.onGround() || out.jumping()) {
+                return;
+            }
+            double friction = context.world().friction(Aabb.ofBody(body.position(), body.width(), body.height()));
+            double walk = ReferenceIntegrator.groundSpeed(friction, false);
+            Vec3 next = body.velocity().withY(0.0)
+                    .add(ReferenceIntegrator.inputAcceleration(body, context.input(), context.world(), false));
+            double speed = next.length();
+            if (speed > walk) {
+                Vec3 clamped = next.multiply(walk / speed);
+                out.horizontal(clamped.x(), clamped.z());
+                out.inputScale(0.0);
+            }
         }
 
         private void charge(MoveContext context, MoveOutput.Builder out, boolean grounded) {

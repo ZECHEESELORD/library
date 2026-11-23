@@ -71,6 +71,53 @@ public final class ReferenceIntegrator {
         return -y;
     }
 
+    /** Vanilla's input acceleration for movement impulses (already scaled), yaw and speed: x and z. */
+    private static double[] accelerate(double forward, double strafe, double speed, float yaw) {
+        double length = strafe * strafe + forward * forward;
+        if (length < 1.0e-7) {
+            return new double[]{0.0, 0.0};
+        }
+        double scale = speed / Math.max(1.0, Math.sqrt(length));
+        double sx = strafe * scale;
+        double sz = forward * scale;
+        double radians = Math.toRadians(yaw);
+        double sin = Math.sin(radians);
+        double cos = Math.cos(radians);
+        return new double[]{sx * cos - sz * sin, sz * cos + sx * sin};
+    }
+
+    /**
+     * The horizontal velocity vanilla adds from {@code input} this tick for a standing body (sneak slows it), as
+     * {@link #step} does before the collision move: {@code speed * 0.216 / f^3} on the ground, the air acceleration
+     * otherwise.
+     */
+    public static Vec3 inputAcceleration(BodyState body, InputFrame input, MovementWorld world, boolean sprinting) {
+        double forward = input.forwardImpulse() * INPUT_FACTOR;
+        double strafe = input.strafeImpulse() * INPUT_FACTOR;
+        if (input.sneak()) {
+            forward *= SNEAK_FACTOR;
+            strafe *= SNEAK_FACTOR;
+        }
+        double friction = body.onGround()
+                ? world.friction(Aabb.ofBody(body.position(), body.width(), body.height())) : 1.0;
+        double speed = body.onGround()
+                ? WALK_SPEED * (sprinting ? SPRINT_FACTOR : 1.0) * (0.21600002 / (friction * friction * friction))
+                : sprinting ? SPRINT_AIR_ACCELERATION : AIR_ACCELERATION;
+        double[] push = accelerate(forward, strafe, speed, body.yaw());
+        return new Vec3(push[0], 0.0, push[1]);
+    }
+
+    /**
+     * The steady horizontal speed of full forward input on ground of block friction {@code friction}: the input
+     * acceleration divided by what friction takes each tick, {@code a / (1 - f * 0.91)}. Walking on stone (0.6) is
+     * 0.2159 b/t and sprinting 0.2806.
+     */
+    public static double groundSpeed(double friction, boolean sprinting) {
+        double acceleration = WALK_SPEED * (sprinting ? SPRINT_FACTOR : 1.0) * INPUT_FACTOR
+                * (0.21600002 / (friction * friction * friction));
+        return acceleration / (1.0 - friction * 0.91);
+    }
+
     /**
      * One tick.
      *
@@ -149,17 +196,9 @@ public final class ReferenceIntegrator {
         double speed = body.onGround()
                 ? WALK_SPEED * (sprinting ? SPRINT_FACTOR : 1.0) * (0.21600002 / (friction * friction * friction))
                 : sprinting ? SPRINT_AIR_ACCELERATION : AIR_ACCELERATION;
-        double length = strafe * strafe + forward * forward;
-        if (length >= 1.0e-7) {
-            double scale = speed / Math.max(1.0, Math.sqrt(length));
-            double sx = strafe * scale;
-            double sz = forward * scale;
-            double radians = Math.toRadians(body.yaw());
-            double sin = Math.sin(radians);
-            double cos = Math.cos(radians);
-            vx += sx * cos - sz * sin;
-            vz += sz * cos + sx * sin;
-        }
+        double[] push = accelerate(forward, strafe, speed, body.yaw());
+        vx += push[0];
+        vz += push[1];
 
         Move move = move(world, box, vx, vy, vz, body.onGround());
         Vec3 moved = position.add(new Vec3(move.dx, move.dy, move.dz));

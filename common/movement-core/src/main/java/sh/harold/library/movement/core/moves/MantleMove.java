@@ -245,6 +245,8 @@ public final class MantleMove implements MoveDefinition {
                 double speed = Math.max(entrySpeed, sprintHeld(context) ? v.sprintExitSpeed() : 0.0);
                 Vec3 exit = direction.multiply(speed);
                 out.horizontal(exit.x(), exit.z());
+                // The exit tick moves at exactly the ruled speed: vanilla's held-input push does not stack on it.
+                out.inputScale(0.0);
                 out.sound(new MoveSound(MoveSound.Source.BLOCK_STEP, "minecraft:block.stone.step",
                         context.body().position().add(new Vec3(0, -0.2, 0)), 0.5f, 1.0f));
                 long press = sinceStart(context.lastJumpPress());
@@ -311,6 +313,7 @@ public final class MantleMove implements MoveDefinition {
                     Vec3 exit = direction.multiply(exitSpeed);
                     out.horizontal(exit.x(), exit.z());
                     out.velocityY(VelocityRule.set(0.0));
+                    out.inputScale(0.0);
                     if (press >= c.hopFromTick() && press <= c.hopToTick()) {
                         return jump(context, out, c, exit.add(direction.multiply(c.hopSpeed())), true);
                     }
@@ -366,6 +369,7 @@ public final class MantleMove implements MoveDefinition {
             out.jump();
             out.horizontal(horizontal.x(), horizontal.z());
             out.velocityY(VelocityRule.KEEP);
+            out.inputScale(0.0);
             context.consumeJump();
             context.markLaunch(MoveKeys.MANTLE, 0.42);
             if (hop && c.camera().hopFov() != 0.0) {

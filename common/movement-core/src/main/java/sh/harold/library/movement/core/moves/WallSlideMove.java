@@ -95,6 +95,15 @@ public final class WallSlideMove implements MoveDefinition {
         public Step tick(MoveContext context, MoveOutput.Builder out) {
             BodyState body = context.body();
             boolean launchedNow = context.lastLaunchTick() == context.tick();
+            Optional<Long> refused = context.recall(MantleRefusal.REFUSED, Long.class);
+            if (body.onGround() && refused.isPresent() && context.tick() > refused.get()) {
+                context.forget(MantleRefusal.REFUSED);
+                refused = Optional.empty();
+            }
+            if (refused.isPresent() && !body.onGround()) {
+                stop(context, out, MoveEnd.EndReason.CONDITION);
+                return Step.CONTINUE;
+            }
             if (body.onGround() || launchedNow) {
                 stop(context, out, body.onGround() ? MoveEnd.EndReason.COMPLETED : MoveEnd.EndReason.INTERRUPTED);
                 used = 0;

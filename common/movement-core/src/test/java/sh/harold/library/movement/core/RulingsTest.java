@@ -116,6 +116,8 @@ class RulingsTest {
         double exit = outputSpeed(end.output());
         assertTrue(entry > 0.27, "entered at sprint speed: " + entry);
         assertEquals(Math.max(entry, 0.2806), exit, 1.0e-9, "exit = max(entry, 0.2806)");
+        assertEquals(Math.max(entry, 0.2806), horizontal(frame(driver, end.tick())), 1.0e-9,
+                "the exit tick moves at exactly the exit speed: no input push on top");
         for (long t = end.tick() + 1; t <= end.tick() + 3; t++) {
             assertTrue(horizontal(frame(driver, t)) > 0.27, "speed kept at tick " + (t - end.tick()));
         }
@@ -134,6 +136,7 @@ class RulingsTest {
         MoveOutput exit = driver.tick(Driver.keys("FS"));
         assertTrue(exit.jump(), "hop on T5");
         assertTrue(outputSpeed(exit) >= 0.2806 - 1.0e-9);
+        assertEquals(outputSpeed(exit), horizontal(driver.trace.getLast()), 1.0e-9, "the hop tick moves at the exit speed");
         double apex = 0;
         for (int i = 0; i < 14; i++) {
             driver.tick(Driver.keys("FS"));
@@ -164,6 +167,7 @@ class RulingsTest {
         MoveOutput t7 = frame(driver, t0 + 7).output();
         assertTrue(t7.jump());
         assertEquals(0.2159 + 0.1, outputSpeed(t7), 1.0e-9);
+        assertEquals(0.2159 + 0.1, horizontal(frame(driver, t0 + 7)), 1.0e-9, "T7 moves at the hop speed");
         CameraCue hop = started(t7, MoveCameras.MANTLE_HOP).orElseThrow();
         var fov = hop.curves().stream().filter(c -> c.channel() == CameraChannel.FOV).findFirst().orElseThrow();
         assertEquals(2.0, ((sh.harold.library.camera.rig.cue.CueCurve.Pulse) fov.curveFor(false)).amount(), 1.0e-9);
@@ -197,11 +201,13 @@ class RulingsTest {
         driver.tick(Driver.keys("FS"));
         driver.run(Driver.keys("F"), 4);
         assertEquals(0.2806, outputSpeed(frame(driver, t0 + 7).output()), 1.0e-9, "sprint pressed at T4, released");
+        assertEquals(0.2806, horizontal(frame(driver, t0 + 7)), 1.0e-9, "T7 moves at exactly the sprint exit");
 
         Driver walk = climbing(ALL);
         walk.run(Driver.keys("F"), 10);
         long w0 = walk.firstStart(MoveKeys.MANTLE).orElseThrow().tick();
         assertEquals(0.2159, outputSpeed(frame(walk, w0 + 7).output()), 1.0e-9, "walking speed without sprint");
+        assertEquals(0.2159, horizontal(frame(walk, w0 + 7)), 1.0e-9, "T7 moves at exactly the walk exit");
     }
 
     /** MA9: strafe from T5 moves the body sideways 0.05 per tick. */
@@ -267,14 +273,62 @@ class RulingsTest {
                 && s.pitch() == 1.0f));
         assertTrue(slaps.getFirst().output().passive(), "no motion fields on the slap tick");
 
+        // The refusal also blocks the wall slide for the rest of the airtime, so the comparison has no wall slide.
         Driver without = Driver.standing(Moveset.DEFAULT.withJumpPreset(JumpPreset.A).withEnabled(
-                Set.of(MoveKeys.JUMP, MoveKeys.ROLL, MoveKeys.SLIDE, MoveKeys.WALL_JUMP)), world, new Vec3(0.5, 0.0, 1.35));
+                Set.of(MoveKeys.JUMP, MoveKeys.ROLL, MoveKeys.SLIDE)), world, new Vec3(0.5, 0.0, 1.35));
         for (Driver.Frame frame : slap.trace) {
             without.tick(frame.input());
         }
         for (int i = 0; i < slap.trace.size(); i++) {
             assertEquals(without.trace.get(i).after().position(), slap.trace.get(i).after().position(), "tick " + i);
         }
+    }
+
+    /**
+     * Refusal ruling (2026-11-23 follow-up): after a refusal, no wall slide starts until the body stands on the ground
+     * again, while a wall kick still can; after landing, the wall slide works again.
+     */
+    @Test
+    void refusalBlocksWallSlideUntilLanding() {
+        TestWorld world = step(2).fill(-3, 3, 2, 3, 3, 30);
+        Driver slap = Driver.standing(ALL, world, new Vec3(0.5, 0.0, 1.35));
+        slap.tick(Driver.keys("FJ"));
+        slap.run(Driver.keys("F"), 20);
+        assertEquals(1, slap.trace.stream().filter(f -> started(f.output(), MoveCameras.MANTLE_REFUSAL).isPresent())
+                .count(), "refused once");
+        assertTrue(slap.firstStart(MoveKeys.WALL_SLIDE).isEmpty(), "no wall slide in the refused airtime");
+        assertTrue(slap.body().onGround());
+
+        Driver control = Driver.standing(ALL, world, new Vec3(0.5, 0.0, 1.69));
+        control.tick(Driver.keys("J"));
+        control.run(InputFrame.EMPTY, 6);
+        control.run(Driver.keys("F"), 14);
+        assertTrue(control.firstStart(MoveKeys.WALL_SLIDE).isPresent(),
+                "control: pushing into the wall on the way down slides when nothing was refused");
+
+        // The wall only counts for a kick once 1.5 blocks of it face the body, so press on the way down below y 0.5.
+        Driver kick = Driver.standing(ALL, world, new Vec3(0.5, 0.0, 1.35));
+        kick.tick(Driver.keys("FJ"));
+        while ((kick.body().velocity().y() >= 0.0 || kick.body().position().y() > 0.5) && kick.tick < 40) {
+            kick.tick(Driver.keys("F"));
+        }
+        kick.tick(Driver.keys("FJ"));
+        kick.run(Driver.keys("F"), 4);
+        long firstRefusal = kick.trace.stream().filter(f -> started(f.output(), MoveCameras.MANTLE_REFUSAL).isPresent())
+                .mapToLong(Driver.Frame::tick).min().orElseThrow();
+        assertTrue(kick.firstStart(MoveKeys.WALL_SLIDE).isEmpty(), "no wall slide after the refusal");
+        assertTrue(kick.firstStart(MoveKeys.WALL_JUMP).isPresent(), "a wall kick is still allowed after a refusal");
+        assertTrue(kick.firstStart(MoveKeys.WALL_JUMP).get().tick() > firstRefusal, "the kick came after the refusal");
+        assertTrue(kick.trace.stream().filter(f -> f.tick() > firstRefusal && f.tick() < kick.firstStart(MoveKeys.WALL_JUMP).get().tick())
+                .noneMatch(f -> f.after().onGround()), "same airtime: no ground between refusal and kick");
+
+        long landed = slap.tick;
+        slap.tick(Driver.keys("J"));
+        slap.run(InputFrame.EMPTY, 6);
+        slap.run(Driver.keys("F"), 14);
+        assertTrue(slap.trace.stream().filter(f -> f.tick() > landed).anyMatch(f -> f.output().events().stream()
+                .anyMatch(e -> e instanceof MoveEvent.Started st && st.move().equals(MoveKeys.WALL_SLIDE))),
+                "after landing, a later airtime slides again");
     }
 
     /** MA1, MA13, MA14, MA18, MA3: the climb cue's keys. */
@@ -411,6 +465,13 @@ class RulingsTest {
                 assertEquals(List.of(landed, landed + 1, landed + 2, landed + 3, landed + 4, landed + 5), cut);
                 assertFalse(frame(driver, landed + 2).after().sprinting(), "sprint is off");
                 assertEquals("stumble", frame(driver, landed + 1).output().status().phase());
+                double walk = ReferenceIntegrator.groundSpeed(0.6, false);
+                assertEquals(0.21586, walk, 1.0e-5, "the integrator's walking speed on stone");
+                for (long t = landed; t <= landed + 5; t++) {
+                    assertTrue(horizontal(frame(driver, t)) <= walk + 1.0e-9, "clamped to walking at tick " + t);
+                }
+                assertEquals(walk, horizontal(frame(driver, landed)), 1.0e-9, "the first stumble tick moves at walk");
+                assertTrue(horizontal(frame(driver, landed + 7)) > walk + 0.01, "sprint returns after the stumble");
             }
             assertTrue(driver.trace.stream().allMatch(f -> f.output().camera().stream().noneMatch(c ->
                     c instanceof CameraCommand.Start s && s.cue().curves().stream()

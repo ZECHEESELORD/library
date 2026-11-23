@@ -21,6 +21,13 @@ import java.util.Optional;
  */
 public final class MantleRefusal implements MoveDefinition {
 
+    /**
+     * The tick of the last refusal, remembered until the body next stands on the ground: the wall slide does not start
+     * while it is set (ruling on refused jumps: no wall slide for the rest of that airtime; a wall kick still can).
+     */
+    public static final Key REFUSED = Key.key(MoveKeys.NAMESPACE, "mantle/refused");
+
+
     private final MantleTuning tuning;
     private final int bufferTicks;
 
@@ -89,6 +96,7 @@ public final class MantleRefusal implements MoveDefinition {
                 if (attempt != null && attempt.check().blocked()) {
                     slappedPress = press;
                     startTick = context.tick();
+                    context.remember(REFUSED, context.tick());
                     left = tuning.refusal().ticks();
                     Probe.LedgeCheck check = attempt.check();
                     Vec3 wall = context.body().position().add(attempt.direction().multiply(0.3 + check.gap() + 0.05))
